@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# 冒烟脚本 ·  unit_id  ·  category 
+# 依据： rationale 
+set -euo pipefail
+BASE_URL="${BASE_URL:-http://localhost:8080}"
+echo "[1/2] health check"
+curl -fsS "$BASE_URL/actuator/health" | jq .
+echo "[2/2] sample API"
+curl -fsS "$BASE_URL/api/v1/projects/ping"

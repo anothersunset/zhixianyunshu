@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# 编译门 · task= task_id  ·  total  patches · avgConf= avg_conf 
+set -euo pipefail
+echo "[1/3] apply patches"
+for p in patch_set/*.patch; do
+  git apply --check "$p"
+  git apply       "$p"
+done
+echo "[2/3] mvn -q -DskipTests compile"
+mvn -q -DskipTests compile
+echo "[3/3] mvn -q test (skip-on-fail)"
+mvn -q test || echo "::warn::tests failed but compile ok"
