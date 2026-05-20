@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# 智迁云枢 依赖类验证脚本
+# Task ID :  task_id 
+# Target  :  target_db 
+# Object  :  suggestion.target 
+# Index   :  index 
+
+set -euo pipefail
+
+POM_FILE=" suggestion.target.split('#')[0] | default('pom.xml') "
+
+echo "[INFO] 检查依赖声明: $POM_FILE"
+
+if grep -E "<artifactId>opengauss-jdbc</artifactId>" "$POM_FILE" > /dev/null; then
+  echo "[PASS] 已引入 opengauss-jdbc"
+else
+  echo "[FAIL] 未发现 opengauss-jdbc 依赖"
+  exit 1
+fi
+
+if grep -E "<artifactId>mysql-connector-java</artifactId>" "$POM_FILE" > /dev/null; then
+  echo "[FAIL] 仍残留 mysql-connector-java，需移除"
+  exit 2
+fi
+
+mvn -f "$POM_FILE" -q -DskipTests=true dependency:resolve
+echo "[OK] 依赖项  suggestion.target  校验通过"

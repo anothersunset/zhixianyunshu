@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# 智迁云枢 配置类验证脚本
+# Task ID :  task_id 
+# Target  :  target_db 
+# Object  :  suggestion.target 
+# Index   :  index 
+
+set -euo pipefail
+
+CFG_FILE=" suggestion.target.split('#')[0] | default('application.yml') "
+
+echo "[INFO] 检查配置文件: $CFG_FILE"
+
+if [[ ! -f "$CFG_FILE" ]]; then
+  echo "[FAIL] 配置文件不存在: $CFG_FILE"
+  exit 1
+fi
+
+if grep -E "jdbc:opengauss://" "$CFG_FILE" > /dev/null; then
+  echo "[PASS] JDBC URL 已切换为 openGauss"
+else
+  echo "[WARN] 未检测到 jdbc:opengauss:// 前缀，请人工复核"
+fi
+
+if grep -E "jdbc:mysql://" "$CFG_FILE" > /dev/null; then
+  echo "[FAIL] 仍残留 jdbc:mysql:// 配置，需清理"
+  exit 2
+fi
+
+echo "[OK] 配置项  suggestion.target  校验通过"

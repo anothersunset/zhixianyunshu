@@ -1,14 +1,15 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 class Settings(BaseSettings):
-    embed_model: str = "BAAI/bge-m3"
-    rerank_model: str = "BAAI/bge-reranker-v2-m3"
-    chroma_path: str = "./.chroma"
-    top_k: int = 50
-    top_n: int = 5
-    hyde_enabled: bool = True
+    model_config = SettingsConfigDict(env_prefix="RAG_", env_file=".env", extra="ignore")
 
-    class Config:
-        env_prefix = "ZHIQIAN_RAG_"
+    host: str = "0.0.0.0"
+    port: int = 8001
+    data_dir: str = "/data"
+    embedding_dim: int = 768
+    bm25_top_k: int = 50
+    rerank_top_n: int = 5
+
 
 settings = Settings()

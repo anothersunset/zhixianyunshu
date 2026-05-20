@@ -1,0 +1,16 @@
+-- 智迁云枢 验证脚本（类型映射类）
+-- Task ID  :  task_id 
+-- Target   :  target_db 
+-- Object   :  suggestion.target 
+-- Index    :  index 
+
+-- 1) 检查目标表列类型是否为预期 NUMERIC / VARCHAR 等
+SELECT column_name, data_type, character_maximum_length, numeric_precision, numeric_scale
+FROM information_schema.columns
+WHERE table_name = ' suggestion.target.split('.')[-2] | default("affected_table") | lower ';
+
+-- 2) 对金额、数量类列做范围校验
+SELECT MIN( suggestion.target.split('.')[-1] | lower ) AS min_val,
+       MAX( suggestion.target.split('.')[-1] | lower ) AS max_val,
+       AVG( suggestion.target.split('.')[-1] | lower ) AS avg_val
+FROM target_schema. suggestion.target.split('.')[-2] | default("affected_table") | lower ;
