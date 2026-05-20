@@ -1,104 +1,91 @@
--- 用户与角色
-CREATE TABLE sys_user (
-	id BIGINT PRIMARY KEY AUTO_INCREMENT,
-	username VARCHAR(64) NOT NULL UNIQUE,
-	password VARCHAR(128) NOT NULL,
-	nickname VARCHAR(64),
-	role VARCHAR(32) NOT NULL DEFAULT 'DEVELOPER',
-	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+-- ZhiQian YunShu 初始化表结构 (PostgreSQL)
+-- 运行于 Flyway；openGauss 也兼容 PostgreSQL 语法
 
--- 项目
-CREATE TABLE project (
-	id BIGINT PRIMARY KEY AUTO_INCREMENT,
-	name VARCHAR(128) NOT NULL,
-	source_type VARCHAR(16) NOT NULL,
-	source_path VARCHAR(512),
-	owner_id BIGINT NOT NULL,
-	target_stack VARCHAR(128),
-	status VARCHAR(32) NOT NULL DEFAULT 'CREATED',
-	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS users (
+    id BIGSERIAL PRIMARY KEY,
+    username VARCHAR(64) NOT NULL UNIQUE,
+    password_hash VARCHAR(128) NOT NULL,
+    display_name VARCHAR(128),
+    role VARCHAR(32) NOT NULL DEFAULT 'USER',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
--- 迁移任务
-CREATE TABLE migration_task (
-	id BIGINT PRIMARY KEY AUTO_INCREMENT,
-	project_id BIGINT NOT NULL,
-	status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
-	progress INT DEFAULT 0,
-	current_stage VARCHAR(64),
-	started_at DATETIME,
-	finished_at DATETIME,
-	INDEX idx_project (project_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS project (
+    id BIGSERIAL PRIMARY KEY,
+    name VARCHAR(128) NOT NULL,
+    source_db VARCHAR(64) NOT NULL,
+    target_db VARCHAR(64) NOT NULL,
+    framework VARCHAR(128),
+    description TEXT,
+    status VARCHAR(32) NOT NULL DEFAULT 'NEW',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
--- Agent 步骤记录
-CREATE TABLE agent_step (
-	id BIGINT PRIMARY KEY AUTO_INCREMENT,
-	task_id BIGINT NOT NULL,
-	stage VARCHAR(64) NOT NULL,
-	agent_name VARCHAR(64),
-	input_json LONGTEXT,
-	output_json LONGTEXT,
-	model VARCHAR(64),
-	confidence DECIMAL(4,3),
-	elapsed_ms BIGINT,
-	token_in INT,
-	token_out INT,
-	status VARCHAR(16),
-	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-	INDEX idx_task (task_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS migration_task (
+    id BIGSERIAL PRIMARY KEY,
+    project_id BIGINT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+    name VARCHAR(128) NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+    avg_confidence DOUBLE PRECISION,
+    total_units INTEGER,
+    review_required INTEGER,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    finished_at TIMESTAMPTZ
+);
 
--- 改造建议CREATE TABLE suggestion (
-CREATE TABLE suggestion (
-	id BIGINT PRIMARY KEY AUTO_INCREMENT,
-	task_id BIGINT NOT NULL,
-	category VARCHAR(32) NOT NULL,
-	target VARCHAR(256),
-	content LONGTEXT,
-	risk_level VARCHAR(16),
-	effort_days DECIMAL(5,2),
-	confidence DECIMAL(4,3),
-	source_json LONGTEXT,
-	review_status VARCHAR(16) DEFAULT 'PENDING',
-	reviewer_id BIGINT,
-	review_reason TEXT,
-	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-	INDEX idx_task (task_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS agent_step (
+    id BIGSERIAL PRIMARY KEY,
+    task_id BIGINT NOT NULL REFERENCES migration_task(id) ON DELETE CASCADE,
+    stage VARCHAR(64) NOT NULL,
+    agent_name VARCHAR(64) NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    elapsed_ms INTEGER,
+    confidence DOUBLE PRECISION,
+    payload JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
--- 报告
-CREATE TABLE report (
-	id BIGINT PRIMARY KEY AUTO_INCREMENT,
-	task_id BIGINT NOT NULL,
-	report_type VARCHAR(32) NOT NULL,
-	content LONGTEXT,
-	file_path VARCHAR(512),
-	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-	INDEX idx_task (task_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS suggestion (
+    id BIGSERIAL PRIMARY KEY,
+    task_id BIGINT NOT NULL REFERENCES migration_task(id) ON DELETE CASCADE,
+    category VARCHAR(32) NOT NULL,
+    target VARCHAR(256) NOT NULL,
+    risk_level VARCHAR(16) NOT NULL,
+    confidence DOUBLE PRECISION,
+    review_status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+    unified_diff TEXT,
+    rationale TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
--- 审计日志
-CREATE TABLE audit_log (
-	id BIGINT PRIMARY KEY AUTO_INCREMENT,
-	user_id BIGINT,
-	action VARCHAR(64) NOT NULL,
-	target_type VARCHAR(32),
-	target_id BIGINT,
-	detail_json LONGTEXT,
-	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-	INDEX idx_user_action (user_id, action)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS script_validation (
+    id BIGSERIAL PRIMARY KEY,
+    task_id BIGINT NOT NULL REFERENCES migration_task(id) ON DELETE CASCADE,
+    script_type VARCHAR(32) NOT NULL,
+    file_path VARCHAR(256) NOT NULL,
+    content TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
--- 长期记忆
-CREATE TABLE memory_record (
-	id BIGINT PRIMARY KEY AUTO_INCREMENT,
-	namespace VARCHAR(64) NOT NULL,
-	key_text VARCHAR(512),
-	value_json LONGTEXT,
-	embedding_id VARCHAR(64),
-	project_id BIGINT,
-	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-	INDEX idx_ns (namespace)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS report (
+    id BIGSERIAL PRIMARY KEY,
+    task_id BIGINT NOT NULL REFERENCES migration_task(id) ON DELETE CASCADE,
+    title VARCHAR(256) NOT NULL,
+    summary TEXT,
+    artifact_url VARCHAR(512),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT,
+    action VARCHAR(64) NOT NULL,
+    target VARCHAR(256),
+    detail TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_task_project ON migration_task(project_id);
+CREATE INDEX IF NOT EXISTS idx_suggestion_task ON suggestion(task_id);
+CREATE INDEX IF NOT EXISTS idx_agent_step_task ON agent_step(task_id);
+CREATE INDEX IF NOT EXISTS idx_report_task ON report(task_id);
