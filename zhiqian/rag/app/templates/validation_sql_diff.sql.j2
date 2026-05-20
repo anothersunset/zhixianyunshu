@@ -1,4 +1,4 @@
--- 智迁云枢 验证脚本（方言及 SQL 重写类）
+-- ZhiQian YunShu validation script (SQL rewrite / dialect)
 -- Task ID  :  task_id 
 -- Target   :  target_db 
 -- Object   :  suggestion.target 
@@ -6,22 +6,24 @@
 -- Conf     :  suggestion.confidence | default('-') 
 -- Index    :  index 
 
--- 1) 数量一致性：源库与目标库 row count 应相等
-SELECT 'src' AS side, COUNT(*) AS row_count FROM source_schema. suggestion.target.split('.')[-1] | default('table_to_check') ;
-SELECT 'dst' AS side, COUNT(*) AS row_count FROM target_schema. suggestion.target.split('.')[-1] | default('table_to_check') ;
+{% set table_name = suggestion.table | default(suggestion.target.split('#')[0].split('.')[-1].replace('Mapper','').lower()) %}
 
--- 2) 样本数据 diff：限 100 行
+-- 1) row count parity: source DB vs target DB
+SELECT 'src' AS side, COUNT(*) AS row_count FROM source_schema. table_name ;
+SELECT 'dst' AS side, COUNT(*) AS row_count FROM target_schema. table_name ;
+
+-- 2) sample diff (limit 100)
 SELECT *
 FROM (
-  SELECT * FROM target_schema. suggestion.target.split('.')[-1] | default('table_to_check') 
+  SELECT * FROM target_schema. table_name 
   EXCEPT
-  SELECT * FROM source_schema. suggestion.target.split('.')[-1] | default('table_to_check') 
+  SELECT * FROM source_schema. table_name 
 ) diff
 LIMIT 100;
 
--- 3) 检查原如改造后 SQL 语义是否运行成功
+-- 3) review the unified_diff produced by Patcher
 {% if suggestion.unified_diff %}
--- diff 参考：
+-- unified diff reference:
 {% for line in suggestion.unified_diff.split('\n') %}
 --    line 
 {% endfor %}

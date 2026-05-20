@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 智迁云枢 依赖类验证脚本
+# ZhiQian YunShu validation script (dependency)
 # Task ID :  task_id 
 # Target  :  target_db 
 # Object  :  suggestion.target 
@@ -7,21 +7,21 @@
 
 set -euo pipefail
 
-POM_FILE=" suggestion.target.split('#')[0] | default('pom.xml') "
+POM_FILE=" suggestion.file | default('pom.xml') "
 
-echo "[INFO] 检查依赖声明: $POM_FILE"
+echo "[INFO] checking dependency declaration: $POM_FILE"
 
 if grep -E "<artifactId>opengauss-jdbc</artifactId>" "$POM_FILE" > /dev/null; then
-  echo "[PASS] 已引入 opengauss-jdbc"
+  echo "[PASS] opengauss-jdbc dependency present"
 else
-  echo "[FAIL] 未发现 opengauss-jdbc 依赖"
+  echo "[FAIL] opengauss-jdbc dependency missing"
   exit 1
 fi
 
 if grep -E "<artifactId>mysql-connector-java</artifactId>" "$POM_FILE" > /dev/null; then
-  echo "[FAIL] 仍残留 mysql-connector-java，需移除"
+  echo "[FAIL] mysql-connector-java still present, must be removed"
   exit 2
 fi
 
 mvn -f "$POM_FILE" -q -DskipTests=true dependency:resolve
-echo "[OK] 依赖项  suggestion.target  校验通过"
+echo "[OK] dependency  suggestion.target  validated"

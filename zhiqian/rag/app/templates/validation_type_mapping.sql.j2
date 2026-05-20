@@ -1,16 +1,20 @@
--- 智迁云枢 验证脚本（类型映射类）
+-- ZhiQian YunShu validation script (type mapping)
 -- Task ID  :  task_id 
 -- Target   :  target_db 
 -- Object   :  suggestion.target 
 -- Index    :  index 
 
--- 1) 检查目标表列类型是否为预期 NUMERIC / VARCHAR 等
+{% set parts = suggestion.target.split('.') %}
+{% set column_name = parts[-1] %}
+{% set table_name = parts[-2] if parts | length >= 2 else 'unknown_table' %}
+
+-- 1) verify column types on the target DB
 SELECT column_name, data_type, character_maximum_length, numeric_precision, numeric_scale
 FROM information_schema.columns
-WHERE table_name = ' suggestion.target.split('.')[-2] | default("affected_table") | lower ';
+WHERE lower(table_name) = lower(' table_name ');
 
--- 2) 对金额、数量类列做范围校验
-SELECT MIN( suggestion.target.split('.')[-1] | lower ) AS min_val,
-       MAX( suggestion.target.split('.')[-1] | lower ) AS max_val,
-       AVG( suggestion.target.split('.')[-1] | lower ) AS avg_val
-FROM target_schema. suggestion.target.split('.')[-2] | default("affected_table") | lower ;
+-- 2) range check on the migrated column
+SELECT MIN( column_name ) AS min_val,
+       MAX( column_name ) AS max_val,
+       AVG( column_name ) AS avg_val
+FROM target_schema. table_name ;
