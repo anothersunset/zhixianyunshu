@@ -22,14 +22,12 @@ public class SqlExtractor {
 	public SqlResult extract(Path projectRoot, JavaResult java) {
 		List<RawSql> list = new ArrayList<>();
 
-		// 1) MyBatis XML
 		try (Stream<Path> walk = Files.walk(projectRoot)) {
 			walk.filter(p -> p.toString().endsWith(".xml"))
 				.filter(SqlExtractor::isMybatisXml)
 				.forEach(p -> list.addAll(parseMybatisXml(p)));
 		}
 
-		// 2) MyBatis 注解
 		for (var cu : java.compilationUnits()) {
 			cu.findAll(AnnotationExpr.class).forEach(an -> {
 				if (!MYBATIS_ANNO.contains(an.getNameAsString())) return;

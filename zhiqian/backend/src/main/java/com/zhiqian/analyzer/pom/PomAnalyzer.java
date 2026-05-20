@@ -15,7 +15,6 @@ import java.util.stream.Stream;
 @Component
 public class PomAnalyzer {
 
-	/** 企业常见信创不兼容依赖：GAV 前缀匹配。 */
 	private static final List<String> KNOWN_RISK_GA = List.of(
 		"com.oracle.database.jdbc:ojdbc",
 		"com.microsoft.sqlserver:mssql-jdbc",

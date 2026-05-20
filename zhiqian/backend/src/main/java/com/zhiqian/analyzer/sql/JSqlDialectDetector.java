@@ -33,14 +33,14 @@ public class JSqlDialectDetector {
 		List<DialectResult.Item> items = new ArrayList<>();
 		for (var r : input.sqls()) {
 			List<String> bad = new ArrayList<>();
-			String dialect = "GENERIC";
+			String[] dialect = { "GENERIC" };
 			ORACLE_FEATURES.forEach((k, p) -> { if (p.matcher(r.text()).find()) bad.add("ORACLE:" + k); });
 			MSSQL_FEATURES.forEach((k, p) -> { if (p.matcher(r.text()).find()) bad.add("MSSQL:" + k); });
-			if (bad.stream().anyMatch(s -> s.startsWith("ORACLE:"))) dialect = "ORACLE";
-			else if (bad.stream().anyMatch(s -> s.startsWith("MSSQL:"))) dialect = "MSSQL";
+			if (bad.stream().anyMatch(s -> s.startsWith("ORACLE:"))) dialect[0] = "ORACLE";
+			else if (bad.stream().anyMatch(s -> s.startsWith("MSSQL:"))) dialect[0] = "MSSQL";
 
 			boolean parseOk = tryParse(r.text());
-			items.add(new DialectResult.Item(r, dialect, bad, parseOk));
+			items.add(new DialectResult.Item(r, dialect[0], bad, parseOk));
 		}
 		return new DialectResult(items);
 	}

@@ -28,7 +28,6 @@ public class ProjectAnalyzeOrchestrator {
 	public AnalyzeResult analyze(Path projectRoot) {
 		long t0 = System.currentTimeMillis();
 
-		// 并发启动独立阶段
 		var pomF = CompletableFuture.supplyAsync(() -> pomAnalyzer.analyze(projectRoot));
 		var cfgF = CompletableFuture.supplyAsync(() -> configScanner.scan(projectRoot));
 		var javaF = CompletableFuture.supplyAsync(() -> javaAnalyzer.analyze(projectRoot));
@@ -37,7 +36,6 @@ public class ProjectAnalyzeOrchestrator {
 		JavaResult java = javaF.join();
 		ConfigResult cfg = cfgF.join();
 
-		// SQL 提取依赖 java AST
 		SqlResult sql = sqlExtractor.extract(projectRoot, java);
 		DialectResult dialect = dialectDetector.detect(sql);
 
