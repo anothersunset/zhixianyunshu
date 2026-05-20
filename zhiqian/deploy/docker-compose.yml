@@ -1,0 +1,81 @@
+name: zhiqian
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: zhiqian-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: zhiqian
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-zhiqian123}
+      POSTGRES_DB: zhiqian
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/00_init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zhiqian -d zhiqian"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: zhiqian-backend
+    restart: unless-stopped
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/zhiqian
+      SPRING_DATASOURCE_USERNAME: zhiqian
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-zhiqian123}
+      APP_JWT_SECRET: ${JWT_SECRET:-change-me-please-change-me-please-32bytes-min}
+      APP_RAG_BASE_URL: http://rag:8001
+      JAVA_TOOL_OPTIONS: "-Xms256m -Xmx768m"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  rag:
+    build:
+      context: ../rag
+      dockerfile: Dockerfile
+    container_name: zhiqian-rag
+    restart: unless-stopped
+    environment:
+      ZHIQIAN_RAG_CHROMA_PATH: /data/.chroma
+    volumes:
+      - ragdata:/data
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8001/health').status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  web:
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+    container_name: zhiqian-web
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+      - rag
+
+volumes:
+  pgdata:
+  ragdata:
