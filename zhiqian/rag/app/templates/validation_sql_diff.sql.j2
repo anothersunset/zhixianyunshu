@@ -1,30 +1,28 @@
 -- ZhiQian YunShu validation script (SQL rewrite / dialect)
--- Task ID  :  task_id 
--- Target   :  target_db 
--- Object   :  suggestion.target 
--- Risk     :  suggestion.risk_level | default('UNKNOWN') 
--- Conf     :  suggestion.confidence | default('-') 
--- Index    :  index 
-
-{% set table_name = suggestion.table | default(suggestion.target.split('#')[0].split('.')[-1].replace('Mapper','').lower()) %}
+-- Task ID  : << task_id >>
+-- Target   : << target_db >>
+-- Object   : << suggestion.target >>
+-- Risk     : << suggestion.risk_level | default('UNKNOWN') >>
+-- Conf     : << suggestion.confidence | default(0.0) >>
+-- Index    : << index >>
 
 -- 1) row count parity: source DB vs target DB
-SELECT 'src' AS side, COUNT(*) AS row_count FROM source_schema. table_name ;
-SELECT 'dst' AS side, COUNT(*) AS row_count FROM target_schema. table_name ;
+SELECT 'src' AS side, COUNT(*) AS row_count FROM source_schema.<< table_name >>;
+SELECT 'dst' AS side, COUNT(*) AS row_count FROM target_schema.<< table_name >>;
 
 -- 2) sample diff (limit 100)
 SELECT *
 FROM (
-  SELECT * FROM target_schema. table_name 
+  SELECT * FROM target_schema.<< table_name >>
   EXCEPT
-  SELECT * FROM source_schema. table_name 
+  SELECT * FROM source_schema.<< table_name >>
 ) diff
 LIMIT 100;
 
--- 3) review the unified_diff produced by Patcher
-{% if suggestion.unified_diff %}
--- unified diff reference:
-{% for line in suggestion.unified_diff.split('\n') %}
---    line 
-{% endfor %}
-{% endif %}
+-- 3) unified diff reference produced by Patcher
+<% if suggestion.unified_diff %>
+-- unified diff:
+<% for line in suggestion.unified_diff.split('\n') %>
+--   << line >>
+<% endfor %>
+<% endif %>

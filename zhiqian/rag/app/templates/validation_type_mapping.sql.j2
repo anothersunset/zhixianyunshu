@@ -1,20 +1,16 @@
 -- ZhiQian YunShu validation script (type mapping)
--- Task ID  :  task_id 
--- Target   :  target_db 
--- Object   :  suggestion.target 
--- Index    :  index 
-
-{% set parts = suggestion.target.split('.') %}
-{% set column_name = parts[-1] %}
-{% set table_name = parts[-2] if parts | length >= 2 else 'unknown_table' %}
+-- Task ID  : << task_id >>
+-- Target   : << target_db >>
+-- Object   : << suggestion.target >>
+-- Index    : << index >>
 
 -- 1) verify column types on the target DB
 SELECT column_name, data_type, character_maximum_length, numeric_precision, numeric_scale
 FROM information_schema.columns
-WHERE lower(table_name) = lower(' table_name ');
+WHERE lower(table_name) = lower('<< table_name >>');
 
 -- 2) range check on the migrated column
-SELECT MIN( column_name ) AS min_val,
-       MAX( column_name ) AS max_val,
-       AVG( column_name ) AS avg_val
-FROM target_schema. table_name ;
+SELECT MIN(<< column_name >>) AS min_val,
+       MAX(<< column_name >>) AS max_val,
+       AVG(<< column_name >>) AS avg_val
+FROM target_schema.<< table_name >>;

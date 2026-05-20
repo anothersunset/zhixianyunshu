@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # ZhiQian YunShu validation script (dependency)
-# Task ID :  task_id 
-# Target  :  target_db 
-# Object  :  suggestion.target 
-# Index   :  index 
+# Task ID : << task_id >>
+# Target  : << target_db >>
+# Object  : << suggestion.target >>
+# Index   : << index >>
 
 set -euo pipefail
 
-POM_FILE=" suggestion.file | default('pom.xml') "
+POM_FILE="<< pom_file >>"
 
 echo "[INFO] checking dependency declaration: $POM_FILE"
 
@@ -24,4 +24,4 @@ if grep -E "<artifactId>mysql-connector-java</artifactId>" "$POM_FILE" > /dev/nu
 fi
 
 mvn -f "$POM_FILE" -q -DskipTests=true dependency:resolve
-echo "[OK] dependency  suggestion.target  validated"
+echo "[OK] dependency << suggestion.target >> validated"
