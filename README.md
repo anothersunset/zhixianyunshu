@@ -1,45 +1,105 @@
-# zhixianyunshu
+# 智迁云枢 · ZhiQian YunShu
 
-> 智迁云枢 · ZhiQian Agent — 信创软件迁移的可信智能 Agent 平台 · 中国软件杯参赛作品
+> 中国软件杯参赛作品 · 面向 MySQL → openGauss 的多 Agent 数据库智能迁移平台
 
-本仓库主体在 [`zhiqian/`](./zhiqian) 目录下。
+本仓库是**可本地 30 秒起走**的演示版：包含 Spring Boot 3 后端、FastAPI RAG 服务、Vue 3 前端、PostgreSQL 与 Nginx，一条 `docker compose up` 命令即可拉起全栈。
 
-## 模块速览
+## 一、架构总览
 
-| 目录 | 模块 | 技术栈 |
-|---|---|---|
-| [`zhiqian/backend/`](./zhiqian/backend) | Spring Boot 主服务 + Agent 编排 + 治理审计 + 代码分析 | Spring Boot 3 · JWT · MyBatis · Flyway · JavaParser · JSqlParser |
-| [`zhiqian/rag/`](./zhiqian/rag) | Python AgenticRAG + 信创知识库 + GraphRAG | FastAPI · BGE-M3 · ChromaDB · NetworkX |
-| [`zhiqian/web/`](./zhiqian/web) | Vue 3 控制台 | Vue 3 · Element Plus · Pinia · ECharts · SSE |
-| [`zhiqian/deploy/`](./zhiqian/deploy) | Docker Compose 一键部署 + Grafana 大盘 | Docker · Prometheus · Grafana |
-| [`zhiqian/docs/`](./zhiqian/docs) | 架构 / 概要设计 / API | Markdown · Mermaid |
-
-## 三大创新点
-1. **业务 Agent 编排架构**:项目分析 → 风险识别 → 方案生成 → 人工复核 → 报告输出 的完整闭环
-2. **代码 + 配置 + 文档多源 RAG**:不仅检索文档,还检索代码结构和配置依赖
-3. **可信决策机制**:每条建议附来源、置信度、风险等级,支持人工复核与审计(Hash 链)
-
-## 8 个量化指标
-- **90s** 端到端延迟(ZIP → PDF 报告)
-- **0.891** RAG 综合评分
-- **38** 示例项目产出 patches 数
-- **7** 业务 Agent 数
-- **0** 万条审计链中断裂 hash 数
-- **≤ 30min** 复核 SLA
-- **≤ 50ms** 接口 P99 延迟
-- **≥ 1万** KB chunks 总量
-
-## 30 秒上手
-
-```bash
-cd zhiqian/deploy
-docker compose up -d
-# 后端     http://localhost:8080
-# RAG      http://localhost:8001
-# 前端     http://localhost:5173
-# Grafana  http://localhost:3000
+```
+╔═════════════════╗      ╔════════════════╗      ╔══════════════╗
+║ zhiqian-web      ║ -- Nginx → ║ zhiqian-backend║ -- HTTP → ║ PostgreSQL ║
+║ Vue 3 + Element  ║      ║ Spring Boot 3  ║      ║  (openGauss兼)║
+╠═════════════════╣      ╠════════════════╣      ╠══════════════╣
+║       SSE        ║ ←────────── ║ SSE · JWT     ║      ║ Flyway 迁移 ║
+╚═════════════════╝      ╠════════════════╣      ╚══════════════╝
+                          ║     │          ║
+                          ╚═══ HTTP ═══════╝
+                                │
+                       ╔════════════════╗
+                       ║ zhiqian-rag    ║
+                       ║ FastAPI + BM25 ║
+                       ╚════════════════╝
 ```
 
-## License
+十 个 Agent 节点与完整理论架构请参阅同名设计文档。
 
-Apache-2.0
+## 二、本地 30 秒启动
+
+```bash
+git clone https://github.com/anothersunset/zhixianyunshu.git
+cd zhixianyunshu/zhiqian/deploy
+cp .env.example .env
+docker compose up -d --build
+```
+
+启动完成后访问：http://localhost （默认占用的端口：80 / 8080 / 8001 / 5432，冲突请改 `.env`）。
+
+首次启动后记录下面三个地址：
+
+| 服务 | URL | 说明 |
+| --- | --- | --- |
+| 前端 | http://localhost | Vue 3 SPA + Element Plus |
+| 后端 | http://localhost:8080/actuator/health | Spring Boot 3 + JWT |
+| RAG  | http://localhost:8001/health | FastAPI + BM25 + Self-RAG critic |
+
+默认管理员账户：**admin / admin123**，首次登录请及时修改。
+
+## 三、可访问页面
+
+| 路径 | 页面 | 说明 |
+| --- | --- | --- |
+| `/` | 仪表盘 | 4 个 KPI 卡、趋势/风险 ECharts、最近任务表 |
+| `/projects` | 项目列表 | 从 `GET /api/projects` 读取 1 个演示项目 |
+| `/projects/:id` | 项目详情 | 项目属性 + 本项目下任务列表 |
+| `/tasks` | 任务列表 | 2 个演示任务（1 个 DONE、1 个 RUNNING） |
+| `/tasks/:id` | 任务详情 | 点击 “开始演示” 观看 8 步 SSE 实时时间线 |
+| `/knowledge` | 知识库 | RAG 检索 + Self-RAG critic 评估面板 |
+| `/reports` | 报告中心 | 演示报告入口 |
+| `/settings` | 设置 | 当前账户、服务地址 |
+
+## 四、演示状态与已知限制
+
+> 本版本为 **本地可跑动的演示版**，以下能力以 mock / 虚拟数据方式提供，生产版本需接入真实服务：
+>
+> - **嵌入检索**：未接入 BGE-M3 与 Faiss，仅启用 BM25 作为主检索。
+> - **LLM 推理**：未接入 GLM-4-Plus 等 LLM provider，Reasoner / Critic 为启发式打分。
+> - **K8s 部署**：仅提供 docker compose ，生产需复制为 Helm Chart。
+> - **权限模型**：仅提供 ADMIN / USER 两角色，未接入 RBAC 细粒度权限。
+> - **报告渲染**：Reporter Agent 为提示占位，未生成真实 PDF。
+
+## 五、常用命令
+
+```bash
+# 查看服务状态
+docker compose ps
+
+# 查看某个服务日志
+docker compose logs -f backend
+docker compose logs -f rag
+
+# 重启某个服务
+docker compose restart web
+
+# 完全重置 (清除数据卷)
+docker compose down -v
+```
+
+## 六、项目结构
+
+```
+zhiqian/
+├─ backend/      Spring Boot 3 + Spring Data JDBC + Spring Security + JWT
+│   ├─ src/main/java/com/zhiqian/    · controllers · agents · ckg · analyzer
+│   └─ src/main/resources/db/migration/  Flyway V1__init.sql · V2__seed.sql
+├─ rag/          FastAPI + BM25 + Self-RAG critic + Jinja2 validation 脚本模板
+│   ├─ app/pipelines/ retriever · critic · rewriter · validation
+│   └─ app/templates/ 验证脚本 (自定义分隔符 << >>)
+├─ web/          Vue 3 + Vite + Element Plus + ECharts + Pinia + vue-router
+│   └─ src/{views,components,api,stores,layouts,router,mock}
+└─ deploy/       docker-compose.yml · nginx.conf · .env.example · init-db.sql
+```
+
+## 七、License
+
+MIT © 2026 ZhiQian YunShu Team

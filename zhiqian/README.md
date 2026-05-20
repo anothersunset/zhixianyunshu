@@ -1,45 +1,72 @@
-# 🛰️ 智迁云枢 · ZhiQian Agent
+# zhiqian/ 代码目录
 
-> **信创软件迁移的可信智能 Agent 平台 · 中国软件杯参赛作品**
+本目录包含三个可独立运行的模块与一个部署目录。推荐使用顶层 README 中的 `docker compose up` 统一拉起，以下说明面向需要单独调试的开发者。
 
-## 一句话
-智迁云枢 = **信创软件迁移** × **AI Agent 落地** × **可信工程**。
+## backend/  (Spring Boot 3)
 
-## 8 个必背数字
-1. **90s** · 从 ZIP 上传到出 PDF 报告的端到端延迟
-2. **0.891** · RAG 综合评分(v3 基准)
-3. **38** · 示例项目产出 patches 数
-4. **7** · 业务 Agent 数(Planner / CodeAnalyzer / SQLCompat / KnowledgeRetriever / SolutionGen / Evaluator / Auditor)
-5. **0** · 万条审计链中断裂 hash 数
-6. **≤ 30min** · 复核 SLA
-7. **≤ 50ms** · 接口 P99 延迟
-8. **≥ 1万** · KB chunks 总量
-
-## 系统架构(5 层 + 7 Agent)
-
-```text
-┌────────────────────────────────────────────────────────┐
-│ L5 治理层  Hash 链审计 · 复核 · RBAC · Grafana 5 大盘 │
-├────────────────────────────────────────────────────────┤
-│ L4 业务层  PatchGenerator · Validation · Report      │
-├────────────────────────────────────────────────────────┤
-│ L3 编排层  Planner + 7 业务 Agent + 状态机           │
-├────────────────────────────────────────────────────────┤
-│ L2 知识层  BGE-M3 · GraphRAG · CKG · 三类记忆        │
-├────────────────────────────────────────────────────────┤
-│ L1 感知层  AST · SQL Parser · 依赖扫描 · 配置扫描    │
-└────────────────────────────────────────────────────────┘
+```bash
+cd backend
+./mvnw -DskipTests spring-boot:run   # 需提前在 docker compose 中拉起 postgres 服务
 ```
 
-## 子模块
+环境变量：
 
-| 目录 | 模块 | 技术栈 |
-|---|---|---|
-| [`backend/`](./backend) | Spring Boot 主服务 + Agent 编排 + 治理审计 + 代码分析 | Spring Boot 3 · JWT · MyBatis · Flyway · JavaParser · JSqlParser |
-| [`rag/`](./rag) | Python AgenticRAG + 信创知识库 + GraphRAG | FastAPI · BGE-M3 · ChromaDB · NetworkX |
-| [`web/`](./web) | Vue 3 控制台 | Vue 3 · Element Plus · Pinia · ECharts · SSE |
-| [`deploy/`](./deploy) | Docker Compose 一键部署 + Grafana 大盘 | Docker · Prometheus · Grafana |
-| [`docs/`](./docs) | 架构 / 概要设计 / API | Markdown · Mermaid |
+| 变量 | 默认 | 说明 |
+| --- | --- | --- |
+| `SPRING_DATASOURCE_URL` | `jdbc:postgresql://localhost:5432/zhiqian` | JDBC URL |
+| `SPRING_DATASOURCE_USERNAME` | `zhiqian` | DB 账号 |
+| `SPRING_DATASOURCE_PASSWORD` | `zhiqian123` | DB 密码 |
+| `APP_JWT_SECRET` | `change-me-please-change-me-please-32bytes-min` | JWT 密钥，生产务必更换 |
+| `APP_JWT_TTL_MINUTES` | `720` | JWT 存活（8 小时） |
+| `APP_RAG_BASE_URL` | `http://localhost:8001` | 后端调用 RAG 的地址 |
 
-## License
-Apache-2.0
+启动后：
+
+- 首次启动 Flyway 会运行 V1__init.sql 创建 8 张表；V2__seed.sql 插入演示项目/任务/建议。
+- DataBootstrap 会检查是否存在 admin 账户，不存在则插入 admin / admin123。
+- 提供接口：
+  - `POST /api/auth/login`、`GET /api/users/me`
+  - `GET /api/projects`、`GET /api/projects/{id}`
+  - `GET /api/tasks`、`GET /api/tasks/{id}`
+  - `GET /api/tasks/{id}/suggestions`
+  - `GET /api/tasks/{id}/stream`  Server-Sent Events（8 个 Agent 步骤 + progress）
+
+## rag/  (FastAPI)
+
+```bash
+cd rag
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8001
+```
+
+提供接口：
+
+- `GET /health`
+- `POST /query`  （参数 question / top_k / rewrite / critic / filters）
+- `POST /validation/generate`  （依据 suggestion 生成 Jinja2 验证脚本）
+
+Jinja2 使用**自定义分隔符**`<< var >>`以避开上游压缩 URL 占位符冲突，请勿改回 `218`。运行单测：
+
+```bash
+pytest -q
+```
+
+## web/  (Vue 3)
+
+```bash
+cd web
+npm i              # 首次安装
+npm run dev        # 启动 Vite dev server，默认 5173 端口
+```
+
+环境变量（`.env.development` 中）：
+
+- `VITE_API_BASE`  后端基地址（默认 `/api`，由 Vite proxy 转发 → 8080）
+- `VITE_RAG_BASE`  RAG 基地址（默认 `/rag`，由 Vite proxy 转发 → 8001）
+
+生产构建：`npm run build` 输出到 `dist/`，该目录会被镜像打包到 nginx 容器。
+
+## deploy/  (Docker Compose)
+
+详见 `deploy/README.md`。
