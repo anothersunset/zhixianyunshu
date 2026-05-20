@@ -3,9 +3,14 @@
     <el-row :gutter="16" class="kpis">
       <el-col :span="6" v-for="k in kpis" :key="k.key">
         <el-card shadow="hover">
-          <div class="kpi-label"> k.label </div>
-          <div class="kpi-value"> k.value <span class="unit"> k.unit </span></div>
-          <div class="kpi-trend" :class="k.trend.startsWith('+') ? 'up' : 'down'"> k.trend  较上周</div>
+          <div class="kpi-label" v-text="k.label" />
+          <div class="kpi-value">
+            <span v-text="k.value" /><span class="unit" v-text="k.unit" />
+          </div>
+          <div class="kpi-trend" :class="k.trend.startsWith('+') ? 'up' : 'down'">
+            <span v-text="k.trend" />
+            <span>　较上周</span>
+          </div>
         </el-card>
       </el-col>
     </el-row>
@@ -31,10 +36,14 @@
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="name" label="任务名称" />
         <el-table-column label="状态" width="140">
-          <template #default="{ row }"><el-tag :type="statusType(row.status)"> row.status </el-tag></template>
+          <template #default="{ row }">
+            <el-tag :type="statusType(row.status)" v-text="row.status" />
+          </template>
         </el-table-column>
         <el-table-column label="平均置信度" width="160">
-          <template #default="{ row }"><el-progress :percentage="Math.round(row.conf*100)" :stroke-width="10" /></template>
+          <template #default="{ row }">
+            <el-progress :percentage="Math.round(row.conf*100)" :stroke-width="10" />
+          </template>
         </el-table-column>
       </el-table>
     </el-card>

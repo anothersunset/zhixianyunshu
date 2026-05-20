@@ -2,7 +2,8 @@
   <el-container class="app">
     <el-aside width="220px" class="side">
       <div class="logo">智迁云枢</div>
-      <el-menu :default-active="route.path" router :collapse="false" background-color="#0f172a" text-color="#cbd5e1" active-text-color="#38bdf8">
+      <el-menu :default-active="route.path" router :collapse="false"
+               background-color="#0f172a" text-color="#cbd5e1" active-text-color="#38bdf8">
         <el-menu-item index="/"><el-icon><Odometer /></el-icon><span>仪表盘</span></el-menu-item>
         <el-menu-item index="/projects"><el-icon><FolderOpened /></el-icon><span>项目</span></el-menu-item>
         <el-menu-item index="/tasks"><el-icon><Operation /></el-icon><span>任务</span></el-menu-item>
@@ -12,8 +13,19 @@
       </el-menu>
     </el-aside>
     <el-container>
-      <el-header class="hdr"><div> title </div><el-dropdown><el-button text> username  <el-icon><CaretBottom /></el-icon></el-button>
-        <template #dropdown><el-dropdown-menu><el-dropdown-item @click="logout">退出登录</el-dropdown-item></el-dropdown-menu></template></el-dropdown>
+      <el-header class="hdr">
+        <div v-text="title" />
+        <el-dropdown>
+          <el-button text>
+            <span v-text="roleLabel" />
+            <el-icon><CaretBottom /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item @click="logout">退出登录</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </el-header>
       <el-main><router-view /></el-main>
     </el-container>
@@ -27,7 +39,7 @@ import { Odometer, FolderOpened, Operation, Reading, Document, Setting, CaretBot
 const route = useRoute()
 const router = useRouter()
 const title = import.meta.env.VITE_APP_TITLE || '智迁云枢'
-const username = localStorage.getItem('zq_role') === 'ADMIN' ? '管理员' : '用户'
+const roleLabel = localStorage.getItem('zq_role') === 'ADMIN' ? '管理员' : '用户'
 
 function logout() { localStorage.removeItem('zq_token'); router.push('/login') }
 </script>

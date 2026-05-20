@@ -2,11 +2,11 @@
   <div class="page">
     <el-page-header :content="project?.name || '项目详情'" @back="router.back()" />
     <el-descriptions :column="2" border style="margin-top:16px" v-if="project">
-      <el-descriptions-item label="源库"> project.sourceDb </el-descriptions-item>
-      <el-descriptions-item label="目标库"> project.targetDb </el-descriptions-item>
-      <el-descriptions-item label="技术栈"> project.framework </el-descriptions-item>
-      <el-descriptions-item label="状态"><el-tag> project.status </el-tag></el-descriptions-item>
-      <el-descriptions-item label="描述" :span="2"> project.description </el-descriptions-item>
+      <el-descriptions-item label="源库"><span v-text="project.sourceDb" /></el-descriptions-item>
+      <el-descriptions-item label="目标库"><span v-text="project.targetDb" /></el-descriptions-item>
+      <el-descriptions-item label="技术栈"><span v-text="project.framework" /></el-descriptions-item>
+      <el-descriptions-item label="状态"><el-tag v-text="project.status" /></el-descriptions-item>
+      <el-descriptions-item label="描述" :span="2"><span v-text="project.description" /></el-descriptions-item>
     </el-descriptions>
 
     <el-card shadow="never" style="margin-top:16px">
@@ -15,10 +15,12 @@
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="name" label="任务名" />
         <el-table-column label="状态" width="120">
-          <template #default="{ row }"><el-tag> row.status </el-tag></template>
+          <template #default="{ row }"><el-tag v-text="row.status" /></template>
         </el-table-column>
         <el-table-column label="操作" width="160">
-          <template #default="{ row }"><el-button link type="primary" @click="router.push(`/tasks/${row.id}`)">查看</el-button></template>
+          <template #default="{ row }">
+            <el-button link type="primary" @click="router.push(`/tasks/\${row.id}`)">查看</el-button>
+          </template>
         </el-table-column>
       </el-table>
     </el-card>

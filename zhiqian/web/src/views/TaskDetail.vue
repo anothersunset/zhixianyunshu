@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <el-page-header :content="`任务 #${id} ${store.current?.name || ''}`" @back="router.back()" />
+    <el-page-header :content="headerText" @back="router.back()" />
 
     <el-row :gutter="16" style="margin-top:16px">
       <el-col :span="14">
@@ -17,10 +17,15 @@
           <el-progress :percentage="store.progress" :stroke-width="14" status="success" />
           <el-timeline style="margin-top:16px">
             <el-timeline-item v-for="(s, i) in store.steps" :key="i"
-                              :timestamp="`${s.stage} · ${s.agentName}`"
+                              :timestamp="`\${s.stage} · \${s.agentName}`"
                               :type="timelineType(s.status)">
-              <div><b>耗时</b>  s.elapsedMs ?? 0 ms<span v-if="s.confidence != null"> · <b>置信度</b>  s.confidence </span></div>
-              <pre class="payload"> JSON.stringify(s.payload, null, 2) </pre>
+              <div>
+                <b>耗时</b> <span v-text="`\${s.elapsedMs ?? 0}ms`" />
+                <template v-if="s.confidence != null">
+                  · <b>置信度</b> <span v-text="s.confidence" />
+                </template>
+              </div>
+              <pre class="payload" v-text="formatPayload(s.payload)" />
             </el-timeline-item>
           </el-timeline>
         </el-card>
@@ -36,7 +41,9 @@
               <template #default="{ row }"><RiskBadge :level="row.riskLevel" /></template>
             </el-table-column>
             <el-table-column label="置信" width="90">
-              <template #default="{ row }"> row.confidence?.toFixed?.(2) ?? '-' </template>
+              <template #default="{ row }">
+                <span v-text="row.confidence?.toFixed(2) ?? '-'" />
+              </template>
             </el-table-column>
           </el-table>
         </el-card>
@@ -58,7 +65,10 @@ const id = computed(() => Number(route.params.id))
 const store = useTaskStore()
 const streaming = ref(false)
 
+const headerText = computed(() => `任务 #${id.value} ${store.current?.name || ''}`)
+
 function timelineType(s: string) { return s === 'OK' ? 'success' : s === 'RUNNING' ? 'primary' : 'info' }
+function formatPayload(p: any) { try { return JSON.stringify(p ?? {}, null, 2) } catch { return String(p) } }
 async function start() { streaming.value = true; store.streamTask(id.value) }
 function stop() { streaming.value = false; store.stopStream() }
 
@@ -69,5 +79,5 @@ onBeforeUnmount(() => store.stopStream())
 <style scoped>
 .page{padding:16px}
 .hdr{display:flex;justify-content:space-between;align-items:center}
-.payload{background:#f5f7fa;border-radius:4px;padding:6px 10px;font-size:12px;color:#606266;margin-top:4px}
+.payload{background:#f5f7fa;border-radius:4px;padding:6px 10px;font-size:12px;color:#606266;margin-top:4px;white-space:pre-wrap}
 </style>

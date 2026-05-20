@@ -1,10 +1,10 @@
 <template>
   <div class="src-citation">
     <el-icon><Link /></el-icon>
-    <span class="path"> chunk.source </span>
-    <el-tag size="small" effect="plain">score  chunk.score?.toFixed?.(2) ?? '-' </el-tag>
+    <span class="path" v-text="chunk.source" />
+    <el-tag size="small" effect="plain" v-text="`score \${chunk.score.toFixed(3)}`" />
   </div>
-  <div class="text"> chunk.text </div>
+  <div class="text" v-text="chunk.text" />
 </template>
 
 <script setup lang="ts">

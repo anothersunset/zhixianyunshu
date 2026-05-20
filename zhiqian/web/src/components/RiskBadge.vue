@@ -1,5 +1,5 @@
 <template>
-  <el-tag :type="tagType" effect="light" round size="small"> label </el-tag>
+  <el-tag :type="tagType" effect="light" round size="small" v-text="label" />
 </template>
 
 <script setup lang="ts">
