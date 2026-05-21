@@ -1,4 +1,4 @@
-"""v2-step-23: 主入口, 注册 MCP router。"""
+"""v2-step-23/26: 主入口, 注册 MCP + TTS router。"""
 from __future__ import annotations
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
     health, query as query_api, validation, rerank, ingest, retrieve,
-    transpile, crag, graphrag, structured, mcp as mcp_api,
+    transpile, crag, graphrag, structured, mcp as mcp_api, tts as tts_api,
 )
 
 
@@ -30,6 +30,7 @@ app.include_router(crag.router)
 app.include_router(graphrag.router)
 app.include_router(structured.router)
 app.include_router(mcp_api.router)
+app.include_router(tts_api.router)
 
 
 @app.get("/")
@@ -38,6 +39,7 @@ async def root():
         "name": "ZhiQian RAG",
         "version": "1.0.0",
         "capabilities": {
-            "crag": True, "graphrag": True, "structured": True, "mcp": True
+            "crag": True, "graphrag": True, "structured": True,
+            "mcp": True, "tts": True
         }
     }

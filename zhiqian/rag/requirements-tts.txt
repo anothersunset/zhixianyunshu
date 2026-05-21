@@ -1,0 +1,2 @@
+# v2-step-26: TTS 可选依赖。pip install -r requirements-tts.txt 启用。
+edge-tts>=6.1.10
