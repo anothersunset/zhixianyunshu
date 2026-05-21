@@ -1,0 +1,189 @@
+# v2-step-18: Helm values for ZhiQian YunShu
+# 生产部署时 override 关键项: image.tag / postgres.password / backend.secrets.jwtSecret /
+# backend.secrets.deepseekApiKey / ingress.hosts / persistence.size
+# ----
+
+global:
+  imageRegistry: ""    # 例 ghcr.io/anothersunset/, 为空时走 docker.io / 本地
+  imagePullSecrets: []
+  storageClass: ""
+
+nameOverride: ""
+fullnameOverride: ""
+
+# ===== 三个服务 =====
+backend:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: zhiqian/backend
+    tag: ""   # 为空时使用 .Chart.AppVersion
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8080
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1500m
+      memory: 2Gi
+  config:
+    # 可被 override 的非敏感配置
+    llm:
+      provider: deepseek
+      baseUrl: https://api.deepseek.com
+      chatModel: deepseek-chat
+      reasonerModel: deepseek-reasoner
+      temperature: 0.2
+      maxTokens: 2048
+      timeoutSeconds: 60
+    langfuse:
+      enabled: false
+      host: https://cloud.langfuse.com
+    temporal:
+      enabled: false
+      serviceTarget: temporal:7233
+      namespace: default
+      taskQueue: zhiqian-migration
+  secrets:
+    # 使用 helm install --set backend.secrets.jwtSecret=... 覆盖, 或 secretRef 外部报存
+    jwtSecret: "please-change-me-to-a-long-random-string-at-least-32-chars"
+    deepseekApiKey: ""
+    langfusePublicKey: ""
+    langfuseSecretKey: ""
+  livenessProbe:
+    httpGet:
+      path: /actuator/health/liveness
+      port: http
+    initialDelaySeconds: 60
+    periodSeconds: 30
+  readinessProbe:
+    httpGet:
+      path: /actuator/health/readiness
+      port: http
+    initialDelaySeconds: 30
+    periodSeconds: 10
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+rag:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: zhiqian/rag
+    tag: ""
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8001
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 2000m
+      memory: 4Gi   # ML 模型需要, 启用 BGE-M3 时 ≥ 3Gi
+  env:
+    RAG_CHUNK_STRATEGY: semantic
+    RAG_CHUNK_SIM_THRESHOLD: "0.62"
+    RAG_OUTLINES_ENABLED: "false"
+    RAG_CRAG_USE_LLM_EVAL: "0"
+    HF_ENDPOINT: https://hf-mirror.com
+  qdrant:
+    enabled: false   # 默认 BM25 单路降级; 上营由 ArgoCD overlay 开
+    url: http://qdrant:6333
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 30
+    periodSeconds: 30
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 15
+    periodSeconds: 10
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+
+web:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: zhiqian/web
+    tag: ""
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+# ===== PostgreSQL =====
+postgres:
+  enabled: true
+  image:
+    repository: postgres
+    tag: "16-alpine"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 5432
+  auth:
+    username: zhiqian
+    password: zhiqian-change-me
+    database: zhiqian
+  persistence:
+    enabled: true
+    size: 10Gi
+    accessMode: ReadWriteOnce
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+# ===== Ingress =====
+ingress:
+  enabled: false
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 50m
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+  hosts:
+    - host: zhiqian.local
+      paths:
+        - path: /api
+          pathType: Prefix
+          service: backend
+        - path: /rag
+          pathType: Prefix
+          service: rag
+        - path: /
+          pathType: Prefix
+          service: web
+  tls: []
+  #  - secretName: zhiqian-tls
+  #    hosts: [zhiqian.local]
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""

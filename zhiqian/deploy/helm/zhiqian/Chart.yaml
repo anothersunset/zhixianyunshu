@@ -1,0 +1,26 @@
+# v2-step-18: Helm Chart for ZhiQian YunShu (智迁云枢)
+apiVersion: v2
+name: zhiqian
+description: ZhiQian YunShu - LLM-driven heterogeneous database migration platform (backend + rag + web + postgres)
+type: application
+version: 0.1.0
+appVersion: "2.0.0"
+kubeVersion: ">=1.24.0-0"
+keywords:
+  - llm
+  - rag
+  - agent
+  - migration
+  - opengauss
+  - deepseek
+  - graphrag
+  - temporal
+home: https://github.com/anothersunset/zhixianyunshu
+sources:
+  - https://github.com/anothersunset/zhixianyunshu
+maintainers:
+  - name: ZhiQian Team
+    email: noreply@zhiqian.local
+annotations:
+  category: AI/Database
+  licenses: Apache-2.0
