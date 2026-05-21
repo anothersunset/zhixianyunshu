@@ -1,0 +1,36 @@
+# v2-step-19: ArgoCD Application for dev environment
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: zhiqian-dev
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    env: dev
+spec:
+  project: zhiqian
+  source:
+    repoURL: https://github.com/anothersunset/zhixianyunshu.git
+    targetRevision: main
+    path: zhiqian/deploy/kustomize/overlays/dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: zhiqian-dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  revisionHistoryLimit: 10

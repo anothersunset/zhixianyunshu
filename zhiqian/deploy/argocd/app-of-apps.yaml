@@ -1,0 +1,28 @@
+# v2-step-19: App-of-apps 根应用 (可选)
+# 一键 bootstrap 后: kubectl apply -f app-of-apps.yaml -n argocd
+# 会自动 sync project.yaml + application-dev.yaml + application-prod.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: zhiqian-root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/anothersunset/zhixianyunshu.git
+    targetRevision: main
+    path: zhiqian/deploy/argocd
+    directory:
+      recurse: false
+      include: '{project.yaml,application-dev.yaml,application-prod.yaml}'
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false

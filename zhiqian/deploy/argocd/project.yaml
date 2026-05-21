@@ -1,0 +1,48 @@
+# v2-step-19: ArgoCD AppProject for ZhiQian YunShu
+# AppProject 限定 Application 可使用的 source repo / dest ns / RBAC
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: zhiqian
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: ZhiQian YunShu intelligent database migration platform
+  sourceRepos:
+    - https://github.com/anothersunset/zhixianyunshu.git
+    - https://github.com/anothersunset/zhixianyunshu
+  destinations:
+    - namespace: zhiqian
+      server: https://kubernetes.default.svc
+    - namespace: zhiqian-dev
+      server: https://kubernetes.default.svc
+    - namespace: zhiqian-staging
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+    - group: networking.k8s.io
+      kind: IngressClass
+  namespaceResourceWhitelist:
+    - group: ''
+      kind: '*'
+    - group: apps
+      kind: '*'
+    - group: batch
+      kind: '*'
+    - group: networking.k8s.io
+      kind: '*'
+    - group: policy
+      kind: '*'
+    - group: autoscaling
+      kind: '*'
+  orphanedResources:
+    warn: true
+  roles:
+    - name: read-only
+      description: read-only access to zhiqian apps
+      policies:
+        - p, proj:zhiqian:read-only, applications, get, zhiqian/*, allow
+      groups:
+        - zhiqian:viewers

@@ -1,0 +1,52 @@
+# v2-step-19: ArgoCD Application for prod environment
+# prod 关闭 automated sync 防误操作, 仅启 selfHeal + drift detection
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: zhiqian-prod
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    env: prod
+  annotations:
+    # 生产升级请走 argocd app sync zhiqian-prod 手动触发
+    notifications.argoproj.io/subscribe.on-deployed.slack: zhiqian-ops
+    notifications.argoproj.io/subscribe.on-health-degraded.slack: zhiqian-alerts
+spec:
+  project: zhiqian
+  source:
+    repoURL: https://github.com/anothersunset/zhixianyunshu.git
+    targetRevision: main
+    path: zhiqian/deploy/kustomize/overlays/prod
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: zhiqian
+  syncPolicy:
+    # prod 不开 automated, 仅 selfHeal 保持状态一致
+    automated:
+      prune: false
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+      - ApplyOutOfSyncOnly=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+  revisionHistoryLimit: 20
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas  # HPA 接管 replicas 后 ArgoCD 不该 drift
+    - kind: Secret
+      name: zhiqian-backend-secret
+      jsonPointers:
+        - /data  # 生产用 External Secrets / Sealed Secrets 同步, ArgoCD 不参与
