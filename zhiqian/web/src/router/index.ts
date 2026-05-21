@@ -1,9 +1,12 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 
+// v2 路由: 加 #26 /present + #28 /edge
 const router = createRouter({
   history: createWebHashHistory(),
   routes: [
     { path: '/login', component: () => import('@/views/Login.vue'), meta: { public: true } },
+    // 演示模式 — 独立全屏, 不走 MainLayout
+    { path: '/present', component: () => import('@/views/PresentationView.vue'), meta: { public: true } },
     {
       path: '/',
       component: () => import('@/layouts/MainLayout.vue'),
@@ -15,9 +18,10 @@ const router = createRouter({
         { path: 'tasks/:id', component: () => import('@/views/TaskDetail.vue') },
         { path: 'sql-transpile', component: () => import('@/views/SqlTranspile.vue') },
         { path: 'knowledge', component: () => import('@/views/KnowledgeBase.vue') },
-        // v2-step-16: CKG graph visualization
         { path: 'ckg', component: () => import('@/views/CkgExplorer.vue') },
         { path: 'reports', component: () => import('@/views/Reports.vue') },
+        // v2-step-28: 端侧推理 Demo
+        { path: 'edge', component: () => import('@/views/LocalChat.vue') },
         { path: 'settings', component: () => import('@/views/Settings.vue') },
       ],
     },

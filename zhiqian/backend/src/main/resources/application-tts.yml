@@ -1,0 +1,14 @@
+# v2-step-26: TTS profile。启用 — SPRING_PROFILES_ACTIVE=tts 启动。
+# 依赖: pip install edge-tts (Microsoft Azure Cognitive Services REST, 免费 high-quality)
+app:
+  tts:
+    enabled: true
+    engine: edge-tts
+    voice: zh-CN-XiaoxiaoNeural   # 可选 zh-CN-YunxiNeural / en-US-AriaNeural
+    rate: "+0%"
+    volume: "+0%"
+    timeout-seconds: 20
+
+logging:
+  level:
+    com.zhiqian.tts: INFO
