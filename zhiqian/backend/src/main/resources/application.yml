@@ -33,9 +33,7 @@ app:
     password: ${APP_ADMIN_PASSWORD}
   rag:
     base-url: ${APP_RAG_BASE_URL:http://localhost:8001}
-  # ===== v2-step-02 新增：LLM 接入配置 =====
-  # 默认指向 DeepSeek-V3.1，使用 OpenAI 兼容协议。
-  # api-key 为空时后端会启用 MockLlmClient（仅回显），不阻塞启动。
+  # ===== v2-step-02: LLM 接入配置 =====
   llm:
     provider: ${LLM_PROVIDER:deepseek}
     api-key: ${LLM_API_KEY:}
@@ -45,14 +43,24 @@ app:
     temperature: ${LLM_TEMPERATURE:0.2}
     max-tokens: ${LLM_MAX_TOKENS:2048}
     timeout-seconds: ${LLM_TIMEOUT_SECONDS:60}
-  # ===== v2-step-08 新增：Langfuse 后端全链观测 =====
-  # public-key/secret-key 留空即 disabled，行为完全不变，不影响功能。
-  # 配上后，task.migration root trace + 6 stage span + 每次 LLM 调用 generation 都会上报。
+  # ===== v2-step-08: Langfuse 后端全链观测 =====
   langfuse:
     enabled: ${LANGFUSE_ENABLED:true}
     host: ${LANGFUSE_HOST:https://cloud.langfuse.com}
     public-key: ${LANGFUSE_PUBLIC_KEY:}
     secret-key: ${LANGFUSE_SECRET_KEY:}
+  # ===== v2-step-14: Temporal durable workflow =====
+  # enabled=false (默认) 时不装载任何 Temporal bean, 原 AgentRunner 路径完全不变。
+  # 启用后必需 docker compose --profile temporal up 拉起 temporal-server。
+  temporal:
+    enabled: ${TEMPORAL_ENABLED:false}
+    service-target: ${TEMPORAL_TARGET:127.0.0.1:7233}
+    namespace: ${TEMPORAL_NAMESPACE:default}
+    task-queue: ${TEMPORAL_TASK_QUEUE:zhiqian-migration}
+    workflow-execution-timeout-minutes: ${TEMPORAL_WF_TIMEOUT_MIN:60}
+    activity-start-to-close-timeout-seconds: ${TEMPORAL_ACT_TIMEOUT_SEC:600}
+    activity-max-attempts: ${TEMPORAL_ACT_MAX_ATTEMPTS:3}
+    worker-concurrent-activity-execution-size: ${TEMPORAL_WORKER_CONCURRENCY:8}
 
 logging:
   level:

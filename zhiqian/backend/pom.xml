@@ -13,7 +13,7 @@
 
     <groupId>com.zhiqian</groupId>
     <artifactId>zhiqian-backend</artifactId>
-    <version>0.1.0</version>
+    <version>0.2.0</version>
     <packaging>jar</packaging>
     <name>zhiqian-backend</name>
     <description>ZhiQian YunShu backend</description>
@@ -24,6 +24,8 @@
         <javaparser.version>3.25.10</javaparser.version>
         <jgrapht.version>1.5.2</jgrapht.version>
         <maven-model.version>3.9.6</maven-model.version>
+        <!-- v2-step-14: Temporal durable workflow -->
+        <temporal.version>1.27.0</temporal.version>
     </properties>
 
     <dependencies>
@@ -101,6 +103,13 @@
             <artifactId>lombok</artifactId>
             <optional>true</optional>
         </dependency>
+        <!-- v2-step-14: Temporal SDK (durable workflow engine).
+             仅在 app.temporal.enabled=true 时装载 bean; 不启用时 ~25MB jar 仅占镜像, 运行时不创建连接。 -->
+        <dependency>
+            <groupId>io.temporal</groupId>
+            <artifactId>temporal-sdk</artifactId>
+            <version>${temporal.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
@@ -109,6 +118,13 @@
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- v2-step-14: Temporal 本地 test server, 仅测试作用域 -->
+        <dependency>
+            <groupId>io.temporal</groupId>
+            <artifactId>temporal-testing</artifactId>
+            <version>${temporal.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

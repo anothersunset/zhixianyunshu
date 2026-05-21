@@ -12,6 +12,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./init-db.sql:/docker-entrypoint-initdb.d/00_init.sql:ro
+      - ./init-temporal-db.sql:/docker-entrypoint-initdb.d/10_temporal.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U zhiqian -d zhiqian"]
       interval: 5s
@@ -34,6 +35,49 @@ services:
       timeout: 5s
       retries: 10
 
+  # v2-step-14: Temporal server (auto-setup, 依赖 postgres)
+  # 启动方式: docker compose --profile temporal up -d
+  # 需要在 .env 中设置 TEMPORAL_ENABLED=true 让 backend 连这里
+  temporal:
+    image: temporalio/auto-setup:1.25.0
+    container_name: zhiqian-temporal
+    restart: unless-stopped
+    profiles: ["temporal"]
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: zhiqian
+      POSTGRES_PWD: ${POSTGRES_PASSWORD:?请在 .env 中设置 POSTGRES_PASSWORD}
+      POSTGRES_SEEDS: postgres
+      DBNAME: temporal
+      VISIBILITY_DBNAME: temporal_visibility
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CLI_ADDRESS: temporal:7233
+    ports:
+      - "7233:7233"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "tctl", "--address", "temporal:7233", "cluster", "health"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  temporal-ui:
+    image: temporalio/ui:2.31.2
+    container_name: zhiqian-temporal-ui
+    restart: unless-stopped
+    profiles: ["temporal"]
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:3000,http://localhost:8233
+    ports:
+      - "8233:8080"
+    depends_on:
+      - temporal
+
   backend:
     build:
       context: ../backend
@@ -55,10 +99,16 @@ services:
       LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.2}
       LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-2048}
       LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-60}
-      # v2-step-08: Langfuse 后端全链观测。留空即 disabled,不影响功能。
+      # v2-step-08: Langfuse 后端全链观测。留空即 disabled
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-https://cloud.langfuse.com}
+      # v2-step-14: Temporal durable workflow。默认 false。
+      # TEMPORAL_ENABLED=true 且 docker compose --profile temporal up 后才走 Temporal 路径。
+      TEMPORAL_ENABLED: ${TEMPORAL_ENABLED:-false}
+      TEMPORAL_TARGET: ${TEMPORAL_TARGET:-temporal:7233}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-zhiqian-migration}
       JAVA_TOOL_OPTIONS: "-Xms256m -Xmx768m"
     ports:
       - "8080:8080"
@@ -93,13 +143,11 @@ services:
       RAG_QDRANT_URL: ${RAG_QDRANT_URL:-http://qdrant:6333}
       RAG_QDRANT_API_KEY: ${RAG_QDRANT_API_KEY:-}
       RAG_RRF_K: ${RAG_RRF_K:-60}
-      # v2-step-06: Chunking
       RAG_CHUNK_STRATEGY: ${RAG_CHUNK_STRATEGY:-semantic}
       RAG_CHUNK_SIM_THRESHOLD: ${RAG_CHUNK_SIM_THRESHOLD:-0.62}
       RAG_CHUNK_MAX_CHARS: ${RAG_CHUNK_MAX_CHARS:-1200}
       RAG_LATE_CHUNK_MAX_CHARS: ${RAG_LATE_CHUNK_MAX_CHARS:-600}
       RAG_LATE_CHUNK_OVERLAP: ${RAG_LATE_CHUNK_OVERLAP:-80}
-      # v2-step-07: Langfuse 全链观测 (留空即 disabled)
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-https://cloud.langfuse.com}
