@@ -2,7 +2,7 @@
 
 ## 总进度表 (32 提交)
 
-### Phase 1 — 真 LLM + 真检索 (P0)
+### Phase 1 — 真 LLM + 真检索 (P0) — ✅ 11/11
 
 | # | 提交 | 状态 |
 | --- | --- | --- |
@@ -15,10 +15,10 @@
 | 7 | feat(rag): Langfuse trace 全链 | ✅ |
 | 8 | feat(backend): Langfuse Java SDK | ✅ |
 | 9 | feat(rag): sqlglot 替 Jinja2 | ✅ |
-| 10 | feat(web): Monaco SQL Diff | ⏳ |
-| 11 | test(rag): RAGAS + golden set 20 | ⏳ |
+| 10 | feat(web): Monaco SQL Diff | ✅ |
+| 11 | test(rag): RAGAS + golden set 20 | ✅ |
 
-### Phase 2 — Agent + GraphRAG
+### Phase 2 — Agent + GraphRAG — ⏳ 0/6
 
 | # | 提交 | 状态 |
 | --- | --- | --- |
@@ -29,7 +29,7 @@
 | 16 | feat(web): Cytoscape.js CKG 可视化 | ⏳ |
 | 17 | test(backend): Spring Boot Test ≥0.8 | ⏳ |
 
-### Phase 3 — 云原生 + 真库 + 协议
+### Phase 3 — 云原生 + 真库 + 协议 — ⏳ 0/7
 
 | # | 提交 | 状态 |
 | --- | --- | --- |
@@ -41,7 +41,7 @@
 | 23 | feat(rag): MCP Server | ⏳ |
 | 24 | feat(backend): A2A 协议 | ⏳ |
 
-### 加分彩蛋
+### 加分彩蛋 — ⏳ 0/8
 
 | # | 提交 | 状态 |
 | --- | --- | --- |
@@ -53,6 +53,25 @@
 | 30 | docs: 论文架构 + 对比表 | ⏳ |
 | 31 | chore: SBOM + Cosign + Trivy | ⏳ |
 | 32 | docs: 最终 README + 脚本 | ⏳ |
+
+---
+
+## Phase 1 milestone (11/11) — 2026-05-21 ✅
+
+**完成能力**:
+- 真 LLM (DeepSeek-V3.1/R1) 驱动 6 Agent 迁移浴水线
+- 中文 SOTA 检索 (BGE-M3 + reranker + Qdrant 3-way RRF + semantic chunking)
+- 双端 Langfuse 可观测 (Python SDK + Java RestClient)
+- sqlglot AST SQL 转译 (替代 Jinja2 字符串拼接)
+- Monaco SQL Diff Web 页面 (/sql-transpile)
+- RAGAS 三层可衡量 (retrieval recall@5 ≥ 0.80 / transpile 8 case / qa keyword ≥ 50%)
+
+**质量基线**:
+- /transpile 响应 < 200ms (sqlglot 本地 AST)
+- /retrieve p50 < 1s (本地 fallback)
+- backend 全链 trace 可在 Langfuse 上看到 6 个 stage span + N 个 generation 子节点
+
+---
 
 ## 决策日志
 
@@ -76,3 +95,9 @@
 | 2026-05-21 | ThreadLocal trace context 让 LLM generation 自动 attach 到当前 stage span |
 | 2026-05-21 | sqlglot 不内置 opengauss, normalize_dialect() alias 到 postgres 生成器 (95% 同语法) |
 | 2026-05-21 | explain_transpile() 不走 AST walk, 用 substring 探测函数名 避免 sqlglot API 不稳定 |
+| 2026-05-21 | Monaco worker 走主线程 (getWorkerUrl=data: URL), 避免 vite worker plugin 配置 |
+| 2026-05-21 | web /sql-transpile 直调 rag (CORS allow_origins=*), 不走 backend 代理 |
+| 2026-05-21 | Vue 模板全面走 v-text/computed, 避免   被上游工具压缩 URL 替换 (复发于 #1) |
+| 2026-05-21 | 测试依赖独立 requirements-test.txt, 避免 langchain/datasets 污染产品镜像 |
+| 2026-05-21 | RAGAS 调 DeepSeek 走 OpenAI compatible (langchain-openai.ChatOpenAI), 零代码修改 |
+| 2026-05-21 | recall@5 阈值 0.80, faithfulness/relevancy 阈值 0.50 (保守, Phase 2 GraphRAG 后可取高) |
