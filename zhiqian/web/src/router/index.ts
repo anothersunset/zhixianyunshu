@@ -15,6 +15,8 @@ const router = createRouter({
         { path: 'tasks/:id', component: () => import('@/views/TaskDetail.vue') },
         { path: 'sql-transpile', component: () => import('@/views/SqlTranspile.vue') },
         { path: 'knowledge', component: () => import('@/views/KnowledgeBase.vue') },
+        // v2-step-16: CKG graph visualization
+        { path: 'ckg', component: () => import('@/views/CkgExplorer.vue') },
         { path: 'reports', component: () => import('@/views/Reports.vue') },
         { path: 'settings', component: () => import('@/views/Settings.vue') },
       ],

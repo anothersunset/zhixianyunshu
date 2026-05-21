@@ -1,6 +1,6 @@
 {
   "name": "zhiqian-web",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,6 +11,8 @@
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.1",
     "axios": "^1.7.2",
+    "cytoscape": "^3.30.2",
+    "cytoscape-fcose": "^2.2.0",
     "echarts": "^5.5.0",
     "element-plus": "^2.7.5",
     "monaco-editor": "^0.50.0",
@@ -20,6 +22,7 @@
     "vue-router": "^4.3.2"
   },
   "devDependencies": {
+    "@types/cytoscape": "^3.21.4",
     "@vitejs/plugin-vue": "^5.0.5",
     "typescript": "^5.4.5",
     "vite": "^5.2.13",

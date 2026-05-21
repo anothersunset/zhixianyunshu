@@ -9,6 +9,7 @@
         <el-menu-item index="/tasks"><el-icon><Operation /></el-icon><span>任务</span></el-menu-item>
         <el-menu-item index="/sql-transpile"><el-icon><Edit /></el-icon><span>SQL 转译</span></el-menu-item>
         <el-menu-item index="/knowledge"><el-icon><Reading /></el-icon><span>知识库</span></el-menu-item>
+        <el-menu-item index="/ckg"><el-icon><Connection /></el-icon><span>CKG 图谱</span></el-menu-item>
         <el-menu-item index="/reports"><el-icon><Document /></el-icon><span>报告</span></el-menu-item>
         <el-menu-item index="/settings"><el-icon><Setting /></el-icon><span>设置</span></el-menu-item>
       </el-menu>
@@ -36,7 +37,7 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router'
 import {
-  Odometer, FolderOpened, Operation, Reading, Document, Setting, CaretBottom, Edit,
+  Odometer, FolderOpened, Operation, Reading, Document, Setting, CaretBottom, Edit, Connection,
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
