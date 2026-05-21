@@ -1,0 +1,49 @@
+# polish: 减少 docker build 上下文 — 提速 / 防秘密外泄
+
+# VCS
+.git
+.gitignore
+.github
+
+# Build outputs
+**/target/
+**/dist/
+**/build/
+**/.next/
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/node_modules/
+**/coverage/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.swp
+.DS_Store
+
+# Logs
+**/*.log
+**/logs/
+
+# Local env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# SBOM/security artifacts
+.sbom/
+**/*.sig
+**/*.pem
+**/*.cdx.json
+!zhiqian/security/*.cdx.json   # 依项目需要, 未来可改
+
+# OS
+Thumbs.db
+
+# Project-specific big assets
+**/seeds/*.tar.gz
+**/*.dump
+**/*.sql.gz
