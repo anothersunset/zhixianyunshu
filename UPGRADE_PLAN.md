@@ -18,15 +18,15 @@
 | 10 | feat(web): Monaco SQL Diff | ✅ |
 | 11 | test(rag): RAGAS + golden set 20 | ✅ |
 
-### Phase 2 — Agent + GraphRAG — 🟡 3/6
+### Phase 2 — Agent + GraphRAG — 🟡 5/6
 
 | # | 提交 | 状态 |
 | --- | --- | --- |
 | 12 | feat(rag): LangGraph Self-RAG→CRAG | ✅ |
 | 13 | feat(rag): GraphRAG 索引 CKG | ✅ |
 | 14 | feat(backend): Temporal worker | ✅ |
-| 15 | feat(rag): Outlines 受约束解码 | ⏳ |
-| 16 | feat(web): Cytoscape.js CKG 可视化 | ⏳ |
+| 15 | feat(rag): Outlines 受约束解码 | ✅ |
+| 16 | feat(web): Cytoscape.js CKG 可视化 | ✅ |
 | 17 | test(backend): Spring Boot Test ≥0.8 | ⏳ |
 
 ### Phase 3 — 云原生 + 真库 + 协议 — ⏳ 0/7
@@ -73,17 +73,17 @@
 
 ---
 
-## Phase 2 进度 (3/6) — 2026-05-21 🟡
+## Phase 2 进度 (5/6) — 2026-05-21 🟡
 
 **已完成**:
 - ✅ #12 LangGraph-style CRAG (retrieve→evaluate→correct/refine/web_search→generate)
 - ✅ #13 GraphRAG 索引 CKG (Louvain-Lite 社区 + local/global 双查询 + 8 测试)
 - ✅ #14 Temporal durable workflow (6 stage activity + QueryMethod + REST + docker profile=temporal)
+- ✅ #15 Outlines 受约束解码 (DeepSeek JSON mode 默认 + Outlines 可选 + 3 endpoint + 6 测试)
+- ✅ #16 Cytoscape.js CKG 可视化 (fcose layout + /api/ckg/graph demo 13 节点 + /ckg 路由)
 
 **待完成**:
-- ⏳ #15 Outlines 受约束解码 (强保证 JSON 输出 schema)
-- ⏳ #16 Cytoscape.js CKG 可视化 (前端图谱浏览)
-- ⏳ #17 Spring Boot Test ≥ 0.8 (Testcontainers + WebMvcTest)
+- ⏳ #17 Spring Boot Test ≥ 0.8 (Testcontainers + WebMvcTest + JaCoCo)
 
 ---
 
@@ -111,7 +111,7 @@
 | 2026-05-21 | explain_transpile() 不走 AST walk, 用 substring 探测函数名 避免 sqlglot API 不稳定 |
 | 2026-05-21 | Monaco worker 走主线程 (getWorkerUrl=data: URL), 避免 vite worker plugin 配置 |
 | 2026-05-21 | web /sql-transpile 直调 rag (CORS allow_origins=*), 不走 backend 代理 |
-| 2026-05-21 | Vue 模板全面走 v-text/computed, 避免   被上游工具压缩 URL 替换 (复发于 #1) |
+| 2026-05-21 | Vue 模板全面走 v-text/computed, 避免 mustache 被上游工具压缩 URL 替换 (复发于 #1 #10 #16) |
 | 2026-05-21 | 测试依赖独立 requirements-test.txt, 避免 langchain/datasets 污染产品镜像 |
 | 2026-05-21 | RAGAS 调 DeepSeek 走 OpenAI compatible (langchain-openai.ChatOpenAI), 零代码修改 |
 | 2026-05-21 | recall@5 阈值 0.80, faithfulness/relevancy 阈值 0.50 (保守, Phase 2 GraphRAG 后可取高) |
@@ -124,3 +124,8 @@
 | 2026-05-21 | TemporalActivities 委托现有 AgentRunner + 6 AgentTool bean, 不双护理业务逻辑 |
 | 2026-05-21 | Temporal docker compose 走 profile=temporal opt-in, 复用主 postgres (DBNAME=temporal/visibility), 不引独立 cassandra |
 | 2026-05-21 | TemporalMigrationController 用 ObjectProvider<WorkflowClient>, disabled 时返 503 而非 404, 给前端明确提示 |
+| 2026-05-21 | Outlines 双后端: 默认 DeepSeek JSON mode (response_format=json_object), 可选 Outlines (transformers + 本地模型), 不在场时静默降级 |
+| 2026-05-21 | Structured output retry 把 pydantic 校验错误回传给 LLM 做下一轮修正, 最多 3 次 |
+| 2026-05-21 | jsonschema 必装 (~150KB), outlines 留注释行可选启用, 避免镜像膨胀 ~500MB |
+| 2026-05-21 | Cytoscape.js + cytoscape-fcose lazy import 仅在 /ckg 路由, 主包不变 |
+| 2026-05-21 | /api/ckg/graph 阶段性返 demo 图 (13 节点 10 边), 接入 CkgAnalyzerService 后切真实数据, 避免阻塞前端开发 |

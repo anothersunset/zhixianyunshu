@@ -4,6 +4,103 @@
 
 ---
 
+## 🟡 Phase 2 进度 (5/6) — 2026-05-21
+
+**Outlines 受约束解码 + Cytoscape.js CKG 可视化双落地**。剩 #17 Spring Boot Test ≥0.8 即 Phase 2 全部交付。
+
+---
+
+## [v2-step-16] 2026-05-21 — Cytoscape.js CKG 图谱可视化
+
+**提交 SHA**: `c3374bf7` (batch 1 web 新文件 3) + `b31d20e6` (batch 2 wiring + backend controller)
+
+### 动机
+v1 有 CKG (Code Knowledge Graph) 分析结果, 却只能看 JSON, 拓扑关系 (表被哪些方法用 / 调用链路) 不可见。Cytoscape.js 是业界 SOTA 图可视化库 (11k⭐, Google/Mozilla 在用), fcose layout 对 100+ 节点也保持可读, 是答辩演示的关键加分项。
+
+### 设计要点
+- **CkgGraph.vue 独立组件**: props nodes/edges 走反序列化, 默认 fcose layout (力导向 + 避免重叠); 5 节点色调 (File=蓝 / Class=绿 / Method=橙 / Table=紫 / Column=灰); 3 边样式 (contains 实线 / calls 虚线 / reads 点线)。
+- **不用 mustache 占位符**: 所有 Vue 模板走 v-text/v-bind, 避免上游工具压缩 URL 替换 (复发于 #1 #10)。
+- **交互**: 节点点击 emit, 右侧面板展示属性 + 邻居; 顶部按 type 过滤 + label 搜索; fit-to-view 按钮。
+- **后端**: GET /api/ckg/graph?projectId=X 当前返 demo 图 (13 节点 + 10 边: 1 file + 2 class + 4 method + 3 table + 3 column), 接入 CkgAnalyzerService 后切真实数据。
+- **lazy import**: CKG 路由 lazy load, cytoscape + cytoscape-fcose 仅在该页面加载 (免主包 +200KB)。
+- **仅增不改**: 不动现有路由与菜单项, 只追加。
+
+### 变更项
+新增 4 文件:
+- `web/src/components/CkgGraph.vue` (cytoscape 包装 ~150 行)
+- `web/src/api/ckg.ts` (axios 客户端)
+- `web/src/views/CkgExplorer.vue` (主页: 项目选 + 过滤 + CkgGraph + 详情面板)
+- `backend/src/main/java/com/zhiqian/ckg/CkgGraphController.java` (GET /api/ckg/graph, demo 图)
+
+修改 3 文件:
+- `web/package.json` (+cytoscape 3.30.2, +cytoscape-fcose 2.2.0, +@types/cytoscape; version 0.3.0 → 0.4.0)
+- `web/src/router/index.ts` (+/ckg 路由)
+- `web/src/layouts/MainLayout.vue` (+CKG 菜单项, Connection 图标)
+
+### 验证
+```bash
+cd zhiqian/web && npm install && npm run dev
+# 打开 http://localhost:5173/#/ckg
+# 选 demo 项目 → 看到 13 节点 + 10 边 的力导向布局
+# 点节点 → 右侧面板展属性 + 邻居 tag 列表
+# 顶部过滤选 Table 只看表节点; 输入 order 高亮匹配
+
+curl -s http://localhost:8080/api/ckg/graph?projectId=1 \
+  -H 'Authorization: Bearer <JWT>' | jq '{nodes: (.data.nodes | length), edges: (.data.edges | length)}'
+# => {nodes: 13, edges: 10}
+```
+
+### 回滚
+`git revert b31d20e6 c3374bf7` → /ckg 页与 /api/ckg/* 接口消失, 其他不受影响。
+
+---
+
+## [v2-step-15] 2026-05-21 — Outlines 受约束解码 (强保证 JSON Schema)
+
+**提交 SHA**: `8fcb13e3`
+
+### 动机
+LLM 生成结构化 JSON (转译解释 / schema 分析 / 迁移风险) 在生产里经常出 'JSON 末尾多一逗号' '字段名笔误' 这类问题, 重试 retry 也不收敛。Outlines (dottxt-ai) 是约束解码 SOTA, 直接在 logits 层强制走 schema, 但需要 transformers + 本地模型。DeepSeek API 自带 `response_format: json_object` 模式, 双轨可降级。
+
+### 设计要点
+- **双后端架构**: 默认 DeepSeek JSON mode (httpx POST + response_format), 可选 Outlines (`RAG_OUTLINES_ENABLED=true`, 需 transformers + outlines)。Outlines 不在场时静默降级。
+- **pydantic v2 schema**: TranspileExplanation / SchemaAnalysisResult / MigrationRiskReport 三模型, Field 描述 + 校验。
+- **retry + 错误反馈**: 解析失败时把 pydantic 错误回传给 LLM 重新生成, 最多 3 次。Langfuse trace 每次尝试。
+- **3 REST 端点**:
+  - POST /structured/transpile-explain (SQL 转译变动详解)
+  - POST /structured/schema-analysis (DDL 表/字段结构 + 风险)
+  - POST /structured/risk-report (迁移风险分级与建议)
+- **轻量依赖**: 必装仅 jsonschema (~150KB), Outlines 留注释行可选启用。
+- **6 测试**: schema 校验 / 无 key fallback / bad JSON retry / 3 端点 mock httpx 烟测。
+
+### 变更项
+新增 4 文件:
+- `rag/app/core/schemas.py` (pydantic 模型)
+- `rag/app/core/structured_output.py` (StructuredOutputClient 双后端)
+- `rag/app/api/structured.py` (3 endpoint)
+- `rag/tests/test_structured.py` (6 测试)
+
+修改: `rag/app/main.py` (0.8.0 → 0.9.0, 注册 structured_router, +structured_output_enabled/structured_backend/outlines_available 三 health cap), `rag/requirements.txt` (+jsonschema==4.23.0, # outlines==0.0.46 可选注释行)。
+
+### 验证
+```bash
+cd zhiqian/rag && pytest tests/test_structured.py -v
+# 6 passed
+
+curl -s http://localhost:8001/health | jq '.capabilities | {structured_output_enabled, structured_backend, outlines_available}'
+# => {structured_output_enabled: true, structured_backend: "deepseek_json_mode", outlines_available: false}
+
+curl -s -X POST http://localhost:8001/structured/transpile-explain \
+  -H 'Content-Type: application/json' \
+  -d '{"source_sql":"SELECT IFNULL(a,b) FROM t LIMIT 5,10","source_dialect":"mysql","target_dialect":"opengauss"}' | jq
+# => { target_sql, changes: [...], risk_level, confidence }
+```
+
+### 回滚
+`git revert 8fcb13e3` → /structured/* 端点消失; 主 /query /crag/* /graphrag/* 不受影响。
+
+---
+
 ## 🟡 Phase 2 进度 (3/6) — 2026-05-21
 
 **LangGraph CRAG + GraphRAG + Temporal worker 三大支柱已落地**。剩 Outlines 受约束解码、Cytoscape.js CKG 可视化、Spring Boot Test ≥0.8。
