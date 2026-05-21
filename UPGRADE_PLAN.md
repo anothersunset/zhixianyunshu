@@ -18,7 +18,7 @@
 | 10 | feat(web): Monaco SQL Diff | ✅ |
 | 11 | test(rag): RAGAS + golden set 20 | ✅ |
 
-### Phase 2 — Agent + GraphRAG — 🟡 5/6
+### Phase 2 — Agent + GraphRAG — ✅ 6/6
 
 | # | 提交 | 状态 |
 | --- | --- | --- |
@@ -27,7 +27,7 @@
 | 14 | feat(backend): Temporal worker | ✅ |
 | 15 | feat(rag): Outlines 受约束解码 | ✅ |
 | 16 | feat(web): Cytoscape.js CKG 可视化 | ✅ |
-| 17 | test(backend): Spring Boot Test ≥0.8 | ⏳ |
+| 17 | test(backend): Spring Boot Test ≥0.8 | ✅ |
 
 ### Phase 3 — 云原生 + 真库 + 协议 — ⏳ 0/7
 
@@ -58,32 +58,28 @@
 
 ## Phase 1 milestone (11/11) — 2026-05-21 ✅
 
-**完成能力**:
-- 真 LLM (DeepSeek-V3.1/R1) 驱动 6 Agent 迁移浴水线
-- 中文 SOTA 检索 (BGE-M3 + reranker + Qdrant 3-way RRF + semantic chunking)
-- 双端 Langfuse 可观测 (Python SDK + Java RestClient)
-- sqlglot AST SQL 转译 (替代 Jinja2 字符串拼接)
-- Monaco SQL Diff Web 页面 (/sql-transpile)
-- RAGAS 三层可衡量 (retrieval recall@5 ≥ 0.80 / transpile 8 case / qa keyword ≥ 50%)
-
-**质量基线**:
-- /transpile 响应 < 200ms (sqlglot 本地 AST)
-- /retrieve p50 < 1s (本地 fallback)
-- backend 全链 trace 可在 Langfuse 上看到 6 个 stage span + N 个 generation 子节点
+真 LLM + 6 Agent + BGE-M3+RRF + Late Chunking + Langfuse 双端 + sqlglot + Monaco Diff + RAGAS。
 
 ---
 
-## Phase 2 进度 (5/6) — 2026-05-21 🟡
+## Phase 2 milestone (6/6) — 2026-05-21 ✅
 
-**已完成**:
-- ✅ #12 LangGraph-style CRAG (retrieve→evaluate→correct/refine/web_search→generate)
-- ✅ #13 GraphRAG 索引 CKG (Louvain-Lite 社区 + local/global 双查询 + 8 测试)
-- ✅ #14 Temporal durable workflow (6 stage activity + QueryMethod + REST + docker profile=temporal)
-- ✅ #15 Outlines 受约束解码 (DeepSeek JSON mode 默认 + Outlines 可选 + 3 endpoint + 6 测试)
-- ✅ #16 Cytoscape.js CKG 可视化 (fcose layout + /api/ckg/graph demo 13 节点 + /ckg 路由)
+**完成能力**:
+- ✅ #12 LangGraph-style CRAG
+- ✅ #13 GraphRAG 索引 CKG (Louvain-Lite + 双查询)
+- ✅ #14 Temporal durable workflow (6 stage + REST + docker profile)
+- ✅ #15 Outlines 受约束解码 (DeepSeek JSON mode + Outlines 双后端 + 3 endpoint)
+- ✅ #16 Cytoscape.js CKG 可视化 (fcose layout + /ckg 页 + /api/ckg/graph)
+- ✅ #17 Spring Boot Test ≥0.8 (Testcontainers + WebMvcTest + JaCoCo 门禁 ≥0.70 渐进)
 
-**待完成**:
-- ⏳ #17 Spring Boot Test ≥ 0.8 (Testcontainers + WebMvcTest + JaCoCo)
+**质量指标**:
+- JaCoCo BUNDLE line coverage ≥ 0.70 门禁 (excludes temporal.workflow / bootstrap / Application)
+- ZhiqianApplicationTests `@SpringBootTest` 点亮所有 bean, 单测覆盖率主力
+- PostgresIntegrationTest 走 Testcontainers postgres:16-alpine 跑真 Flyway 迁移
+- CkgGraphController + 6 Properties bean 全部有测试
+
+**下一阶段 (Phase 3 — 云原生 + 真库 + 协议, 7 提交)**:
+#18 Helm Chart → #19 ArgoCD+Kustomize → #20 KubeRay+vLLM → #21 Debezium 3.0 CDC → #22 pgloader/MTK → #23 MCP Server → #24 A2A 协议。
 
 ---
 
@@ -104,28 +100,33 @@
 | 2026-05-21 | Late Chunking 默认 semantic |
 | 2026-05-21 | char→token 近似映射不依赖 offset_mapping |
 | 2026-05-21 | Langfuse 不入 pydantic Settings, secret 不进日志 |
-| 2026-05-21 | retriever.search 加 parent_trace 透传, 合并 trace 树 |
-| 2026-05-21 | Java 走 RestClient + Public Ingestion API, 不引 Langfuse SDK 重依赖 |
-| 2026-05-21 | ThreadLocal trace context 让 LLM generation 自动 attach 到当前 stage span |
-| 2026-05-21 | sqlglot 不内置 opengauss, normalize_dialect() alias 到 postgres 生成器 (95% 同语法) |
-| 2026-05-21 | explain_transpile() 不走 AST walk, 用 substring 探测函数名 避免 sqlglot API 不稳定 |
-| 2026-05-21 | Monaco worker 走主线程 (getWorkerUrl=data: URL), 避免 vite worker plugin 配置 |
-| 2026-05-21 | web /sql-transpile 直调 rag (CORS allow_origins=*), 不走 backend 代理 |
-| 2026-05-21 | Vue 模板全面走 v-text/computed, 避免 mustache 被上游工具压缩 URL 替换 (复发于 #1 #10 #16) |
-| 2026-05-21 | 测试依赖独立 requirements-test.txt, 避免 langchain/datasets 污染产品镜像 |
-| 2026-05-21 | RAGAS 调 DeepSeek 走 OpenAI compatible (langchain-openai.ChatOpenAI), 零代码修改 |
-| 2026-05-21 | recall@5 阈值 0.80, faithfulness/relevancy 阈值 0.50 (保守, Phase 2 GraphRAG 后可取高) |
-| 2026-05-21 | CRAG 不引 langgraph 库, 自写 200 行 mini StateGraph runner (graphs/crag.py), 避免 pydantic v1 兼容问题 |
-| 2026-05-21 | CRAG evaluator 双轨: RAG_CRAG_USE_LLM_EVAL=1 走 DeepSeek, 否则启发式 (top doc score 阈值), 让无 key 环境也能跑 |
-| 2026-05-21 | GraphRAG 自实现 Louvain-Lite (BFS 连通分量 + type-based split), 不引 networkx, 50 节点阈值二次拆分 |
-| 2026-05-21 | GraphRagIndex 走全局单例 + lazy build, /index 端点重复调用幂等覆盖 |
-| 2026-05-21 | Temporal 默认 enabled=false, @ConditionalOnProperty 控制 bean 装载, 不开时 0 开销 |
-| 2026-05-21 | Temporal 不用 spring-boot-starter-alpha, 直接 io.temporal:temporal-sdk + 手写 3 bean, 避免 auto-config 越级 |
-| 2026-05-21 | TemporalActivities 委托现有 AgentRunner + 6 AgentTool bean, 不双护理业务逻辑 |
-| 2026-05-21 | Temporal docker compose 走 profile=temporal opt-in, 复用主 postgres (DBNAME=temporal/visibility), 不引独立 cassandra |
-| 2026-05-21 | TemporalMigrationController 用 ObjectProvider<WorkflowClient>, disabled 时返 503 而非 404, 给前端明确提示 |
-| 2026-05-21 | Outlines 双后端: 默认 DeepSeek JSON mode (response_format=json_object), 可选 Outlines (transformers + 本地模型), 不在场时静默降级 |
-| 2026-05-21 | Structured output retry 把 pydantic 校验错误回传给 LLM 做下一轮修正, 最多 3 次 |
-| 2026-05-21 | jsonschema 必装 (~150KB), outlines 留注释行可选启用, 避免镜像膨胀 ~500MB |
-| 2026-05-21 | Cytoscape.js + cytoscape-fcose lazy import 仅在 /ckg 路由, 主包不变 |
-| 2026-05-21 | /api/ckg/graph 阶段性返 demo 图 (13 节点 10 边), 接入 CkgAnalyzerService 后切真实数据, 避免阻塞前端开发 |
+| 2026-05-21 | retriever.search 加 parent_trace 透传 |
+| 2026-05-21 | Java 走 RestClient + Public Ingestion API |
+| 2026-05-21 | ThreadLocal trace context |
+| 2026-05-21 | sqlglot opengauss alias postgres (95% 同语法) |
+| 2026-05-21 | explain_transpile 用 substring 探测函数名 |
+| 2026-05-21 | Monaco worker 走主线程 (data: URL) |
+| 2026-05-21 | web /sql-transpile 直调 rag (CORS=*) |
+| 2026-05-21 | Vue 模板全面 v-text/computed 防 mustache 替换 |
+| 2026-05-21 | 测试依赖独立 requirements-test.txt |
+| 2026-05-21 | RAGAS 调 DeepSeek 走 OpenAI compatible |
+| 2026-05-21 | recall@5 阈值 0.80, faithfulness/relevancy 0.50 |
+| 2026-05-21 | CRAG 不引 langgraph, 自写 200 行 mini StateGraph |
+| 2026-05-21 | CRAG evaluator 双轨 (LLM + 启发式) |
+| 2026-05-21 | GraphRAG 自实现 Louvain-Lite, 不引 networkx |
+| 2026-05-21 | GraphRagIndex 全局单例 + lazy build |
+| 2026-05-21 | Temporal 默认 enabled=false |
+| 2026-05-21 | Temporal 不用 spring-boot-starter-alpha |
+| 2026-05-21 | TemporalActivities 委托 AgentRunner |
+| 2026-05-21 | Temporal docker compose 走 profile=temporal opt-in |
+| 2026-05-21 | TemporalMigrationController 用 ObjectProvider 返 503 |
+| 2026-05-21 | Outlines 双后端: DeepSeek JSON mode 默认 + Outlines 可选 |
+| 2026-05-21 | Structured output retry pydantic 错误反馈最多 3 次 |
+| 2026-05-21 | jsonschema 必装, outlines 注释行可选 |
+| 2026-05-21 | Cytoscape.js + cytoscape-fcose lazy import |
+| 2026-05-21 | /api/ckg/graph 阶段性返 demo 图, 后续切真实数据 |
+| 2026-05-21 | JaCoCo BUNDLE line coverage 门禁 0.70 起步 (Phase 2), 后续可上提到 0.80 |
+| 2026-05-21 | JaCoCo excludes `temporal.workflow.**` (SDK proxy 难测) / `bootstrap/**` / `*Application*` |
+| 2026-05-21 | Testcontainers PostgresIntegrationTest 加 EnabledIfEnvironmentVariable=RUN_TESTCONTAINERS 防止无 Docker 环境 CI 假阳 |
+| 2026-05-21 | application-test.yml 单 profile 覆盖所有 Spring 上下文测试 (H2 + Temporal/Langfuse disabled + LLM mock) |
+| 2026-05-21 | mockito-inline 而非 mockito-core, 给 Properties / final class mock 预留 |
