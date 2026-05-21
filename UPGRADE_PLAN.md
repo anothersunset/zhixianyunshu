@@ -1,6 +1,6 @@
 # 智迁云枢 v2 升级路线图
 
-## 总进度 (32/32 + Bonus 8/8 ✅)
+## 总进度 (32/32 + Bonus 8/8 + Polish round ✅)
 
 ### Phase 1 — 真 LLM + 真检索 (P0) — ✅ 11/11
 
@@ -45,14 +45,24 @@
 
 | # | 提交 | 状态 | SHA |
 | --- | --- | --- | --- |
-| 25 | feat(web): 暗色 + i18n | ✅ | `643b8dcf` |
-| 26 | feat(web): 答辩演示模式 + edge-tts | ✅ | (需 #32 demo 中`/present`预占) |
+| 25 | feat(web): 暗色 + i18n | ✅ | `643b8dcf` + polish `2c797979` |
+| 26 | feat(web): 答辩演示模式 + edge-tts | ✅ | polish `9b938300` |
 | 27 | feat(reports): Typst PDF | ✅ | `3a3c608c` |
-| 28 | feat(web): transformers.js 端侧 | ✅ | `afb66784` |
+| 28 | feat(web): transformers.js 端侧 | ✅ | `afb66784` + polish `2c797979` |
 | 29 | feat(deploy): 公开数据集一键导入 | ✅ | `636cb9a8` |
 | 30 | docs: 论文架构 + 对比表 | ✅ | `40c3aefc` |
-| 31 | chore: SBOM + Cosign + Trivy | ✅ | `b0337f56` |
+| 31 | chore: SBOM + Cosign + Trivy | ✅ | `b0337f56` + polish `2c797979` |
 | 32 | docs: 顶级 README + 脚本 | ✅ | `7124ce77` |
+
+### Polish round — ✅
+
+| 内容 | SHA |
+| --- | --- |
+| #26 补齑 PresentationView + SlideDeck + tts service + TtsController | `9b938300` |
+| #28 LocalChat.vue Vue template `v-text` 重写 (防 URL 压缩) | `2c797979` |
+| #25 package.json 装 vue-i18n@9 + optional @xenova/transformers | `2c797979` |
+| #31 scripts/install-supply-chain-workflow.sh 一键 sed cp | `2c797979` |
+| scripts/smoke-test.sh 三路静态检 | `(本提交)` |
 
 ---
 
@@ -70,13 +80,13 @@ LangGraph CRAG + GraphRAG + Temporal + Outlines + Cytoscape + JaCoCo。
 **UX 体验 + 论文级交付 + 供应链安全**.
 
 - ✅ #25 暗色 + i18n: vue-i18n@9 + useTheme composable + 12 个 CSS 变量 + 2 个 switcher
-- ✅ #26 答辩演示模式 + edge-tts: `/present` 路由预占, edge-tts 代理需后续补推设 TTS controller
+- ✅ #26 答辩演示 + edge-tts: PresentationView (10 幻灯片 + 键盘控制 + 读稿) + backend TtsController ProcessBuilder 代理
 - ✅ #27 Typst PDF: typst CLI + migration-report.typ 模板 + `/reports/generate` endpoint + backend ReportClient 代理
 - ✅ #28 transformers.js: dynamic import + WebGPU/WASM 降级 + Phi-3.5-mini ONNX q4 量化 + `/edge` Demo 页
 - ✅ #29 公开数据集: docker compose mysql:5.7 + opengauss-lite + bootstrap.sh 拉 Sakila/Chinook/Employees + benchmark 对比
 - ✅ #30 论文架构: 3 份 mermaid 架构 (overall/pipeline/RAG) + comparison.md (6 维度 × 5 产品) + innovations.md (8 创新点)
-- ✅ #31 供应链: Syft CycloneDX + Trivy SARIF + Cosign keyless OIDC + SLSA Build L2 定位 (workflow 放 workflows-template/, 手动 cp)
-- ✅ #32 顶级 README + demo-walkthrough.sh + healthcheck.sh
+- ✅ #31 供应链: Syft CycloneDX + Trivy SARIF + Cosign keyless OIDC + SLSA Build L2 + 一键 install 脚本
+- ✅ #32 顶级 README + demo-walkthrough.sh + healthcheck.sh + smoke-test.sh
 
 ---
 
@@ -151,7 +161,12 @@ LangGraph CRAG + GraphRAG + Temporal + Outlines + Cytoscape + JaCoCo。
 | 2026-05-21 | #27 报告模板字体 PingFang SC > Noto CJK SC > SimSun, Menlo 为代码 |
 | 2026-05-21 | #28 transformers.js dynamic import, 依可选, 未装返 error 不崩 |
 | 2026-05-21 | #28 WebGPU 首选 q4 量化, WASM 降级 numThreads=hardwareConcurrency |
-| 2026-05-21 | #29 docker compose --profile datasets, mysql:33306 / opengauss:55432 面主栈 |
+| 2026-05-21 | #29 docker compose --profile datasets, mysql:33306 / opengauss:55432 避主栈 |
 | 2026-05-21 | #31 cosign keyless OIDC, 不需 KMS / 私钥, Rekor public ledger |
-| 2026-05-21 | #31 workflow 放 workflows-template/, 手动 cp 到 .github/workflows/ |
+| 2026-05-21 | #31 workflow 放 workflows-template/, 一键 install 脚本 sed 转占位符 |
 | 2026-05-21 | #32 demo-walkthrough.sh 6 步, ENABLE_CDC=1 可选 |
+| 2026-05-21 | Polish: LocalChat.vue 全用 v-text 带二重括号表达式, 防上游 URL 压缩 |
+| 2026-05-21 | Polish: PresentationView 独立路由 + meta.public, 跳过登录守卫 |
+| 2026-05-21 | Polish: TTS 两路 — backend ProcessBuilder 外调 edge-tts CLI / web 优雅 fallback SpeechSynthesis |
+| 2026-05-21 | Polish: TtsProperties 用 @Component 而非 @EnableConfigurationProperties, 避 main 类修改 |
+| 2026-05-21 | Polish: install-supply-chain-workflow.sh 用 sed 转 `$ ctx ` → $530, 避免手工改 |
