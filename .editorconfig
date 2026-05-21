@@ -1,0 +1,29 @@
+# https://editorconfig.org
+# polish: 三语言统一缩 / EOL / 末线
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+# Java 遵 4-space (Spring Boot 慱例)
+[*.java]
+indent_size = 4
+
+# Python 遵 4-space (PEP 8)
+[*.py]
+indent_size = 4
+
+# Makefile 必 tab
+[Makefile]
+indent_style = tab
+
+[*.{yml,yaml}]
+indent_size = 2
+
+[*.{md,mdx}]
+trim_trailing_whitespace = false   # markdown 末线 2 个空格 是 line break

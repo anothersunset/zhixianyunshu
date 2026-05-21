@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 先读 Troubleshooting
+    url: https://github.com/anothersunset/zhixianyunshu/blob/main/docs/TROUBLESHOOTING.md
+    about: 12 条常见问题 + 定位 / 修复, 大部分问题都能在这找到
+  - name: 🔧 Tools 版本矩阵
+    url: https://github.com/anothersunset/zhixianyunshu/blob/main/docs/TOOLS.md
+    about: CLI 依赖版本要求 + 一键装脚本
+  - name: 💬 讨论
+    url: https://github.com/anothersunset/zhixianyunshu/discussions
+    about: 不肯定是 bug / 需求 — 去 Discussions 聊
