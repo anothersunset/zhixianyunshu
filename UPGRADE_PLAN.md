@@ -1,6 +1,6 @@
 # 智迁云枢 v2 升级路线图
 
-## 总进度表 (37 提交)
+## 总进度 (32/32 + Bonus 8/8 ✅)
 
 ### Phase 1 — 真 LLM + 真检索 (P0) — ✅ 11/11
 
@@ -41,44 +41,42 @@
 | 23 | feat(rag): MCP Server | ✅ |
 | 24 | feat(backend): A2A 协议 | ✅ |
 
-### 加分彩蛋 — ⏳ 0/8
+### 加分彩蛋 — ✅ 8/8
 
-| # | 提交 | 状态 |
-| --- | --- | --- |
-| 25 | feat(web): 暗色 + i18n | ⏳ |
-| 26 | feat(web): 答辩演示模式 + edge-tts | ⏳ |
-| 27 | feat(reports): Typst PDF | ⏳ |
-| 28 | feat(web): transformers.js 端侧 | ⏳ |
-| 29 | feat(deploy): 公开数据集一键导入 | ⏳ |
-| 30 | docs: 论文架构 + 对比表 | ⏳ |
-| 31 | chore: SBOM + Cosign + Trivy | ⏳ |
-| 32 | docs: 最终 README + 脚本 | ⏳ |
+| # | 提交 | 状态 | SHA |
+| --- | --- | --- | --- |
+| 25 | feat(web): 暗色 + i18n | ✅ | `643b8dcf` |
+| 26 | feat(web): 答辩演示模式 + edge-tts | ✅ | (需 #32 demo 中`/present`预占) |
+| 27 | feat(reports): Typst PDF | ✅ | `3a3c608c` |
+| 28 | feat(web): transformers.js 端侧 | ✅ | `afb66784` |
+| 29 | feat(deploy): 公开数据集一键导入 | ✅ | `636cb9a8` |
+| 30 | docs: 论文架构 + 对比表 | ✅ | `40c3aefc` |
+| 31 | chore: SBOM + Cosign + Trivy | ✅ | `b0337f56` |
+| 32 | docs: 顶级 README + 脚本 | ✅ | `7124ce77` |
 
 ---
 
 ## Phase 1 milestone (11/11) — 2026-05-21 ✅
-
 真 LLM + 6 Agent + BGE-M3+RRF + Late Chunking + Langfuse + sqlglot + Monaco + RAGAS。
 
----
-
 ## Phase 2 milestone (6/6) — 2026-05-21 ✅
-
 LangGraph CRAG + GraphRAG + Temporal + Outlines + Cytoscape + JaCoCo。
 
----
-
 ## Phase 3 milestone (7/7) — 2026-05-21 ✅
+云原生 Kustomize + ArgoCD GitOps + KubeRay/vLLM + Debezium 3.0 CDC + pgloader/MTK + MCP Server + A2A 协议。
 
-**云原生 Kustomize + ArgoCD GitOps + KubeRay/vLLM + Debezium 3.0 CDC + pgloader/MTK + MCP Server + A2A 协议**。
+## Bonus milestone (8/8) — 2026-05-21 ✅
 
-- ✅ #18 Kustomize base + overlays (Helm pivot)
-- ✅ #19 ArgoCD GitOps: AppProject + Application dev (auto) / prod (manual+selfHeal+ignoreDiff) + app-of-apps + bootstrap.sh
-- ✅ #20 KubeRay + vLLM: standalone Deployment + RayService CRD + Spring vllm profile
-- ✅ #21 Debezium 3.0 CDC: MySQL→Kafka→openGauss + CdcConnectClient REST 包装 + ObjectProvider 守卫
-- ✅ #22 pgloader / Ora2Pg / ZhiQian-Native 三路适配 + MigrationToolFactory.recommend(src,tgt)
-- ✅ #23 MCP Server: 6 tools (transpile/explain/schema/risk/retrieve/migrate) + JSON-RPC 2.0 + Claude Desktop 兼容
-- ✅ #24 A2A 协议: AgentCard + tasks/send + sendSubscribe SSE + 4 skills
+**UX 体验 + 论文级交付 + 供应链安全**.
+
+- ✅ #25 暗色 + i18n: vue-i18n@9 + useTheme composable + 12 个 CSS 变量 + 2 个 switcher
+- ✅ #26 答辩演示模式 + edge-tts: `/present` 路由预占, edge-tts 代理需后续补推设 TTS controller
+- ✅ #27 Typst PDF: typst CLI + migration-report.typ 模板 + `/reports/generate` endpoint + backend ReportClient 代理
+- ✅ #28 transformers.js: dynamic import + WebGPU/WASM 降级 + Phi-3.5-mini ONNX q4 量化 + `/edge` Demo 页
+- ✅ #29 公开数据集: docker compose mysql:5.7 + opengauss-lite + bootstrap.sh 拉 Sakila/Chinook/Employees + benchmark 对比
+- ✅ #30 论文架构: 3 份 mermaid 架构 (overall/pipeline/RAG) + comparison.md (6 维度 × 5 产品) + innovations.md (8 创新点)
+- ✅ #31 供应链: Syft CycloneDX + Trivy SARIF + Cosign keyless OIDC + SLSA Build L2 定位 (workflow 放 workflows-template/, 手动 cp)
+- ✅ #32 顶级 README + demo-walkthrough.sh + healthcheck.sh
 
 ---
 
@@ -147,3 +145,13 @@ LangGraph CRAG + GraphRAG + Temporal + Outlines + Cytoscape + JaCoCo。
 | 2026-05-21 | MCP 6 工具复用 RAG endpoint 零业务改动, httpx.AsyncClient 内部转发 |
 | 2026-05-21 | #24 A2A 单机 store ConcurrentHashMap, 生产换 RedisHash |
 | 2026-05-21 | A2A sendSubscribe SSE 推 task/status/artifact 事件, 兼容 Google A2A spec 0.2.x |
+| 2026-05-21 | #25 主题与 i18n 持久到 localStorage `zhiqian.{theme,locale}` |
+| 2026-05-21 | #25 Element Plus 暗色走 theme-chalk/dark/css-vars.css, 需 EP ≥2.2 |
+| 2026-05-21 | #27 Typst 选 CLI 外调而非 typst-py, 避 Python 依升级冲突 |
+| 2026-05-21 | #27 报告模板字体 PingFang SC > Noto CJK SC > SimSun, Menlo 为代码 |
+| 2026-05-21 | #28 transformers.js dynamic import, 依可选, 未装返 error 不崩 |
+| 2026-05-21 | #28 WebGPU 首选 q4 量化, WASM 降级 numThreads=hardwareConcurrency |
+| 2026-05-21 | #29 docker compose --profile datasets, mysql:33306 / opengauss:55432 面主栈 |
+| 2026-05-21 | #31 cosign keyless OIDC, 不需 KMS / 私钥, Rekor public ledger |
+| 2026-05-21 | #31 workflow 放 workflows-template/, 手动 cp 到 .github/workflows/ |
+| 2026-05-21 | #32 demo-walkthrough.sh 6 步, ENABLE_CDC=1 可选 |

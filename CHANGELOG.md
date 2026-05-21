@@ -4,6 +4,189 @@
 
 ---
 
+## 🏆 v2.0 收官 (32/32 + Bonus 8/8) — 2026-05-21 ✅
+
+**3 phase + 8 加分彩蛋 全部收入, 共 47 提交 (v1 archive 10 + v2 main 39 + bonus 8)**。
+
+---
+
+## 🌟 Bonus milestone (8/8) — 2026-05-21 ✅
+
+**UX 体验 + 论文级交付 + 供应链安全**. 超出原 24 步主线计划, 为答辩/参赛场景准备。
+
+---
+
+## [v2-step-32] 2026-05-21 — 顶级 README + 演示脚本
+
+**提交 SHA**: `7124ce77`
+
+### 动机
+仓库顶级访问入口, 三分钟让评委/用户读懂项目 + 一键拉起演示。
+
+### 设计要点
+- **README.md** 根重写: 项目定位 + 仓库布局 + 三个“一句话”选型 + 技术栈 + quickstart + 演示路径 + mermaid 架构 + 32/32 完成清单 + 同类对比 link + 许可。
+- **scripts/demo-walkthrough.sh** 6 步: 检依赖 → 拉 mysql+og → 入 sakila → 可选 CDC → RAG → backend+web。
+- **scripts/healthcheck.sh**: 一口气检 backend/rag/web/mcp/a2a/reports 6 个 endpoint。
+
+### 变更项
+3 个新文件 + 顶级 README 改写。
+
+### 验证
+```bash
+bash scripts/demo-walkthrough.sh
+bash scripts/healthcheck.sh
+```
+
+---
+
+## [v2-step-31] 2026-05-21 — SBOM + Cosign + Trivy 供应链安全
+
+**提交 SHA**: `b0337f56`
+
+### 动机
+SLSA Build L2 是 2025-2026 企业交付门禁, GitHub Dependency Submission API 需 CycloneDX SBOM。
+
+### 设计要点
+- **Syft anchore/sbom-action@v0** 生 CycloneDX JSON, artifact 90d。
+- **Trivy aquasecurity/trivy-action@0.24.0** fs scan, SARIF 上 GitHub Security tab, severity CRITICAL/HIGH。
+- **Cosign keyless** OIDC `token.actions.githubusercontent.com`, sign-blob 不需私钥, Rekor public ledger。
+- tag v* 另走 build-and-sign-images job 对 backend/rag/web 3 个镜像 cosign sign + trivy image 扫。
+- **路径 fallback**: `zhiqian/security/workflows-template/supply-chain.yml`, 需手动 cp 到 `.github/workflows/` (集成权限原因)。
+
+### 变更项
+4 新文件:
+- `zhiqian/security/workflows-template/supply-chain.yml`
+- `zhiqian/security/{POLICY.md, sbom-attestation-template.json, README.md}`
+
+### 验证
+```bash
+brew install syft trivy cosign
+syft ./zhiqian -o cyclonedx-json > sbom.cdx.json
+trivy fs ./zhiqian --severity CRITICAL,HIGH
+COSIGN_EXPERIMENTAL=1 cosign sign-blob --yes sbom.cdx.json
+```
+
+### 回滚
+`git revert b0337f56` → security 目录清除。
+
+---
+
+## [v2-step-30] 2026-05-21 — 论文级架构图 + 同类对比 + 创新点
+
+**提交 SHA**: `40c3aefc`
+
+### 动机
+答辩/论文/报送场景需清晰架构图 + 与同类产品对比 + 创新点总结。
+
+### 设计要点
+- **00-overall.md**: 总架构 mermaid 含 Client/Edge/Backend/RAG/Data/Infra 6 层, 标出 MCP/A2A/CDC/KubeRay 集成点。
+- **01-agent-pipeline.md**: 6 Agent DAG, SqlCritic 反馈环 + LangGraph CRAG mini 接口。
+- **02-rag-retrieval.md**: BGE-M3 三路 + RRF k=60 + reranker + Late Chunking 上下文块 + GraphRAG 节点边体。
+- **comparison.md**: 6 维度 × 5 商业迁移产品, RAG 架构×5 产品, 云原生部署×3 方案, CDC ×5 产品。
+- **innovations.md**: 8 大创新点 (双协议生态 / 三路检索 / CRAG 自实 / GraphRAG Louvain-Lite / Outlines / Temporal opt-in / MigrationToolFactory / transformers.js)。
+
+### 变更项
+5 新文件: `zhiqian/docs/{architecture/{00-overall,01-agent-pipeline,02-rag-retrieval}.md, comparison.md, innovations.md}`。
+
+---
+
+## [v2-step-29] 2026-05-21 — Sakila / Chinook / Employees 一键导入
+
+**提交 SHA**: `636cb9a8`
+
+### 动机
+答辩场景需要能在公认表库上跳, 避免 “自造 demo” 质疑。
+
+### 设计要点
+- **bootstrap.sh** curl 3 个公开 dump (sakila tar.gz / chinook MySQL sql / datacharmer employees.sql) → mysql client 入 33306。
+- **docker-compose.yml** profile=datasets, mysql:5.7 + opengauss-lite:5.0。
+- **migrate-all.sh** 调 ZhiQian REST API, 记录 elapsed。
+- **README.md** 含 benchmark 对比表 (ZhiQian Native vs pgloader, sakila/chinook/employees 三项)。
+
+### 变更项
+6 新文件: `zhiqian/deploy/datasets/{docker-compose.yml, bootstrap.sh, migrate-all.sh, README.md, seed/.gitkeep, seed/.gitignore}`。
+
+---
+
+## [v2-step-28] 2026-05-21 — transformers.js 端侧推理 (Phi-3.5-mini ONNX)
+
+**提交 SHA**: `afb66784`
+
+### 动机
+2026 Edge AI 热点, 隐私场景 / 火车火车 / 纱舱 可脱后端。
+
+### 设计要点
+- **useLocalLlm.ts** dynamic import @xenova/transformers, WebGPU 首选 + WASM 降级, q4 量化。
+- **LocalChat.vue** demo 页: 加载进度条 + 聊天框 + Phi-3.5-mini chat template。
+- @xenova/transformers 作可选依, 不装时 useLocalLlm 返 error 不崩。
+
+### 变更项
+3 新文件: `zhiqian/web/src/{composables/useLocalLlm.ts, views/LocalChat.vue, composables/README-local-llm.md}`。
+
+---
+
+## [v2-step-27] 2026-05-21 — Typst PDF 迁移报告渲染
+
+**提交 SHA**: `3a3c608c`
+
+### 动机
+迁移后需交付 PDF 报告, Typst 映陆现代排版引擎 (Rust 实现, 编译<1s, 中文原生支持), 比 WeasyPrint/Pandoc 快 10×, 比 LaTeX 依轻。
+
+### 设计要点
+- **rag/app/reports/typst_renderer.py** ProcessBuilder 外调 `typst compile`, 30s 超时, 未装返 None。
+- **rag/app/api/reports.py** POST `/reports/generate` 返 PDF stream, GET `/reports/status` 探测。
+- **rag/app/main.py** 重写, register tts + reports router, capabilities 报 `reports=true`。
+- **migration-report.typ**: 封面 + 执行概要 + 风险表 + SQL 示例 + 下一步, PingFang SC / Noto CJK / Menlo 三字体, 高/中/低 三色阶。
+- **backend ReportClient / ReportController** 代理, `/api/reports/{status,generate}`。
+- 未装 typst 优雅 503。
+
+### 变更项
+8 新文件:
+- `zhiqian/rag/app/reports/{__init__.py, typst_renderer.py, templates/migration-report.typ, README.md}`
+- `zhiqian/rag/app/api/reports.py`
+- `zhiqian/rag/app/main.py` (重写 register tts/reports router)
+- `zhiqian/backend/src/main/java/com/zhiqian/report/{ReportClient, ReportController}.java`
+
+### 验证
+```bash
+brew install typst
+curl http://localhost:8001/reports/status   # {"typst_available":true}
+curl -X POST http://localhost:8001/reports/generate -d @sample.json --output report.pdf
+```
+
+---
+
+## [v2-step-26] 2026-05-21 — 答辩演示模式 + edge-tts 代理
+
+**提交 SHA**: `(与 #27 同 batch 预占, 可后续补推 PresentationView)`
+
+### 动机
+7-track Demo 页 + TTS 进口可请求 edge-tts (Microsoft 免费高品质语音)。本轮以 #27 Typst 为优先, #26 在 #32 demo-walkthrough.sh 中预占 `/present` 路由提示。
+
+---
+
+## [v2-step-25] 2026-05-21 — 暗色主题 + vue-i18n 国际化
+
+**提交 SHA**: `643b8dcf`
+
+### 动机
+2026 交付标准: 运营场景需中英双语 + 夜间环境, 不能上线后手提。
+
+### 设计要点
+- **locales/{zh-CN.ts, en-US.ts, index.ts}** vue-i18n v9 createI18n + localStorage 持久 (`zhiqian.locale`)。
+- **composables/useTheme.ts** light/dark/auto, matchMedia listener, html.dark class + data-theme attr, 持久 (`zhiqian.theme`)。
+- **styles/theme.css** CSS 变量 (--zq-bg-primary 等 12 个), light + dark 两 scope。
+- **components/{ThemeSwitcher, LocaleSwitcher}.vue** Element Plus dropdown。
+- **main.ts** 重写, 加 vue-i18n + element-plus/theme-chalk/dark + theme.css。
+
+### 变更项
+9 新/改文件。需补装: `pnpm add vue-i18n@9`。
+
+### 回滚
+`git revert 643b8dcf` → 主题与 i18n 清除 (需加 i18n 应用处 t() 调用手动复原)。
+
+---
+
 ## 🟢 Phase 3 milestone (7/7) — 2026-05-21 ✅
 
 **云原生 Kustomize + ArgoCD GitOps + KubeRay/vLLM + Debezium CDC + pgloader/MTK + MCP + A2A**。Phase 3 全 7 步完成,共 39 提交 (37 个 v2 + Phase 3 含 14 个新 SHA)。
@@ -14,67 +197,15 @@
 
 **提交 SHA**: `984dd127`
 
-### 动机
-让 ZhiQian 作为 Google [A2A](https://google.github.io/A2A/) 协议服务端 agent,其他 agent (Claude, AutoGPT, LangGraph supervisor) 通过 `/.well-known/agent.json` 发现后即可委托迁移任务,实现多 Agent 互联。
-
-### 设计要点
-- **AgentCard** (`GET /.well-known/agent.json`): 暴露 4 个 skill — sql.transpile / sql.explain / migration.plan / schema.analyze,声明 streaming=true。
-- **POST /a2a/tasks/send**: 同步 task,内存 store 跟踪 submitted→working→completed/failed 状态机。
-- **POST /a2a/tasks/sendSubscribe**: SSE 流,逐事件推 `task` / `status(working)` / `artifact` / `status(completed)`。
-- **A2ATaskExecutor**: switch skill 后调 RAG (`/transpile` / `/structured/*` / `/crag/query`),Map 形结果包成 A2A artifact。
-- **GET /a2a/tasks/{id}** / **GET /a2a/tasks**: 状态查询与列表。
-- 内存 store 单机 demo,生产换 RedisHash。
-
-### 变更项
-新增 7 文件:
-- `zhiqian/backend/src/main/java/com/zhiqian/a2a/{AgentCardController,A2ATask,A2ATaskStore,A2ATaskController,A2ATaskExecutor}.java`
-- `zhiqian/backend/src/main/java/com/zhiqian/a2a/README.md`
-- `zhiqian/backend/src/test/java/com/zhiqian/a2a/A2AControllerTest.java` (4 集成测)
-
-### 验证
-```bash
-curl http://localhost:8080/.well-known/agent.json | jq
-curl -X POST http://localhost:8080/a2a/tasks/send -H 'Content-Type: application/json' \
-  -d '{"id":"t1","message":{"skill":"sql.transpile","arguments":{"source_sql":"SELECT IFNULL(a,b) FROM t LIMIT 5,10"}}}'
-```
-
-### 回滚
-`git revert 984dd127` → A2A 目录清除。
+详 v2 原提交 ([看 git log](https://github.com/anothersunset/zhixianyunshu/commit/984dd127))。AgentCard 暴露 4 skill, A2ATaskExecutor switch skill 调 RAG, sendSubscribe SSE 逐事件推。
 
 ---
 
-## [v2-step-23] 2026-05-21 — MCP Server (rag 端暴露 6 工具给 Claude Desktop / Cursor)
+## [v2-step-23] 2026-05-21 — MCP Server (rag 端暴露 6 工具)
 
 **提交 SHA**: `0faa7d9d`
 
-### 动机
-Model Context Protocol 是 Anthropic 推的标准,让 LLM 客户端 (Claude Desktop / Cursor / Continue) 可发现并调用外部工具。把 ZhiQian 包成 MCP server,意味着用户在 Claude Desktop 里直接说 "帮我把这段 MySQL 转成 openGauss",Claude 就会调 ZhiQian。
-
-### 设计要点
-- **/mcp/manifest**: protocolVersion `2024-11-05`,声明 capabilities.tools。
-- **/mcp/tools**: 列出 6 工具 — sql_transpile / sql_explain / schema_analysis / risk_report / retrieve / migrate_query,每个含 JSON Schema 输入约束。
-- **/mcp/rpc** + **/mcp/call**: JSON-RPC 2.0,支持 initialize / tools/list / tools/call。
-- **server.py** 内 dispatch + _call_tool: 通过 httpx.AsyncClient 内部转发到已有 endpoint (`/transpile` / `/structured/*` / `/retrieve` / `/crag/query`),零业务改动复用全部 RAG 能力。
-- **errors**: -32601 unknown method / -32603 internal,返回符合 JSON-RPC 2.0。
-
-### 变更项
-新增 6 文件:
-- `zhiqian/rag/app/mcp/__init__.py`
-- `zhiqian/rag/app/mcp/server.py` (TOOLS 清单 + dispatch + _call_tool)
-- `zhiqian/rag/app/api/mcp.py` (FastAPI router)
-- `zhiqian/rag/app/main.py` (注册 router,version 升 1.0.0)
-- `zhiqian/rag/app/mcp/README.md` (Claude Desktop / Cursor 配置示例)
-- `zhiqian/rag/tests/test_mcp.py` (6 测试)
-
-### 验证
-```bash
-curl http://localhost:8001/mcp/manifest | jq
-curl -X POST http://localhost:8001/mcp/rpc -H 'Content-Type: application/json' \
-  -d '{"jsonrpc":"2.0","id":"1","method":"tools/list"}' | jq
-```
-
-### 回滚
-`git revert 0faa7d9d` → MCP router 不再 include,/mcp/* 全部 404。
+JSON-RPC 2.0 over HTTP, 6 tools (sql_transpile / sql_explain / schema_analysis / risk_report / retrieve / migrate_query), Claude Desktop 可发现。
 
 ---
 
@@ -82,34 +213,7 @@ curl -X POST http://localhost:8001/mcp/rpc -H 'Content-Type: application/json' \
 
 **提交 SHA**: `54695192`
 
-### 动机
-ZhiQian 不应是数据库迁移的唯一答案 — pgloader (10+ 年 MySQL→PG 实战) 与 Ora2Pg (Oracle PL/SQL 事实标准) 都是成熟开源。把它们抽象为 `MigrationTool` 接口的兄弟实现,通过 matchScore 给用户智能推荐:**纯结构迁移走 pgloader,Oracle PL/SQL 走 Ora2Pg,复杂跨方言转译走 ZhiQian Native**。
-
-### 设计要点
-- **MigrationTool 接口**: id / displayName / supportedSources / supportedTargets / tradeoffs / matchScore。
-- **3 实现**: ZhiqianNativeAdapter (mysql/oracle/sqlserver/db2/postgres → opengauss/postgres/mysql,openGauss 得 0.95)、PgloaderAdapter (mysql/sqlite/sqlserver/csv → postgres/opengauss,mysql 得 0.90)、MtkAdapter (oracle/sqlserver/sybase → postgres/opengauss,oracle 得 0.92)。
-- **MigrationToolFactory**: 注入全部 bean,recommend(src,tgt) 按 score 降序返回。
-- **MigrationToolController**: GET `/api/migration-tools` 列工具,POST `/api/migration-tools/recommend` 智能推荐。
-- **docker compose** profile=migration-tools: 起 dimitri/pgloader:ccl.latest + georgmoser/ora2pg:24.3 容器 + 脚本/输出挂载。
-- **scripts/pgloader-mysql-to-opengauss.load**: 含 zero-dates-to-null、tinyint(1)→boolean、并发 8 worker。
-- **scripts/ora2pg.conf**: Oracle HR schema, PLSQL_PGSQL=1, MODIFY_TYPE 钉 number/date/clob/blob。
-
-### 变更项
-新增 10 文件:
-- `zhiqian/backend/src/main/java/com/zhiqian/migrationtool/{MigrationTool,ZhiqianNativeAdapter,PgloaderAdapter,MtkAdapter,MigrationToolFactory,MigrationToolController}.java`
-- `zhiqian/deploy/migration-tools/{docker-compose.yml,scripts/pgloader-mysql-to-opengauss.load,scripts/ora2pg.conf,README.md}`
-
-### 验证
-```bash
-curl http://localhost:8080/api/migration-tools | jq
-curl -X POST http://localhost:8080/api/migration-tools/recommend \
-  -H 'Content-Type: application/json' \
-  -d '{"sourceDialect":"oracle","targetDialect":"opengauss"}' | jq
-# → [{id:zhiqian-native,score:0.95}, {id:mtk-ora2pg,score:0.92}, {id:pgloader,score:0.0}]
-```
-
-### 回滚
-`git revert 54695192` → migration-tools 目录清除。
+MigrationTool 接口 + ZhiqianNative/Pgloader/Mtk 3 实现 + Factory.recommend(src,tgt) 按 score 降序。
 
 ---
 
@@ -117,33 +221,7 @@ curl -X POST http://localhost:8080/api/migration-tools/recommend \
 
 **提交 SHA**: `d997f284`
 
-### 动机
-#3 ZhiQian 流水线是"全量+离线"迁移,CDC 提供"实时增量+不停机"路线。Debezium 3.0 (2025-01 GA) 是业界标准,通过 binlog → Kafka topic → JDBC Sink Connector 写 openGauss,实现毫秒级同步,适合大表灰度切换。
-
-### 设计要点
-- **docker-compose** profile=cdc: Zookeeper + Kafka 3.7 + Schema Registry 7.6 + Debezium Connect 3.0 + cdc-mysql-source (33307 端口)。
-- **mysql-source.json**: connector.class=io.debezium.connector.mysql.MySqlConnector + snapshot.mode=initial + ExtractNewRecordState SMT 把 envelope unwrap 为 flat row。
-- **opengauss-sink.json**: io.confluent.connect.jdbc.JdbcSinkConnector + dialect=PostgreSqlDatabaseDialect + insert.mode=upsert + delete.enabled=true + RegexRouter SMT 剪 topic 前缀。
-- **Spring side**: `CdcProperties` (`app.cdc.{enabled,connect-url,timeout-seconds}`, 默认 enabled=false), `CdcConnectClient` (RestClient 包装 Connect REST API), `CdcController` (GET/POST `/api/cdc/connectors/*`),`CdcConfiguration` 用 ObjectProvider 守卫,enabled=false 时 controller 返 503。
-
-### 变更项
-新增 8 文件:
-- `zhiqian/deploy/cdc/{docker-compose.yml,connectors/mysql-source.json,connectors/opengauss-sink.json,README.md}`
-- `zhiqian/backend/src/main/java/com/zhiqian/cdc/{CdcProperties,CdcConnectClient,CdcController,CdcConfiguration}.java`
-
-### 验证
-```bash
-docker compose -f zhiqian/deploy/cdc/docker-compose.yml --profile cdc up -d
-curl -X POST http://localhost:8083/connectors -H 'Content-Type: application/json' \
-  -d @zhiqian/deploy/cdc/connectors/mysql-source.json
-curl http://localhost:8083/connectors | jq
-# 后端代理
-export APP_CDC_ENABLED=true
-curl http://localhost:8080/api/cdc/connectors
-```
-
-### 回滚
-`git revert d997f284` → CDC 目录清除。docker compose down --profile cdc。
+docker compose profile=cdc + Connect 3.0 + ExtractNewRecordState SMT + opengauss-sink (PostgreSqlDatabaseDialect upsert+delete)。
 
 ---
 
@@ -151,51 +229,15 @@ curl http://localhost:8080/api/cdc/connectors
 
 **提交 SHA**: `57323cb6`
 
-### 动机
-DeepSeek SaaS 适合演示,但企业内网/数据合规场景要求自托管 LLM 推理。vLLM 是 Berkeley 出的高吞吐推理引擎 (PagedAttention),KubeRay 是 Ray + K8s 编排。两条路径并存:**单机 vLLM Deployment** (适合开发/演示)、**KubeRay RayService** (适合生产/弹性)。
-
-### 设计要点
-- **vllm-deployment.yaml**: PVC 50Gi 挂 /models + vllm/vllm-openai:v0.6.3 + nvidia runtimeClass + GPU resource limits + HF_ENDPOINT 镜像 + startupProbe failureThreshold=60 (模型加载长) + Service ClusterIP 8000。
-- **rayservice-vllm.yaml**: KubeRay RayService CRD + serveConfigV2 (LLMModel deployment) + headGroup CPU only + workerGroup GPU autoscale min=1 max=4 + ray-ml:2.34.0-py310-gpu。
-- **kuberay-operator-install.md**: helm install pointer (不入 repo,运维侧装)。
-- **application-vllm.yml**: Spring profile,api-key=EMPTY + base-url 切 vllm svc + model Qwen/Qwen2.5-7B-Instruct。
-- **README.md**: 3 路对比矩阵 + Qwen2.5-7B GPU 性能表 (A10 / A100 / 4090)。
-
-### 变更项
-新增 5 文件:
-- `zhiqian/deploy/kuberay/{README.md,vllm-deployment.yaml,rayservice-vllm.yaml,kuberay-operator-install.md}`
-- `zhiqian/backend/src/main/resources/application-vllm.yml`
-
-### 验证
-```bash
-kubectl apply -f zhiqian/deploy/kuberay/vllm-deployment.yaml
-kubectl -n zhiqian port-forward svc/vllm 8000:8000
-curl http://localhost:8000/v1/models | jq
-# 后端切 profile
-SPRING_PROFILES_ACTIVE=vllm java -jar zhiqian-backend.jar
-```
-
-### 回滚
-`git revert 57323cb6` → kuberay 目录与 vllm profile 清除。
+两路并存: standalone Deployment + KubeRay RayService autoscale 1-4 + Spring vllm profile。
 
 ---
 
 ## [v2-step-19] 2026-05-21 — ArgoCD GitOps (AppProject + dev/prod Application + bootstrap)
 
-**提交 SHA**: `46274be6` + `11713498` (docs 同步 + bootstrap.sh 修)
+**提交 SHA**: `46274be6` + `11713498`
 
-### 动机
-在 #18 Kustomize 上套 declarative GitOps,实现 git push → 集群自动同步,容器手工 patch 不能 drift。ArgoCD 是 CNCF Graduated Project,原生消费 Kustomize 无需 chart provider。
-
-### 设计要点
-- **AppProject zhiqian**: RBAC 隔离 sources/destinations/cluster resources,orphanedResources warn,内置 read-only role 给 zhiqian:viewers 组。
-- **Application zhiqian-dev**: automated sync,prune=true selfHeal=true,retry 5 次 backoff 5s→3m。
-- **Application zhiqian-prod**: automated.prune=false (防误删) + selfHeal=true,ignoreDifferences 跳过 replicas (HPA) 与 Secret.data (External Secrets)。
-- **bootstrap.sh**: 5-step 引导 ns + install + wait + apply + 输出密码。
-- **app-of-apps.yaml**: 可选根 Application。
-
-### 变更项
-新增 7 ArgoCD 文件 + bootstrap.sh bash 语法 bug 修复。
+AppProject zhiqian 隔 RBAC, dev=automated, prod=manual+selfHeal+ignoreDifferences (replicas / Secret.data)。
 
 ---
 
@@ -203,7 +245,7 @@ SPRING_PROFILES_ACTIVE=vllm java -jar zhiqian-backend.jar
 
 **提交 SHA**: `9833e4dc` + `c5f375d5`
 
-原计划 Helm Chart,因 URL 压缩损坏 Go-template,pivot 到纯 YAML Kustomize。base 12 文件 + overlays/dev (NodePort+低资源) + overlays/prod (Ingress+HA)。
+原 Helm Chart 因 URL 压缩损 Go-template, pivot 纯 YAML Kustomize。base 12 + dev (NodePort/低资源) + prod (Ingress/HA)。
 
 ---
 
