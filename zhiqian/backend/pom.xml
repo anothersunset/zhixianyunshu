@@ -13,7 +13,7 @@
 
     <groupId>com.zhiqian</groupId>
     <artifactId>zhiqian-backend</artifactId>
-    <version>0.2.0</version>
+    <version>0.3.0</version>
     <packaging>jar</packaging>
     <name>zhiqian-backend</name>
     <description>ZhiQian YunShu backend</description>
@@ -26,7 +26,22 @@
         <maven-model.version>3.9.6</maven-model.version>
         <!-- v2-step-14: Temporal durable workflow -->
         <temporal.version>1.27.0</temporal.version>
+        <!-- v2-step-17: Testcontainers + JaCoCo -->
+        <testcontainers.version>1.20.1</testcontainers.version>
+        <jacoco.version>0.8.12</jacoco.version>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <dependency>
@@ -103,13 +118,13 @@
             <artifactId>lombok</artifactId>
             <optional>true</optional>
         </dependency>
-        <!-- v2-step-14: Temporal SDK (durable workflow engine).
-             仅在 app.temporal.enabled=true 时装载 bean; 不启用时 ~25MB jar 仅占镜像, 运行时不创建连接。 -->
+        <!-- v2-step-14: Temporal SDK -->
         <dependency>
             <groupId>io.temporal</groupId>
             <artifactId>temporal-sdk</artifactId>
             <version>${temporal.version}</version>
         </dependency>
+        <!-- ===== Test scope ===== -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
@@ -120,11 +135,39 @@
             <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- v2-step-14: Temporal 本地 test server, 仅测试作用域 -->
+        <!-- v2-step-14: Temporal local test server -->
         <dependency>
             <groupId>io.temporal</groupId>
             <artifactId>temporal-testing</artifactId>
             <version>${temporal.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- v2-step-17: H2 in-memory DB for unit / WebMvc tests -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- v2-step-17: Testcontainers for integration tests with real PostgreSQL -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- v2-step-17: Mockito inline for final classes mocking -->
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-inline</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -142,6 +185,48 @@
                         </exclude>
                     </excludes>
                 </configuration>
+            </plugin>
+            <!-- v2-step-17: JaCoCo coverage. Initial threshold 0.70 for line coverage,
+                 可随后续测试补全上提到0.80。 -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals><goal>prepare-agent</goal></goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals><goal>report</goal></goals>
+                    </execution>
+                    <execution>
+                        <id>check</id>
+                        <phase>verify</phase>
+                        <goals><goal>check</goal></goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.70</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                            <excludes>
+                                <exclude>com/zhiqian/temporal/workflow/**</exclude>
+                                <exclude>com/zhiqian/bootstrap/**</exclude>
+                                <exclude>com/zhiqian/*Application*</exclude>
+                            </excludes>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

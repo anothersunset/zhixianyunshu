@@ -1,0 +1,38 @@
+# v2-step-17: 测试专用 profile, H2 in-memory 避免 PostgreSQL 依赖
+spring:
+  datasource:
+    url: jdbc:h2:mem:zhiqian_test;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+  flyway:
+    enabled: false
+  sql:
+    init:
+      mode: never
+
+app:
+  jwt:
+    secret: test-secret-key-for-junit-only-not-real-must-be-long-enough-32+
+    expire-minutes: 60
+  llm:
+    provider: deepseek
+    api-key: ""   # 空 → MockLlmClient
+    base-url: https://api.deepseek.com
+    chat-model: deepseek-chat
+    reasoner-model: deepseek-reasoner
+    temperature: 0.2
+    max-tokens: 1024
+    timeout-seconds: 30
+  langfuse:
+    enabled: false
+    host: https://cloud.langfuse.com
+    public-key: ""
+    secret-key: ""
+  temporal:
+    enabled: false   # 测试默认不启 Temporal worker
+
+logging:
+  level:
+    root: WARN
+    com.zhiqian: INFO
