@@ -1,3 +1,4 @@
+import sqlglot
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -12,11 +13,15 @@ from app.core.observability import get_langfuse
 from app.api.rerank import router as rerank_router
 from app.api.ingest import router as ingest_router, _retriever as _ingest_dep
 from app.api.retrieve import router as retrieve_router, _retriever as _retrieve_dep
+from app.api.transpile import router as transpile_router
 
 app = FastAPI(
     title="ZhiQian RAG Service",
-    description="智迁云枢 RAG: BM25 + BGE-M3 dense/sparse + Qdrant + RRF + bge-reranker-v2-m3 + Self-RAG critic + Langfuse 全链路观测",
-    version="0.5.0",
+    description=(
+        "智迁云枢 RAG: BM25 + BGE-M3 dense/sparse + Qdrant + RRF + bge-reranker-v2-m3 "
+        "+ Self-RAG critic + Langfuse 全链路观测 + sqlglot AST 转译"
+    ),
+    version="0.6.0",
 )
 
 app.add_middleware(
@@ -39,6 +44,8 @@ app.dependency_overrides[_retrieve_dep] = lambda: retriever
 app.include_router(rerank_router, prefix="/rerank")
 app.include_router(ingest_router, prefix="/ingest")
 app.include_router(retrieve_router, prefix="/retrieve")
+# v2-step-09
+app.include_router(transpile_router, prefix="/transpile")
 
 
 @app.on_event("startup")
@@ -86,6 +93,9 @@ def health():
             **retriever.capabilities(),
             "langfuse_enabled": lf.available,
             "langfuse_host": lf.host if lf.available else None,
+            # v2-step-09
+            "sqlglot_enabled": True,
+            "sqlglot_version": sqlglot.__version__,
         },
     }
 

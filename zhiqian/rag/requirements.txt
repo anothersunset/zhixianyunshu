@@ -19,6 +19,10 @@ pytest-asyncio==0.23.6
 # 不配 LANGFUSE_PUBLIC_KEY/SECRET_KEY 时自动 disabled,行为不变
 langfuse==2.50.0
 
+# v2-step-09: sqlglot SQL AST 方言转译 (~2MB 纯 Python 零依赖)
+# 替代 Jinja2 字符串拼接, 走 MySQL → openGauss/PostgreSQL AST 重写
+sqlglot==25.16.1
+
 # v2-step-04: 要启用 "真 BGE-M3 + bge-reranker-v2-m3" 才装 ML 重依赖。
 # 安装方式:  pip install -r requirements-ml.txt  或  docker build --build-arg BUILD_ML=1
 # 不装也能跑,退化到 1024 维 hash 向量 + BM25 顺序。
