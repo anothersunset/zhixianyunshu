@@ -31,6 +31,15 @@ services:
       APP_JWT_SECRET: ${JWT_SECRET:?请在 .env 中设置 JWT_SECRET}
       APP_ADMIN_PASSWORD: ${ADMIN_PASSWORD:?请在 .env 中设置 ADMIN_PASSWORD}
       APP_RAG_BASE_URL: http://rag:8001
+      # v2-step-02 新增：LLM 变量透传。未设置则为空字串，后端走 MockLlmClient。
+      LLM_PROVIDER: ${LLM_PROVIDER:-deepseek}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com/v1}
+      LLM_CHAT_MODEL: ${LLM_CHAT_MODEL:-deepseek-chat}
+      LLM_REASONER_MODEL: ${LLM_REASONER_MODEL:-deepseek-reasoner}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.2}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-2048}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-60}
       JAVA_TOOL_OPTIONS: "-Xms256m -Xmx768m"
     ports:
       - "8080:8080"

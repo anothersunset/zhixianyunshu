@@ -23,22 +23,17 @@
 1. **标题格式**:`type(scope): 改了什么 — 为什么 (影响)`
    - type: `feat` / `fix` / `refactor` / `docs` / `chore` / `test` / `perf` / `build`
    - scope: `backend` / `rag` / `web` / `deploy` / `docs` / `bonus`
-2. **正文必须包含**:
-   - **动机**:为什么改这处
-   - **变更项**:具体新增/修改/删除了什么文件
-   - **影响范围**:对哪些模块/接口/数据有连锁影响
-   - **验证方式**:本地如何确认这次改动可用
-   - **回滚方法**:出问题如何 revert
-3. **CHANGELOG.md 同步更新**:本仓库根目录的 CHANGELOG.md 用人类可读语言记录每条变更
+2. **正文必须包含**: 动机 / 变更项 / 影响 / 验证 / 回滚
+3. **CHANGELOG.md 同步更新**
 
 ## 总进度表(32 提交)
 
-### Phase 1 — 真 LLM + 真检索(让演示"像真的",优先级 P0)
+### Phase 1 — 真 LLM + 真检索(P0)
 
 | # | 提交 | 状态 | 影响 |
 | --- | --- | --- | --- |
-| 1 | docs(v2): 升级路线图 + 变更记录基线 | ✅ 本提交 | 项目导航 |
-| 2 | feat(backend): Spring AI 1.0 + DeepSeek-V3.1 接入 | ⏳ | 后端获得真 LLM 能力 |
+| 1 | docs(v2): 升级路线图 + 变更记录基线 | ✅ | 项目导航 |
+| 2 | feat(backend): DeepSeek-V3.1 LLM 客户端 + 优雅降级 | ✅ | 后端获得真 LLM 能力 |
 | 3 | feat(backend): LLMReasonerAgent 替换 TaskSseDemoEmitter | ⏳ | SSE 时间线变真 |
 | 4 | feat(rag): BGE-M3 嵌入 + bge-reranker-v2-m3 重排 | ⏳ | 检索质量阶跃 |
 | 5 | feat(rag): Qdrant 向量库 + 混合检索(BM25+Dense+Sparse) | ⏳ | 召回率提升 30%+ |
@@ -49,7 +44,7 @@
 | 10 | feat(web): Monaco SQL Diff 编辑器 | ⏳ | 可视化改写前后对比 |
 | 11 | test(rag): RAGAS 评测框架 + 20 条 golden set | ⏳ | 量化检索质量 |
 
-### Phase 2 — Agent 编排 + GraphRAG(论文亮点,P1)
+### Phase 2 — Agent 编排 + GraphRAG(P1)
 
 | # | 提交 | 状态 | 影响 |
 | --- | --- | --- | --- |
@@ -60,7 +55,7 @@
 | 16 | feat(web): Cytoscape.js 渲染 CKG 图谱 | ⏳ | 可视化亮点 |
 | 17 | test(backend): Spring Boot Test 覆盖率 ≥ 80% | ⏳ | 可维护性 |
 
-### Phase 3 — 云原生 + 真库 + 开放协议(工业级,P2)
+### Phase 3 — 云原生 + 真库 + 开放协议(P2)
 
 | # | 提交 | 状态 | 影响 |
 | --- | --- | --- | --- |
@@ -72,7 +67,7 @@
 | 23 | feat(rag): MCP Server 暴露 CKG + 检索能力 | ⏳ | 外部 Agent 可调用 |
 | 24 | feat(backend): A2A 协议(Google 2025.4)端点 | ⏳ | 与他人 Agent 互通 |
 
-### 加分彩蛋(差异化,P3)
+### 加分彩蛋(P3)
 
 | # | 提交 | 状态 | 影响 |
 | --- | --- | --- | --- |
@@ -93,7 +88,7 @@
 | BGE-M3 模型下载慢 | 中 | 首次启动慢 | Dockerfile 预拉取 + ModelScope 镜像源 |
 | Temporal 学习曲线 | 中 | 工期延后 | 提供回退到 Spring `@Async` 的实现 |
 | 公开 MySQL 样本与 openGauss 兼容性 | 低 | 演示卡 | sqlglot 自动转 + 验证报告 |
-| K8s 部署对评委演示意义不大 | 低 | 加分有限 | 用 K3s + 录屏演示,不强求现场跑 |
+| K8s 部署对评委演示意义不大 | 低 | 加分有限 | 用 K3s + 录屏演示 |
 
 ## 决策日志
 
@@ -103,3 +98,5 @@
 | 2026-05-21 | LLM 选 DeepSeek-V3.1 | lee fanwei | 性价比 + 中文 SOTA |
 | 2026-05-21 | docker compose 为主路径 | lee fanwei | 本地拉取直接可跑 |
 | 2026-05-21 | 使用公开数据集 Sakila/CM/Employees | lee fanwei | 合规 + 免运维 |
+| 2026-05-21 | LLM 接入不引 Spring AI，用 RestClient 零依赖 | AI 负责人 | 避免 Boot 3.2→3.4 升级连锁风险 |
+| 2026-05-21 | api-key 为空时优雅降级为 Mock | AI 负责人 | docker compose 零配置可启动 |

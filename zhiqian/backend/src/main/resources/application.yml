@@ -33,6 +33,18 @@ app:
     password: ${APP_ADMIN_PASSWORD}
   rag:
     base-url: ${APP_RAG_BASE_URL:http://localhost:8001}
+  # ===== v2-step-02 新增：LLM 接入配置 =====
+  # 默认指向 DeepSeek-V3.1，使用 OpenAI 兼容协议。
+  # api-key 为空时后端会启用 MockLlmClient（仅回显），不阻塞启动。
+  llm:
+    provider: ${LLM_PROVIDER:deepseek}
+    api-key: ${LLM_API_KEY:}
+    base-url: ${LLM_BASE_URL:https://api.deepseek.com/v1}
+    chat-model: ${LLM_CHAT_MODEL:deepseek-chat}
+    reasoner-model: ${LLM_REASONER_MODEL:deepseek-reasoner}
+    temperature: ${LLM_TEMPERATURE:0.2}
+    max-tokens: ${LLM_MAX_TOKENS:2048}
+    timeout-seconds: ${LLM_TIMEOUT_SECONDS:60}
 
 logging:
   level:
