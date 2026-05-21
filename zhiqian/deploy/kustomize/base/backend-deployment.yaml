@@ -1,0 +1,96 @@
+# v2-step-18: backend Spring Boot Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zhiqian-backend
+  labels:
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/component: api
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: backend
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: backend
+        app.kubernetes.io/component: api
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: backend
+          image: zhiqian/backend:2.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: prod
+            - name: SPRING_CONFIG_LOCATION
+              value: classpath:/application.yml,/etc/zhiqian/application.yaml
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: zhiqian-backend-secret
+                  key: postgres-password
+            - name: APP_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: zhiqian-backend-secret
+                  key: jwt-secret
+            - name: APP_LLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: zhiqian-backend-secret
+                  key: deepseek-api-key
+            - name: APP_LANGFUSE_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: zhiqian-backend-secret
+                  key: langfuse-public-key
+            - name: APP_LANGFUSE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: zhiqian-backend-secret
+                  key: langfuse-secret-key
+          volumeMounts:
+            - name: config
+              mountPath: /etc/zhiqian
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1500m
+              memory: 2Gi
+      volumes:
+        - name: config
+          configMap:
+            name: zhiqian-backend-config

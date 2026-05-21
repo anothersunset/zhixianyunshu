@@ -1,0 +1,47 @@
+# v2-step-18: ZhiQian YunShu Kustomize base
+# kubectl apply -k zhiqian/deploy/kustomize/base
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: zhiqian
+resources:
+  - namespace.yaml
+  - postgres-statefulset.yaml
+  - postgres-service.yaml
+  - backend-configmap.yaml
+  - backend-deployment.yaml
+  - backend-service.yaml
+  - rag-deployment.yaml
+  - rag-service.yaml
+  - web-deployment.yaml
+  - web-service.yaml
+commonLabels:
+  app.kubernetes.io/part-of: zhiqian
+  app.kubernetes.io/managed-by: kustomize
+  app.kubernetes.io/version: "2.0.0"
+images:
+  - name: zhiqian/backend
+    newTag: "2.0.0"
+  - name: zhiqian/rag
+    newTag: "2.0.0"
+  - name: zhiqian/web
+    newTag: "2.0.0"
+secretGenerator:
+  - name: zhiqian-backend-secret
+    literals:
+      - jwt-secret=CHANGE-ME-please-use-overlay-or-sealed-secrets-32-chars-min
+      - deepseek-api-key=
+      - langfuse-public-key=
+      - langfuse-secret-key=
+      - postgres-password=zhiqian-change-me
+    options:
+      disableNameSuffixHash: true
+configMapGenerator:
+  - name: zhiqian-rag-env
+    literals:
+      - RAG_CHUNK_STRATEGY=semantic
+      - RAG_CHUNK_SIM_THRESHOLD=0.62
+      - RAG_OUTLINES_ENABLED=false
+      - RAG_CRAG_USE_LLM_EVAL=0
+      - HF_ENDPOINT=https://hf-mirror.com
+    options:
+      disableNameSuffixHash: true

@@ -1,0 +1,52 @@
+# v2-step-18: backend application config (non-secret)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: zhiqian-backend-config
+  labels:
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/component: api
+data:
+  application.yaml: |
+    spring:
+      datasource:
+        url: jdbc:postgresql://zhiqian-postgres:5432/zhiqian
+        username: zhiqian
+        password: ${SPRING_DATASOURCE_PASSWORD}
+      flyway:
+        enabled: true
+        baseline-on-migrate: true
+    server:
+      port: 8080
+    management:
+      endpoints:
+        web:
+          exposure:
+            include: health,info,metrics
+      endpoint:
+        health:
+          probes:
+            enabled: true
+    app:
+      jwt:
+        secret: ${APP_JWT_SECRET}
+        expire-minutes: 1440
+      llm:
+        provider: deepseek
+        api-key: ${APP_LLM_API_KEY}
+        base-url: https://api.deepseek.com
+        chat-model: deepseek-chat
+        reasoner-model: deepseek-reasoner
+        temperature: 0.2
+        max-tokens: 2048
+        timeout-seconds: 60
+      langfuse:
+        enabled: false
+        host: https://cloud.langfuse.com
+        public-key: ${APP_LANGFUSE_PUBLIC_KEY}
+        secret-key: ${APP_LANGFUSE_SECRET_KEY}
+      temporal:
+        enabled: false
+        service-target: temporal:7233
+        namespace: default
+        task-queue: zhiqian-migration
