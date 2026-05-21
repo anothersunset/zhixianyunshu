@@ -8,7 +8,6 @@ class Settings(BaseSettings):
     port: int = 8001
     data_dir: str = "/data"
 
-    # v2-step-04：embedding_dim 768→1024（BGE-M3 原生）
     embedding_dim: int = 1024
     bm25_top_k: int = 50
     rerank_top_n: int = 5
@@ -24,11 +23,19 @@ class Settings(BaseSettings):
     reranker_model: str = "BAAI/bge-reranker-v2-m3"
     reranker_fp16: bool = True
 
-    # v2-step-05：Qdrant + RRF
+    # Qdrant + RRF
     use_qdrant: bool = True
     qdrant_url: str = "http://qdrant:6333"
     qdrant_api_key: str = ""
     rrf_k: int = 60
+
+    # v2-step-06: Chunking
+    # 默认策略 semantic；/ingest 请求可在单次调用中覆盖
+    chunk_strategy: str = "semantic"  # semantic / late / none
+    chunk_sim_threshold: float = 0.62
+    chunk_max_chars: int = 1200
+    late_chunk_max_chars: int = 600
+    late_chunk_overlap: int = 80
 
 
 settings = Settings()

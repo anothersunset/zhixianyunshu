@@ -1,11 +1,7 @@
 """一站式 HybridRetriever — BM25 粗排 + (可选 Qdrant dense + sparse) + RRF 融合 + Reranker 精排。
 
-v2-step-05 升级路径：
-1. BM25 插期在内存里（jieba 分词） → 出 rank list_1
-2. Qdrant.available + BGE-M3.available 两者都真 → dense rank list_2 + sparse rank list_3
-3. RRF 融合 → candidate set
-4. Reranker 可用 → cross-encoder 精排 top_k
-5. 任一阶段堆栈到不可用都可以“少维运转”。
+v2-step-05：三路检索 + RRF。
+v2-step-06：接受预嵌入的 chunk（add() 中中的 doc 可携 embedding），用 LateChunker 产出的带全文上下文 embedding 直接入库。
 """
 from __future__ import annotations
 
@@ -87,11 +83,9 @@ class HybridRetriever:
     ):
         self.docs = docs if docs is not None else _DEMO_DOCS
         self.collection = collection
-        # 内存索引（BM25 + id→doc 带 fallback）
         self._tokens = [_tokenize(d["text"]) for d in self.docs]
         self._bm25 = BM25Okapi(self._tokens) if self._tokens else None
         self._by_id: Dict[str, Dict[str, Any]] = {d["id"]: d for d in self.docs}
-        # 依赖组件
         if reranker is not None:
             self._reranker = reranker
         elif settings.use_reranker:
@@ -110,7 +104,6 @@ class HybridRetriever:
             self._qdrant = QdrantStore(url=settings.qdrant_url, api_key=settings.qdrant_api_key or None, dim=settings.embedding_dim)
         else:
             self._qdrant = None
-        # 启动时打印总体能力
         log.info(
             "[HybridRetriever] collection=%s | bm25=%s embed_real=%s qdrant_avail=%s rerank_avail=%s",
             self.collection,
@@ -119,27 +112,26 @@ class HybridRetriever:
             (self._qdrant.available if self._qdrant else False),
             (self._reranker.available if self._reranker else False),
         )
-        # 启动时如果 Qdrant 可用且未入库，把 demo docs 入一份（幂等）
         self._maybe_seed_qdrant()
 
     # ───── 公开 API ─────
 
     def add(self, docs: List[Dict[str, Any]]) -> int:
-        """动态追加文档。同时更新内存 BM25（重建）与 Qdrant（增量 upsert）。"""
+        """动态追加文档／块。允许每条 doc 携 `embedding` 字段，有则不会重新 encode。"""
         if not docs:
             return 0
         new_count = 0
+        new_docs: List[Dict[str, Any]] = []
         for d in docs:
             if d.get("id") in self._by_id:
                 continue
             self.docs.append(d)
             self._by_id[d["id"]] = d
+            new_docs.append(d)
             new_count += 1
-        # 重建 BM25 (实现简洁；demo 量级可接受)
         self._tokens = [_tokenize(x["text"]) for x in self.docs]
         self._bm25 = BM25Okapi(self._tokens) if self._tokens else None
-        # 写 Qdrant (如可用)
-        self._index_qdrant(docs)
+        self._index_qdrant(new_docs)
         return new_count
 
     def search(
@@ -151,13 +143,11 @@ class HybridRetriever:
         if not self.docs or self._bm25 is None:
             return []
         coarse_k = max(top_k * 5, top_k)
-        # 路 1: BM25
         bm25_scores = self._bm25.get_scores(_tokenize(question))
         bm25_ranked = sorted(
             zip([d["id"] for d in self.docs], bm25_scores),
             key=lambda x: x[1], reverse=True,
         )[:coarse_k]
-        # 路 2 + 3: Qdrant dense + sparse (仅在 embedder 与 qdrant 都可用时)
         dense_ranked: List[Tuple[str, float]] = []
         sparse_ranked: List[Tuple[str, float]] = []
         used_dense = used_sparse = False
@@ -176,14 +166,12 @@ class HybridRetriever:
                     used_sparse = True
             except Exception as e:
                 log.warning("[HybridRetriever] dense/sparse 路径出错，单走 BM25。err=%s", e)
-        # RRF 融合
         lists = [bm25_ranked]
         if used_dense and dense_ranked:
             lists.append(dense_ranked)
         if used_sparse and sparse_ranked:
             lists.append(sparse_ranked)
         fused = rrf_merge(lists, k=settings.rrf_k, top_n=coarse_k)
-        # 过滤 + 组装
         coarse: List[Dict[str, Any]] = []
         for doc_id, rrf_score, per_ch in fused:
             d = self._by_id.get(doc_id)
@@ -204,7 +192,6 @@ class HybridRetriever:
             })
             if len(coarse) >= coarse_k:
                 break
-        # 精排
         if self._reranker and self._reranker.available and coarse:
             texts = [c["text"] for c in coarse]
             reranked = self._reranker.rerank(question, texts, top_n=top_k)
@@ -228,6 +215,7 @@ class HybridRetriever:
             "rerank_model": settings.reranker_model if (self._reranker and self._reranker.available) else None,
             "rrf_k": settings.rrf_k,
             "docs": len(self.docs),
+            "chunk_strategy_default": settings.chunk_strategy,
         }
 
     # ───── 内部 ─────
@@ -243,18 +231,38 @@ class HybridRetriever:
     def _index_qdrant(self, docs: List[Dict[str, Any]]):
         if not (self._embedder and self._embedder.available and self._qdrant and self._qdrant.available) or not docs:
             return
-        texts = [d["text"] for d in docs]
-        full = self._embedder.encode_full(texts)
-        dense = full["dense_vecs"]
-        sparse = []
-        for sd in full["lexical_weights"]:
-            sd = sd or {}
-            sparse.append({int(k): float(v) for k, v in sd.items()})
-        self._qdrant.upsert(
-            self.collection,
-            ids=[d["id"] for d in docs],
-            texts=texts,
-            dense_vecs=dense,
-            sparse_dicts=sparse,
-            metas=[d.get("meta") for d in docs],
-        )
+        # 区分：携 embedding 的直接写；不携的重新 encode_full
+        with_emb: List[Dict[str, Any]] = []
+        need_encode: List[Dict[str, Any]] = []
+        for d in docs:
+            if isinstance(d.get("embedding"), list) and d["embedding"]:
+                with_emb.append(d)
+            else:
+                need_encode.append(d)
+        # 写预嵌入部分（late-chunked）：sparse 为空，dense 直接走
+        if with_emb:
+            self._qdrant.upsert(
+                self.collection,
+                ids=[d["id"] for d in with_emb],
+                texts=[d["text"] for d in with_emb],
+                dense_vecs=[d["embedding"] for d in with_emb],
+                sparse_dicts=[{} for _ in with_emb],
+                metas=[d.get("meta") for d in with_emb],
+            )
+        # 写需要 encode 的部分
+        if need_encode:
+            texts = [d["text"] for d in need_encode]
+            full = self._embedder.encode_full(texts)
+            dense = full["dense_vecs"]
+            sparse = []
+            for sd in full["lexical_weights"]:
+                sd = sd or {}
+                sparse.append({int(k): float(v) for k, v in sd.items()})
+            self._qdrant.upsert(
+                self.collection,
+                ids=[d["id"] for d in need_encode],
+                texts=texts,
+                dense_vecs=dense,
+                sparse_dicts=sparse,
+                metas=[d.get("meta") for d in need_encode],
+            )

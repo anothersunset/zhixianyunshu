@@ -11,7 +11,7 @@
 | 3 | feat(backend): LLM 驱动迁移流水线 | ✅ |
 | 4 | feat(rag): BGE-M3 + bge-reranker-v2-m3 | ✅ |
 | 5 | feat(rag): Qdrant + RRF 三路混合 | ✅ |
-| 6 | feat(rag): Late Chunking + 语义分块 | ⏳ |
+| 6 | feat(rag): Late Chunking + 语义分块 | ✅ |
 | 7 | feat(rag): Langfuse trace 全链 | ⏳ |
 | 8 | feat(backend): Langfuse Java SDK | ⏳ |
 | 9 | feat(rag): sqlglot 替 Jinja2 | ⏳ |
@@ -58,14 +58,15 @@
 
 | 日期 | 决策 |
 | --- | --- |
-| 2026-05-21 | 全量升级 + 彩蛋 |
-| 2026-05-21 | LLM 选 DeepSeek-V3.1 |
-| 2026-05-21 | docker compose 为主 |
-| 2026-05-21 | 公开数据集 Sakila/CM/Employees |
+| 2026-05-21 | LLM = DeepSeek-V3.1 |
+| 2026-05-21 | docker compose 主 + Helm 副 |
+| 2026-05-21 | 公开数据 Sakila/CM/Employees |
 | 2026-05-21 | RestClient 不用 Spring AI |
 | 2026-05-21 | api-key 为空优雅降级 |
 | 2026-05-21 | 复用 AgentGraph |
-| 2026-05-21 | ML 依赖拆到 ml.txt + BUILD_ML |
+| 2026-05-21 | ML 依赖到 ml.txt + BUILD_ML |
 | 2026-05-21 | embedding_dim 768→1024 |
-| 2026-05-21 | Qdrant 走 docker profile=ml | 
-| 2026-05-21 | RRF k=60 作为三路融合 |
+| 2026-05-21 | Qdrant 走 docker profile=ml |
+| 2026-05-21 | RRF k=60 |
+| 2026-05-21 | Late Chunking 默认 semantic | 
+| 2026-05-21 | char→token 近似映射不依赖 offset_mapping |

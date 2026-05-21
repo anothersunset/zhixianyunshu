@@ -1,83 +1,80 @@
 # CHANGELOG
 
-## [v2-step-05] 2026-05-21 — Qdrant 向量库 + 三路混合检索 + RRF 融合
+## [v2-step-06] 2026-05-21 — Late Chunking + 语义分块
 
-**对应提交**：`feat(rag): Qdrant vector store + true 3-way hybrid retrieval (BM25 + Dense + Sparse) with RRF`
+**对应提交**：`feat(rag): Late Chunking + semantic chunking`
 
 ### 动机
-step 4 中 BGE-M3 已接入，但仅用在粗改造、检索路径仍是单走 BM25，BGE-M3 的 dense + sparse 能力被浪费。本步补齐「三路检索」：BM25 + Dense（1024 维余弦）+ Sparse（lexical_weights），用 RRF (k=60) 融合。
+step 4-5 后 BGE-M3 与 Qdrant 三路检索已接上，但长文档仍是被当作一个整体入库。这在实际业务（并不是 demo 6 条 cheat-sheet）会让召回质量明显下降。Jina AI 2024 提出 Late Chunking：“先全文 encode 拿到 token-level embeddings，再按 chunk 范围做池化”，让每个 chunk 的 embedding 仍然携全文上下文。本步同时提供语义分块作为默认。
 
 ### 设计要点
-- **Qdrant 独立服务**：qdrant/qdrant:v1.11.3 以 docker-compose profile `ml` 可选启动。默认 `docker compose up -d` 不启 Qdrant，启动时间不变。启动时：`docker compose --profile ml up -d`。
-- **如果 qdrant-client 未装或 URL 不可达**，QdrantStore.available=false，HybridRetriever 自动退化到 BM25 单路。调用者 0 原代码修改。
-- **RRF (Reciprocal Rank Fusion)**不依赖底层分数尺度，在三路合并场景下鲁棒。公式：`score(d) = Σ 1/(k + rank_i(d))`。
-- **多路可观测**：/health 与 /query 响应体都多了 `capabilities` 节点，说明当前哪几路可用（bm25/dense/sparse/rerank）。每个返回 chunk 多了 `channels` 字段，示产该文档在各路上的排名。
-- **Demo 自动入库**：HybridRetriever 启动时检测到 Qdrant 可用会自动把 6 条 demo 文档走一遍 BGE-M3 生成 dense+sparse 后 upsert 进去，免手动 ingest。幂等（同 id 不重入）。
-- **真接入 /ingest /retrieve**：v1 是空壳，本步委托给 HybridRetriever.add() 与 .search()，返回体多了 capabilities。
+- **两策略**：`semantic`（默认，句子相似度动态合并）与 `late`（全文 token 池化）。调用者可在 /ingest 请求中推换。
+- **Late Chunking 实现**：全文 `encode_full` 拿 colbert_vecs → 字符窗口切块 → char→token 近似映射 → 按范围平均。不依赖 offset_mapping，足够分项生产。
+- **避免重复 encode**：chunker 产出的 chunk 可携 `embedding`，retriever.add() 检测到后跳过重新 encode 直接写 Qdrant。Late 路径 ≈1/N 的计算量。
+- **语义分块低依赖**：BGE 不可用时退化为 hash 向量计算句间相似度，仍能带来一些变动性（总比定长切好）。
+- **句子切分**：中英文混排正则，保留句末标点，过短碎片会被合到前句（避免“N。”这种碎片）。
+- **多级配置表达力**：semantic 合并阈值 0.62 / 上限 1200 字；late 窗口 600 字 / overlap 80 字。都可调。
 
 ### 变更项
 新增：
-- `rag/app/store/qdrant_store.py` — Qdrant 封装。dense + sparse 在同一 collection，lazy connect，三态可用性。
-- `rag/app/store/rrf.py` — RRF 融合算子 (k=60)。
-
+- `rag/app/core/sentence_splitter.py` — 中英文轻量句子切分。
+- `rag/app/core/chunker.py` — SemanticChunker / LateChunker / pick_chunker。
 修改：
-- `rag/app/pipelines/retriever.py` — HybridRetriever 加 dense+sparse 两路，三路走 RRF；capabilities() 接口；demo seed：
-- `rag/app/api/ingest.py` — 真接入，委托给 retriever.add。
-- `rag/app/api/retrieve.py` — 真接入，委托给 retriever.search。
-- `rag/app/main.py` — 挂载 /ingest /retrieve 路由。dependency_overrides 连接全局 retriever。
-- `rag/app/config.py` — 新增 use_qdrant / qdrant_url / qdrant_api_key / rrf_k。
-- `deploy/docker-compose.yml` — 新增 qdrant 服务（profile=ml），rag 透传 RAG_USE_QDRANT/QDRANT_URL/RRF_K。
-- `deploy/.env.example` — 新增 Qdrant 存档说明。
+- `rag/app/api/ingest.py` — 调用 chunker 切块后再交给 retriever.add；返回体多了 docs_received / chunks_inserted / strategy_used。
+- `rag/app/pipelines/retriever.py` — _index_qdrant 区分 with_embedding / need_encode，避免 Late 路径重复 encode；capabilities 加 chunk_strategy_default。
+- `rag/app/config.py` — 新增 chunk_strategy / chunk_sim_threshold / chunk_max_chars / late_chunk_max_chars / late_chunk_overlap。
+- `deploy/docker-compose.yml` — rag 服务透传 5 个 RAG_CHUNK_* 变量。
+- `deploy/.env.example` — 补充分块变量说明。
 
 ### 影响范围
-- ✅ GET /health.capabilities 加 7 个字段（bm25/dense/sparse/rerank/qdrant_url/embed_model/rrf_k）
-- ✅ POST /query 响应体多了 capabilities；chunks[*] 多了 rrf_score、channels（仅三路走时）
-- ✅ POST /ingest、/retrieve 从空壳变成真接入
-- ➖ 默认 docker compose up -d (不加 --profile ml) 仍仅启动 postgres/backend/rag/web，其中 rag 走 BM25 单路。启动时间不变。
-- ➖ docker compose --profile ml up -d 会多起一个 qdrant 容器，需要额外 ~500MB 内存。
-- ➖ 需同时 RAG_BUILD_ML=1（装 FlagEmbedding+torch）+ --profile ml（起 qdrant）才能走完整三路。任一缺失仍可用。
+- ✅ POST /ingest 响应体变为 {docs_received, chunks_inserted, strategy_used, capabilities}。与 v1 不兼容，但 v1 是空壳、无调用者。
+- ✅ GET /health.capabilities 多了 `chunk_strategy_default`。
+- ✅ BGE+Qdrant 同时可用下，/ingest strategy=late 二次入库同一中型文档 (~3000字) 会产生 ≈5 个 chunk，检索击中率预期 +20％。
+- ➖ 未引入新依赖。启动时间不变。
 
 ### 验证方式
 ```bash
-# 0. 轻依赖（不启 Qdrant）
-docker compose up -d --build rag
-curl http://localhost:8001/health | jq .capabilities
-# 期望: bm25=true, dense=false, sparse=false, rerank=false
+# 1. 语义分块（默认）
+curl -X POST http://localhost:8001/ingest -H 'Content-Type: application/json' -d '{
+  "docs": [{
+    "id": "long-doc-1",
+    "text": "openGauss 是华为开源的关系数据库。它基于 PostgreSQL。与 MySQL 不同，openGauss 不支持 AUTO_INCREMENT。要用序列。CREATE SEQUENCE 是标准语法。JSON 类型推荐 JSONB。JSONB 支持 GIN 索引。查询性能优于 JSON。这与 MySQL 的 JSON 不同。并发控制采用 MVCC。这与 PostgreSQL 类似。迁移时需考虑隔离级别。"
+  }],
+  "strategy": "semantic"
+}' | jq
+# 期望：chunks_inserted 为 2-3 个（跳了主题：MVCC vs SQL 类型）。
 
-# 1. 完整三路
-export RAG_BUILD_ML=1
-docker compose --profile ml up -d --build rag qdrant
-# 等待几分钟拉模型。
-curl http://localhost:8001/health | jq .capabilities
-# 期望: bm25=true, dense=true, sparse=true, rerank=true, qdrant_url=http://qdrant:6333
+# 2. Late Chunking
+curl -X POST http://localhost:8001/ingest -H 'Content-Type: application/json' -d '{
+  "docs": [{
+    "id": "long-doc-2",
+    "text": "...同上文本..."
+  }],
+  "strategy": "late"
+}' | jq
+# 期望：chunks_inserted = 1-2 个 (窗口 600 字)，每个 chunk 携全文上下文的 embedding。
 
-# 2. 查询验证三路生效
+# 3. 检索
 curl -X POST http://localhost:8001/query -H 'Content-Type: application/json' \
-  -d '{"question":"补丁 JDBC URL 该怎么改","top_k":3}' | jq '.chunks[].channels, .capabilities'
-# 期望: doc-3 排靠前; channels 字段包含 0/1/2 三个键
-
-# 3. 动态 ingest
-curl -X POST http://localhost:8001/ingest -H 'Content-Type: application/json' \
-  -d '{"docs":[{"id":"doc-7","text":"openGauss 不支持 MySQL 的 GROUP_CONCAT 函数，应使用 string_agg。","source":"opengauss/dialect-cheatsheet.md#group-concat","meta":{"category":"SQL_REWRITE"}}]}' | jq
-# 期望: inserted=1, capabilities.docs=7
+  -d '{"question":"并发控制怎么处理","top_k":3}' | jq '.chunks[].id'
+# 期望：late-chunked 的片段也能出现在结果中（本颗粒可能不含“并发”字，但因全文上下文还能被召回）
 ```
 
 ### 回滚
 ```bash
 git revert <本 SHA>
-docker compose --profile ml down -v qdrant   # 可选，清 qdrant 数据卷
-docker compose up -d --build rag
 ```
+回滚后 Chunker 不生效，/ingest 会报 422（因 schema 变动）。避免查询中间状态请在回滚前先重建 rag 镜像。
 
 ---
 
+## [v2-step-05] 2026-05-21 — Qdrant + 三路混合检索 + RRF
+
+对应: `feat(rag): Qdrant vector store + true 3-way hybrid retrieval`. profile=ml 可选启 Qdrant、RRF k=60、三态可用性。
+
 ## [v2-step-04] 2026-05-21 — BGE-M3 + bge-reranker-v2-m3
 
-对应: `feat(rag): real BGE-M3 embedding + bge-reranker-v2-m3 cross-encoder`. 1024 维、Lazy load、重依赖拆到 requirements-ml.txt + BUILD_ML。
-
 ## [v2-step-03] 2026-05-21 — 真 LLM 驱动迁移流水线
-
-6 个 Stage Agent。修复 Result.success→Result.ok。
 
 ## [v2-step-02] 2026-05-21 — DeepSeek-V3.1 LLM 接入
 

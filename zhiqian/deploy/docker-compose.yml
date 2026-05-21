@@ -18,8 +18,6 @@ services:
       timeout: 5s
       retries: 10
 
-  # v2-step-05：Qdrant 向量库。默认不启（仅在 --profile ml 时启动）。
-  # 不启时 RAG 服务会检测到 Qdrant 不可达，自动退化到单走 BM25 路径。
   qdrant:
     image: qdrant/qdrant:v1.11.3
     container_name: zhiqian-qdrant
@@ -87,11 +85,16 @@ services:
       RAG_RERANKER_MODEL: ${RAG_RERANKER_MODEL:-BAAI/bge-reranker-v2-m3}
       RAG_RERANKER_FP16: ${RAG_RERANKER_FP16:-true}
       RAG_EMBEDDING_DIM: ${RAG_EMBEDDING_DIM:-1024}
-      # v2-step-05：Qdrant + RRF
       RAG_USE_QDRANT: ${RAG_USE_QDRANT:-true}
       RAG_QDRANT_URL: ${RAG_QDRANT_URL:-http://qdrant:6333}
       RAG_QDRANT_API_KEY: ${RAG_QDRANT_API_KEY:-}
       RAG_RRF_K: ${RAG_RRF_K:-60}
+      # v2-step-06: Chunking
+      RAG_CHUNK_STRATEGY: ${RAG_CHUNK_STRATEGY:-semantic}
+      RAG_CHUNK_SIM_THRESHOLD: ${RAG_CHUNK_SIM_THRESHOLD:-0.62}
+      RAG_CHUNK_MAX_CHARS: ${RAG_CHUNK_MAX_CHARS:-1200}
+      RAG_LATE_CHUNK_MAX_CHARS: ${RAG_LATE_CHUNK_MAX_CHARS:-600}
+      RAG_LATE_CHUNK_OVERLAP: ${RAG_LATE_CHUNK_OVERLAP:-80}
       HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}
     volumes:
       - ragdata:/data
