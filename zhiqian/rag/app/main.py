@@ -17,14 +17,18 @@ from app.api.transpile import router as transpile_router
 # v2-step-12: CRAG
 from app.api.crag import router as crag_router, _runner_dep as _crag_runner_dep
 from app.graphs.crag import CragRunner
+# v2-step-13: GraphRAG
+from app.api.graphrag import router as graphrag_router, _index_dep as _graphrag_index_dep
+from app.graphs.graphrag import GraphRagIndex
 
 app = FastAPI(
     title="ZhiQian RAG Service",
     description=(
         "智迁云枢 RAG: BM25 + BGE-M3 dense/sparse + Qdrant + RRF + bge-reranker-v2-m3 "
-        "+ Self-RAG critic + Langfuse 全链观测 + sqlglot AST 转译 + CRAG 路由修复"
+        "+ Self-RAG critic + Langfuse 全链观测 + sqlglot AST 转译 + CRAG 路由修复 "
+        "+ GraphRAG community report"
     ),
-    version="0.7.0",
+    version="0.8.0",
 )
 
 app.add_middleware(
@@ -41,12 +45,16 @@ critic = SelfRagCritic()
 rewriter = QueryRewriter()
 # v2-step-12: 全局 CRAG runner, 复用 retriever
 crag_runner = CragRunner(retriever)
+# v2-step-13: 全局 GraphRAG index (启动后为空, /graphrag/index 后填充)
+graphrag_index = GraphRagIndex()
 
 # v2-step-05: 全局 retriever 注入到 /ingest /retrieve 路由的 Depends 位点
 app.dependency_overrides[_ingest_dep] = lambda: retriever
 app.dependency_overrides[_retrieve_dep] = lambda: retriever
 # v2-step-12: CRAG runner 注入
 app.dependency_overrides[_crag_runner_dep] = lambda: crag_runner
+# v2-step-13: GraphRAG index 注入
+app.dependency_overrides[_graphrag_index_dep] = lambda: graphrag_index
 
 app.include_router(rerank_router, prefix="/rerank")
 app.include_router(ingest_router, prefix="/ingest")
@@ -55,6 +63,8 @@ app.include_router(retrieve_router, prefix="/retrieve")
 app.include_router(transpile_router, prefix="/transpile")
 # v2-step-12
 app.include_router(crag_router, prefix="/crag")
+# v2-step-13
+app.include_router(graphrag_router, prefix="/graphrag")
 
 
 @app.on_event("startup")
@@ -102,12 +112,14 @@ def health():
             **retriever.capabilities(),
             "langfuse_enabled": lf.available,
             "langfuse_host": lf.host if lf.available else None,
-            # v2-step-09
             "sqlglot_enabled": True,
             "sqlglot_version": sqlglot.__version__,
-            # v2-step-12
             "crag_enabled": True,
             "langgraph_style_crag": True,
+            # v2-step-13
+            "graphrag_enabled": True,
+            "graphrag_indexed_nodes": len(graphrag_index.nodes),
+            "graphrag_communities": len(graphrag_index.communities),
         },
     }
 
@@ -125,7 +137,6 @@ def query(req: QueryReq):
         with tr.span("rewrite", input={"enabled": req.rewrite}) as sp:
             rewritten = rewriter.rewrite(q) if req.rewrite else None
             sp.output({"rewritten": rewritten})
-        # 把 trace 透传给 retriever, 合并成一棵 trace 树
         chunks_raw = retriever.search(
             rewritten or q,
             top_k=req.top_k,
