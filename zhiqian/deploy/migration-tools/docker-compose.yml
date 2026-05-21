@@ -1,0 +1,19 @@
+# v2-step-22: pgloader + Ora2Pg 容器 (profile=migration-tools)
+services:
+  pgloader:
+    image: dimitri/pgloader:ccl.latest
+    profiles: [migration-tools]
+    entrypoint: ["tail", "-f", "/dev/null"]    # 保持运行, docker exec 调用
+    volumes:
+      - ./scripts:/scripts:ro
+      - ./output:/output
+
+  ora2pg:
+    image: georgmoser/ora2pg:24.3
+    profiles: [migration-tools]
+    entrypoint: ["tail", "-f", "/dev/null"]
+    environment:
+      ORACLE_HOME: /usr/lib/oracle/21/client64
+    volumes:
+      - ./scripts:/scripts:ro
+      - ./output:/output
