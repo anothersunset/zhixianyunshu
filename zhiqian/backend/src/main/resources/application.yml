@@ -45,6 +45,14 @@ app:
     temperature: ${LLM_TEMPERATURE:0.2}
     max-tokens: ${LLM_MAX_TOKENS:2048}
     timeout-seconds: ${LLM_TIMEOUT_SECONDS:60}
+  # ===== v2-step-08 新增：Langfuse 后端全链观测 =====
+  # public-key/secret-key 留空即 disabled，行为完全不变，不影响功能。
+  # 配上后，task.migration root trace + 6 stage span + 每次 LLM 调用 generation 都会上报。
+  langfuse:
+    enabled: ${LANGFUSE_ENABLED:true}
+    host: ${LANGFUSE_HOST:https://cloud.langfuse.com}
+    public-key: ${LANGFUSE_PUBLIC_KEY:}
+    secret-key: ${LANGFUSE_SECRET_KEY:}
 
 logging:
   level:
