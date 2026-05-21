@@ -1,0 +1,40 @@
+# v2-step-18: prod Ingress (nginx)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: zhiqian
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 50m
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - zhiqian.local
+      secretName: zhiqian-tls
+  rules:
+    - host: zhiqian.local
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: zhiqian-backend
+                port:
+                  number: 8080
+          - path: /rag
+            pathType: Prefix
+            backend:
+              service:
+                name: zhiqian-rag
+                port:
+                  number: 8001
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: zhiqian-web
+                port:
+                  number: 80

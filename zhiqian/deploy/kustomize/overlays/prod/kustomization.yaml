@@ -1,0 +1,26 @@
+# v2-step-18: prod overlay - HA 多副本 + Ingress + 严资源
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: zhiqian
+resources:
+  - ../../base
+  - ingress.yaml
+commonLabels:
+  env: prod
+replicas:
+  - name: zhiqian-backend
+    count: 3
+  - name: zhiqian-rag
+    count: 2
+  - name: zhiqian-web
+    count: 2
+patches:
+  - path: patch-resources.yaml
+  - path: secret-patch.yaml
+images:
+  - name: zhiqian/backend
+    newTag: 2.0.0
+  - name: zhiqian/rag
+    newTag: 2.0.0
+  - name: zhiqian/web
+    newTag: 2.0.0
