@@ -95,6 +95,10 @@ services:
       RAG_CHUNK_MAX_CHARS: ${RAG_CHUNK_MAX_CHARS:-1200}
       RAG_LATE_CHUNK_MAX_CHARS: ${RAG_LATE_CHUNK_MAX_CHARS:-600}
       RAG_LATE_CHUNK_OVERLAP: ${RAG_LATE_CHUNK_OVERLAP:-80}
+      # v2-step-07: Langfuse 全链观测 (留空即 disabled)
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-https://cloud.langfuse.com}
       HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}
     volumes:
       - ragdata:/data

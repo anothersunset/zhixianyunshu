@@ -1,18 +1,21 @@
 """一站式 HybridRetriever — BM25 粗排 + (可选 Qdrant dense + sparse) + RRF 融合 + Reranker 精排。
 
-v2-step-05：三路检索 + RRF。
-v2-step-06：接受预嵌入的 chunk（add() 中中的 doc 可携 embedding），用 LateChunker 产出的带全文上下文 embedding 直接入库。
+v2-step-05: 三路检索 + RRF。
+v2-step-06: 接受预嵌入的 chunk (add() 中的 doc 可携 embedding),用 LateChunker 产出的带全文上下文 embedding 直接入库。
+v2-step-07: search() 全链 span 化 (bm25/encode_query/qdrant.dense/qdrant.sparse/rrf/rerank);新增 parent_trace 参数允许上游 trace 透传。
 """
 from __future__ import annotations
 
 import logging
 import re
+from contextlib import ExitStack
 from typing import Any, Dict, List, Optional, Tuple
 
 from rank_bm25 import BM25Okapi
 
 from app.config import settings
 from app.core.bge_m3 import BgeM3Embedder
+from app.core.observability import get_langfuse
 from app.core.reranker import CrossEncoderReranker
 from app.store.qdrant_store import QdrantStore
 from app.store.rrf import rrf_merge
@@ -23,37 +26,37 @@ log = logging.getLogger(__name__)
 _DEMO_DOCS: List[Dict[str, Any]] = [
     {
         "id": "doc-1",
-        "text": "openGauss 不支持 MySQL 的 DATE_FORMAT 函数，需要使用 TO_CHAR 进行格式化。例如 TO_CHAR(t.created_at, 'YYYY-MM')。",
+        "text": "openGauss 不支持 MySQL 的 DATE_FORMAT 函数,需要使用 TO_CHAR 进行格式化。例如 TO_CHAR(t.created_at, 'YYYY-MM')。",
         "source": "opengauss/dialect-cheatsheet.md#date-format",
         "meta": {"dialect": "openGauss", "category": "SQL_REWRITE"},
     },
     {
         "id": "doc-2",
-        "text": "MySQL IFNULL(x, y) 在 openGauss 中可以等价替换为 COALESCE(x, y)，两者语义一致。",
+        "text": "MySQL IFNULL(x, y) 在 openGauss 中可以等价替换为 COALESCE(x, y),两者语义一致。",
         "source": "opengauss/dialect-cheatsheet.md#null-handling",
         "meta": {"dialect": "openGauss", "category": "SQL_REWRITE"},
     },
     {
         "id": "doc-3",
-        "text": "从 MySQL 迁移到 openGauss 时，JDBC URL 需从 jdbc:mysql:// 改为 jdbc:opengauss://，默认端口从 3306 变为 5432。",
+        "text": "从 MySQL 迁移到 openGauss 时,JDBC URL 需从 jdbc:mysql:// 改为 jdbc:opengauss://,默认端口从 3306 变为 5432。",
         "source": "opengauss/migration-guide.md#jdbc",
         "meta": {"dialect": "openGauss", "category": "CONFIG"},
     },
     {
         "id": "doc-4",
-        "text": "openGauss 驱动 GA 版本仅提供 opengauss-jdbc artifact，在 Maven 中需替换 mysql-connector-java。",
+        "text": "openGauss 驱动 GA 版本仅提供 opengauss-jdbc artifact,在 Maven 中需替换 mysql-connector-java。",
         "source": "opengauss/migration-guide.md#dependency",
         "meta": {"dialect": "openGauss", "category": "DEPENDENCY"},
     },
     {
         "id": "doc-5",
-        "text": "建议使用 LIMIT ... OFFSET ... 并明确指定 ORDER BY，openGauss 与 MySQL 在分页语法上兼容，但顺序需明确。",
+        "text": "建议使用 LIMIT ... OFFSET ... 并明确指定 ORDER BY,openGauss 与 MySQL 在分页语法上兼容,但顺序需明确。",
         "source": "opengauss/dialect-cheatsheet.md#pagination",
         "meta": {"dialect": "openGauss", "category": "SQL_REWRITE"},
     },
     {
         "id": "doc-6",
-        "text": "BigDecimal 推荐映射为 openGauss 的 NUMERIC(p, s)，例如金额使用 NUMERIC(20, 4)，避免精度丢失。",
+        "text": "BigDecimal 推荐映射为 openGauss 的 NUMERIC(p, s),例如金额使用 NUMERIC(20, 4),避免精度丢失。",
         "source": "opengauss/type-mapping.md#numeric",
         "meta": {"dialect": "openGauss", "category": "TYPE_MAPPING"},
     },
@@ -117,7 +120,7 @@ class HybridRetriever:
     # ───── 公开 API ─────
 
     def add(self, docs: List[Dict[str, Any]]) -> int:
-        """动态追加文档／块。允许每条 doc 携 `embedding` 字段，有则不会重新 encode。"""
+        """动态追加文档/块。允许每条 doc 携 `embedding` 字段,有则不会重新 encode。"""
         if not docs:
             return 0
         new_count = 0
@@ -139,70 +142,116 @@ class HybridRetriever:
         question: str,
         top_k: int = 5,
         filters: Optional[Dict[str, Any]] = None,
+        parent_trace: Any = None,
     ) -> List[Dict[str, Any]]:
+        """三路混合检索 + RRF + 可选重排。
+
+        v2-step-07: 全链 Langfuse 埋点。若 caller 已传 parent_trace,本次调用作为其子 span 组;
+        否则自起一个 'rag.retrieve' 顶层 trace。Langfuse disabled 时所有 span 走 no-op,无额外开销。
+        """
         if not self.docs or self._bm25 is None:
             return []
-        coarse_k = max(top_k * 5, top_k)
-        bm25_scores = self._bm25.get_scores(_tokenize(question))
-        bm25_ranked = sorted(
-            zip([d["id"] for d in self.docs], bm25_scores),
-            key=lambda x: x[1], reverse=True,
-        )[:coarse_k]
-        dense_ranked: List[Tuple[str, float]] = []
-        sparse_ranked: List[Tuple[str, float]] = []
-        used_dense = used_sparse = False
-        if self._embedder and self._embedder.available and self._qdrant and self._qdrant.available:
-            try:
-                full = self._embedder.encode_full([question])
-                qdense = full["dense_vecs"][0]
-                qsparse_raw = full["lexical_weights"][0] or {}
-                qsparse = {int(k): float(v) for k, v in qsparse_raw.items()}
-                drs = self._qdrant.search_dense(self.collection, qdense, k=coarse_k)
-                dense_ranked = [(rid, s) for rid, s, _ in drs]
-                used_dense = True
-                if qsparse:
-                    srs = self._qdrant.search_sparse(self.collection, qsparse, k=coarse_k)
-                    sparse_ranked = [(rid, s) for rid, s, _ in srs]
-                    used_sparse = True
-            except Exception as e:
-                log.warning("[HybridRetriever] dense/sparse 路径出错，单走 BM25。err=%s", e)
-        lists = [bm25_ranked]
-        if used_dense and dense_ranked:
-            lists.append(dense_ranked)
-        if used_sparse and sparse_ranked:
-            lists.append(sparse_ranked)
-        fused = rrf_merge(lists, k=settings.rrf_k, top_n=coarse_k)
-        coarse: List[Dict[str, Any]] = []
-        for doc_id, rrf_score, per_ch in fused:
-            d = self._by_id.get(doc_id)
-            if d is None:
-                continue
-            if filters:
-                meta = d.get("meta") or {}
-                if any(meta.get(k) != v for k, v in filters.items()):
+        lf = get_langfuse()
+        with ExitStack() as stack:
+            if parent_trace is not None:
+                tr = parent_trace
+            else:
+                tr = stack.enter_context(
+                    lf.trace(
+                        "rag.retrieve",
+                        input={"question": question, "top_k": top_k},
+                        metadata={"collection": self.collection},
+                        tags=["rag", "retrieve"],
+                    )
+                )
+            coarse_k = max(top_k * 5, top_k)
+
+            # ── BM25 ──
+            with tr.span("bm25.search", input={"coarse_k": coarse_k}) as sp:
+                bm25_scores = self._bm25.get_scores(_tokenize(question))
+                bm25_ranked = sorted(
+                    zip([d["id"] for d in self.docs], bm25_scores),
+                    key=lambda x: x[1], reverse=True,
+                )[:coarse_k]
+                sp.output({"hits": len(bm25_ranked), "top_id": bm25_ranked[0][0] if bm25_ranked else None})
+
+            # ── Dense + Sparse via Qdrant ──
+            dense_ranked: List[Tuple[str, float]] = []
+            sparse_ranked: List[Tuple[str, float]] = []
+            used_dense = used_sparse = False
+            if self._embedder and self._embedder.available and self._qdrant and self._qdrant.available:
+                try:
+                    with tr.span("bge.encode_query", input={"q_len": len(question)}) as sp:
+                        full = self._embedder.encode_full([question])
+                        qdense = full["dense_vecs"][0]
+                        qsparse_raw = full["lexical_weights"][0] or {}
+                        qsparse = {int(k): float(v) for k, v in qsparse_raw.items()}
+                        sp.output({"dense_dim": len(qdense), "sparse_terms": len(qsparse)})
+                    with tr.span("qdrant.dense", input={"coarse_k": coarse_k}) as sp:
+                        drs = self._qdrant.search_dense(self.collection, qdense, k=coarse_k)
+                        dense_ranked = [(rid, s) for rid, s, _ in drs]
+                        used_dense = True
+                        sp.output({"hits": len(dense_ranked), "top_id": dense_ranked[0][0] if dense_ranked else None})
+                    if qsparse:
+                        with tr.span("qdrant.sparse", input={"coarse_k": coarse_k, "sparse_terms": len(qsparse)}) as sp:
+                            srs = self._qdrant.search_sparse(self.collection, qsparse, k=coarse_k)
+                            sparse_ranked = [(rid, s) for rid, s, _ in srs]
+                            used_sparse = True
+                            sp.output({"hits": len(sparse_ranked), "top_id": sparse_ranked[0][0] if sparse_ranked else None})
+                except Exception as e:
+                    log.warning("[HybridRetriever] dense/sparse 路径出错,单走 BM25。err=%s", e)
+
+            # ── RRF ──
+            lists = [bm25_ranked]
+            if used_dense and dense_ranked:
+                lists.append(dense_ranked)
+            if used_sparse and sparse_ranked:
+                lists.append(sparse_ranked)
+            with tr.span("rrf.merge", input={"channels": len(lists), "rrf_k": settings.rrf_k}) as sp:
+                fused = rrf_merge(lists, k=settings.rrf_k, top_n=coarse_k)
+                sp.output({"fused": len(fused), "top_id": fused[0][0] if fused else None})
+
+            coarse: List[Dict[str, Any]] = []
+            for doc_id, rrf_score, per_ch in fused:
+                d = self._by_id.get(doc_id)
+                if d is None:
                     continue
-            coarse.append({
-                "id": d["id"],
-                "text": d["text"],
-                "score": float(rrf_score),
-                "rrf_score": float(rrf_score),
-                "channels": per_ch,
-                "source": d.get("source", "unknown"),
-                "meta": d.get("meta"),
-            })
-            if len(coarse) >= coarse_k:
-                break
-        if self._reranker and self._reranker.available and coarse:
-            texts = [c["text"] for c in coarse]
-            reranked = self._reranker.rerank(question, texts, top_n=top_k)
-            out: List[Dict[str, Any]] = []
-            for idx, rscore in reranked:
-                item = dict(coarse[idx])
-                item["rerank_score"] = float(rscore)
-                item["score"] = float(rscore)
-                out.append(item)
-            return out
-        return coarse[:top_k]
+                if filters:
+                    meta = d.get("meta") or {}
+                    if any(meta.get(k) != v for k, v in filters.items()):
+                        continue
+                coarse.append({
+                    "id": d["id"],
+                    "text": d["text"],
+                    "score": float(rrf_score),
+                    "rrf_score": float(rrf_score),
+                    "channels": per_ch,
+                    "source": d.get("source", "unknown"),
+                    "meta": d.get("meta"),
+                })
+                if len(coarse) >= coarse_k:
+                    break
+
+            # ── Rerank ──
+            if self._reranker and self._reranker.available and coarse:
+                with tr.span("rerank.cross_encoder", input={"candidates": len(coarse), "top_n": top_k}) as sp:
+                    texts = [c["text"] for c in coarse]
+                    reranked = self._reranker.rerank(question, texts, top_n=top_k)
+                    out: List[Dict[str, Any]] = []
+                    for idx, rscore in reranked:
+                        item = dict(coarse[idx])
+                        item["rerank_score"] = float(rscore)
+                        item["score"] = float(rscore)
+                        out.append(item)
+                    sp.output({"reranked": len(out), "top_id": out[0]["id"] if out else None})
+                if parent_trace is None:
+                    tr.output({"final_ids": [x["id"] for x in out]})
+                return out
+
+            result = coarse[:top_k]
+            if parent_trace is None:
+                tr.output({"final_ids": [x["id"] for x in result]})
+            return result
 
     def capabilities(self) -> Dict[str, Any]:
         return {
@@ -231,7 +280,6 @@ class HybridRetriever:
     def _index_qdrant(self, docs: List[Dict[str, Any]]):
         if not (self._embedder and self._embedder.available and self._qdrant and self._qdrant.available) or not docs:
             return
-        # 区分：携 embedding 的直接写；不携的重新 encode_full
         with_emb: List[Dict[str, Any]] = []
         need_encode: List[Dict[str, Any]] = []
         for d in docs:
@@ -239,7 +287,6 @@ class HybridRetriever:
                 with_emb.append(d)
             else:
                 need_encode.append(d)
-        # 写预嵌入部分（late-chunked）：sparse 为空，dense 直接走
         if with_emb:
             self._qdrant.upsert(
                 self.collection,
@@ -249,7 +296,6 @@ class HybridRetriever:
                 sparse_dicts=[{} for _ in with_emb],
                 metas=[d.get("meta") for d in with_emb],
             )
-        # 写需要 encode 的部分
         if need_encode:
             texts = [d["text"] for d in need_encode]
             full = self._embedder.encode_full(texts)

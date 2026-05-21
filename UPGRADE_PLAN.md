@@ -1,8 +1,8 @@
 # 智迁云枢 v2 升级路线图
 
-## 总进度表（32 提交）
+## 总进度表 (32 提交)
 
-### Phase 1 — 真 LLM + 真检索（P0）
+### Phase 1 — 真 LLM + 真检索 (P0)
 
 | # | 提交 | 状态 |
 | --- | --- | --- |
@@ -12,7 +12,7 @@
 | 4 | feat(rag): BGE-M3 + bge-reranker-v2-m3 | ✅ |
 | 5 | feat(rag): Qdrant + RRF 三路混合 | ✅ |
 | 6 | feat(rag): Late Chunking + 语义分块 | ✅ |
-| 7 | feat(rag): Langfuse trace 全链 | ⏳ |
+| 7 | feat(rag): Langfuse trace 全链 | ✅ |
 | 8 | feat(backend): Langfuse Java SDK | ⏳ |
 | 9 | feat(rag): sqlglot 替 Jinja2 | ⏳ |
 | 10 | feat(web): Monaco SQL Diff | ⏳ |
@@ -68,5 +68,7 @@
 | 2026-05-21 | embedding_dim 768→1024 |
 | 2026-05-21 | Qdrant 走 docker profile=ml |
 | 2026-05-21 | RRF k=60 |
-| 2026-05-21 | Late Chunking 默认 semantic | 
+| 2026-05-21 | Late Chunking 默认 semantic |
 | 2026-05-21 | char→token 近似映射不依赖 offset_mapping |
+| 2026-05-21 | Langfuse 不入 pydantic Settings,secret 不进日志 |
+| 2026-05-21 | retriever.search 加 parent_trace 透传,合并 trace 树 |
