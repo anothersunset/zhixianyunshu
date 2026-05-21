@@ -1,0 +1,6 @@
+*.sql
+*.tar.gz
+sakila-db/
+chinook/
+employees/
+!.gitkeep

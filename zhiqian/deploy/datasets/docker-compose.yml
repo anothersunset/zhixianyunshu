@@ -1,0 +1,38 @@
+# v2-step-29: 公开数据集 MySQL 源。docker compose --profile datasets up -d
+services:
+  datasets-mysql:
+    image: mysql:5.7
+    profiles: [datasets]
+    container_name: zhiqian-datasets-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: zhiqian
+      MYSQL_ROOT_HOST: "%"
+    ports:
+      - "33306:3306"
+    volumes:
+      - datasets_mysql_data:/var/lib/mysql
+      - ./seed:/docker-entrypoint-initdb.d:ro
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pzhiqian"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  datasets-opengauss:
+    image: enmotech/opengauss-lite:5.0.0
+    profiles: [datasets]
+    container_name: zhiqian-datasets-opengauss
+    environment:
+      GS_PASSWORD: ZhiQian@2026
+    ports:
+      - "55432:5432"
+    volumes:
+      - datasets_og_data:/var/lib/opengauss
+
+volumes:
+  datasets_mysql_data:
+  datasets_og_data:
