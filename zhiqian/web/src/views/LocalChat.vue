@@ -1,4 +1,5 @@
-<!-- v2-step-28: 端侧 LLM Demo。加载 Phi-3.5-mini ONNX, 走 WebGPU / WASM, 后端完全不走。-->
+<!-- v2-step-28 (polish): 端侧 LLM Demo。加载 Phi-3.5-mini ONNX, 走 WebGPU / WASM, 后端完全不走。
+     注: 不能直接在 Vue template 用二重大括号绑定 — 上游 URL 压缩会吞掉, 故全程用 v-text / v-bind。-->
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useLocalLlm, isWebGpuAvailable } from '@/composables/useLocalLlm'
@@ -28,9 +29,13 @@ async function onSend() {
     <h2>💻 端侧推理 Demo</h2>
     <p class="note">本页完全走浏览器 (transformers.js + Phi-3.5-mini ONNX), 不走后端。</p>
     <div class="badges">
-      <el-tag :type="webgpu ? 'success' : 'warning'">482</el-tag>
-      <el-tag>状态: 483</el-tag>
-      <el-tag v-if="state === 'loading'">484%</el-tag>
+      <el-tag :type="webgpu ? 'success' : 'warning'" v-text="webgpu ? 'WebGPU ✓' : 'WASM (fallback)'" />
+      <el-tag>
+        状态: <span v-text="state" />
+      </el-tag>
+      <el-tag v-if="state === 'loading'">
+        <span v-text="progress" />%
+      </el-tag>
     </div>
 
     <el-button v-if="state === 'idle' || state === 'error'" type="primary" @click="onLoad">
@@ -43,7 +48,7 @@ async function onSend() {
       <el-button type="primary" :loading="loading" @click="onSend" style="margin-top: 10px">发送</el-button>
       <div v-if="output" class="output">
         <h4>回复:</h4>
-        <pre>485</pre>
+        <pre v-text="output" />
       </div>
     </div>
   </div>
