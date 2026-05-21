@@ -8,21 +8,27 @@ class Settings(BaseSettings):
     port: int = 8001
     data_dir: str = "/data"
 
-    # v2-step-04：从 768 提升到 1024（与 BGE-M3 原生一致）。hash 占位也发 1024，避免 Chroma 维度冲突。
+    # v2-step-04：embedding_dim 768→1024（BGE-M3 原生）
     embedding_dim: int = 1024
     bm25_top_k: int = 50
     rerank_top_n: int = 5
 
-    # v2-step-04：BGE-M3 配置
+    # BGE-M3
     use_bge_m3: bool = True
     bge_model: str = "BAAI/bge-m3"
     bge_fp16: bool = True
-    bge_device: str = ""  # 空 → 自动；cpu / cuda:0 等
+    bge_device: str = ""
 
-    # v2-step-04：Reranker 配置
+    # Reranker
     use_reranker: bool = True
     reranker_model: str = "BAAI/bge-reranker-v2-m3"
     reranker_fp16: bool = True
+
+    # v2-step-05：Qdrant + RRF
+    use_qdrant: bool = True
+    qdrant_url: str = "http://qdrant:6333"
+    qdrant_api_key: str = ""
+    rrf_k: int = 60
 
 
 settings = Settings()
