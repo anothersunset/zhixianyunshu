@@ -27,6 +27,15 @@ sqlglot==25.16.1
 # 不装也能跑: CRAG 降级为仅本地 doc, web_search 节点返 []
 duckduckgo-search==6.2.10
 
+# v2-step-15: JSON Schema 验证 (轻量 ~80KB 纯 Python)
+# StructuredOutputClient 下游可用 jsonschema 验证 LLM JSON 输出
+jsonschema==4.23.0
+# 可选: outlines 在采样层强制 JSON Schema 合法 (LogitsProcessor)
+# 需 transformers 重依赖 (~500MB 上), 默认不装。启用方式:
+#   pip install outlines==0.0.46 transformers==4.44.2 torch  # 额外装
+#   export RAG_OUTLINES_ENABLED=true RAG_OUTLINES_MODEL=microsoft/Phi-3.5-mini-instruct
+# 不装时自动降级到 DeepSeek JSON mode
+
 # v2-step-04: 要启用 "真 BGE-M3 + bge-reranker-v2-m3" 才装 ML 重依赖。
 # 安装方式:  pip install -r requirements-ml.txt  或  docker build --build-arg BUILD_ML=1
 # 不装也能跑, 退化到 1024 维 hash 向量 + BM25 顺序。

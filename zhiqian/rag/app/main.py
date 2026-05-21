@@ -20,15 +20,18 @@ from app.graphs.crag import CragRunner
 # v2-step-13: GraphRAG
 from app.api.graphrag import router as graphrag_router, _index_dep as _graphrag_index_dep
 from app.graphs.graphrag import GraphRagIndex
+# v2-step-15: 结构化输出
+from app.api.structured import router as structured_router, _client_dep as _structured_client_dep
+from app.core.structured_output import StructuredOutputClient, outlines_available
 
 app = FastAPI(
     title="ZhiQian RAG Service",
     description=(
         "智迁云枢 RAG: BM25 + BGE-M3 dense/sparse + Qdrant + RRF + bge-reranker-v2-m3 "
         "+ Self-RAG critic + Langfuse 全链观测 + sqlglot AST 转译 + CRAG 路由修复 "
-        "+ GraphRAG community report"
+        "+ GraphRAG community report + Outlines/JSON-mode 受约束解码"
     ),
-    version="0.8.0",
+    version="0.9.0",
 )
 
 app.add_middleware(
@@ -47,6 +50,8 @@ rewriter = QueryRewriter()
 crag_runner = CragRunner(retriever)
 # v2-step-13: 全局 GraphRAG index (启动后为空, /graphrag/index 后填充)
 graphrag_index = GraphRagIndex()
+# v2-step-15: 全局结构化输出 client
+structured_client = StructuredOutputClient()
 
 # v2-step-05: 全局 retriever 注入到 /ingest /retrieve 路由的 Depends 位点
 app.dependency_overrides[_ingest_dep] = lambda: retriever
@@ -55,6 +60,8 @@ app.dependency_overrides[_retrieve_dep] = lambda: retriever
 app.dependency_overrides[_crag_runner_dep] = lambda: crag_runner
 # v2-step-13: GraphRAG index 注入
 app.dependency_overrides[_graphrag_index_dep] = lambda: graphrag_index
+# v2-step-15: 结构化输出 client 注入
+app.dependency_overrides[_structured_client_dep] = lambda: structured_client
 
 app.include_router(rerank_router, prefix="/rerank")
 app.include_router(ingest_router, prefix="/ingest")
@@ -65,6 +72,8 @@ app.include_router(transpile_router, prefix="/transpile")
 app.include_router(crag_router, prefix="/crag")
 # v2-step-13
 app.include_router(graphrag_router, prefix="/graphrag")
+# v2-step-15
+app.include_router(structured_router, prefix="/structured")
 
 
 @app.on_event("startup")
@@ -116,10 +125,13 @@ def health():
             "sqlglot_version": sqlglot.__version__,
             "crag_enabled": True,
             "langgraph_style_crag": True,
-            # v2-step-13
             "graphrag_enabled": True,
             "graphrag_indexed_nodes": len(graphrag_index.nodes),
             "graphrag_communities": len(graphrag_index.communities),
+            # v2-step-15
+            "structured_output_enabled": True,
+            "structured_backend": structured_client.current_backend(),
+            "outlines_available": outlines_available(),
         },
     }
 
