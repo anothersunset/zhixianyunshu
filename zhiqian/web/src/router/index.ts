@@ -13,6 +13,7 @@ const router = createRouter({
         { path: 'projects/:id', component: () => import('@/views/ProjectDetail.vue') },
         { path: 'tasks', component: () => import('@/views/TaskList.vue') },
         { path: 'tasks/:id', component: () => import('@/views/TaskDetail.vue') },
+        { path: 'sql-transpile', component: () => import('@/views/SqlTranspile.vue') },
         { path: 'knowledge', component: () => import('@/views/KnowledgeBase.vue') },
         { path: 'reports', component: () => import('@/views/Reports.vue') },
         { path: 'settings', component: () => import('@/views/Settings.vue') },
