@@ -1,0 +1,43 @@
+/* v2-step-25: 暗色/亮色 CSS 变量。Element Plus 2.7 原生看 html.dark + data-theme 类。*/
+:root {
+  --zq-bg-primary: #ffffff;
+  --zq-bg-secondary: #f7f8fa;
+  --zq-bg-tertiary: #eef0f4;
+  --zq-text-primary: #1f2329;
+  --zq-text-secondary: #51545b;
+  --zq-text-tertiary: #8a8f99;
+  --zq-border: #e6e8eb;
+  --zq-primary: #0c66e4;
+  --zq-success: #22c55e;
+  --zq-warning: #f59e0b;
+  --zq-danger: #ef4444;
+  --zq-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+html.dark {
+  --zq-bg-primary: #14171c;
+  --zq-bg-secondary: #1c2025;
+  --zq-bg-tertiary: #24292f;
+  --zq-text-primary: #e6e8eb;
+  --zq-text-secondary: #b3b7c0;
+  --zq-text-tertiary: #6e7681;
+  --zq-border: #2a2f37;
+  --zq-primary: #4a92ff;
+  --zq-success: #3ed27c;
+  --zq-warning: #fbbf24;
+  --zq-danger: #f87171;
+  --zq-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+body {
+  background: var(--zq-bg-primary);
+  color: var(--zq-text-primary);
+  transition: background 0.2s, color 0.2s;
+}
+
+.zq-panel {
+  background: var(--zq-bg-secondary);
+  border: 1px solid var(--zq-border);
+  border-radius: 8px;
+  box-shadow: var(--zq-shadow);
+}
