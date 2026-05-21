@@ -13,8 +13,8 @@
 | 5 | feat(rag): Qdrant + RRF 三路混合 | ✅ |
 | 6 | feat(rag): Late Chunking + 语义分块 | ✅ |
 | 7 | feat(rag): Langfuse trace 全链 | ✅ |
-| 8 | feat(backend): Langfuse Java SDK | ⏳ |
-| 9 | feat(rag): sqlglot 替 Jinja2 | ⏳ |
+| 8 | feat(backend): Langfuse Java SDK | ✅ |
+| 9 | feat(rag): sqlglot 替 Jinja2 | ✅ |
 | 10 | feat(web): Monaco SQL Diff | ⏳ |
 | 11 | test(rag): RAGAS + golden set 20 | ⏳ |
 
@@ -70,5 +70,9 @@
 | 2026-05-21 | RRF k=60 |
 | 2026-05-21 | Late Chunking 默认 semantic |
 | 2026-05-21 | char→token 近似映射不依赖 offset_mapping |
-| 2026-05-21 | Langfuse 不入 pydantic Settings,secret 不进日志 |
-| 2026-05-21 | retriever.search 加 parent_trace 透传,合并 trace 树 |
+| 2026-05-21 | Langfuse 不入 pydantic Settings, secret 不进日志 |
+| 2026-05-21 | retriever.search 加 parent_trace 透传, 合并 trace 树 |
+| 2026-05-21 | Java 走 RestClient + Public Ingestion API, 不引 Langfuse SDK 重依赖 |
+| 2026-05-21 | ThreadLocal trace context 让 LLM generation 自动 attach 到当前 stage span |
+| 2026-05-21 | sqlglot 不内置 opengauss, normalize_dialect() alias 到 postgres 生成器 (95% 同语法) |
+| 2026-05-21 | explain_transpile() 不走 AST walk, 用 substring 探测函数名 避免 sqlglot API 不稳定 |
