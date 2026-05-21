@@ -1,4 +1,4 @@
-# 轻依赖(默认 docker compose 使用)。构建时间 ~30s,镜像 ≤ 200MB。
+# 轻依赖(默认 docker compose 使用)。构建时间 ~30s, 镜像 ≤ 200MB。
 fastapi==0.111.0
 uvicorn[standard]==0.30.1
 pydantic==2.7.1
@@ -15,14 +15,18 @@ python-multipart==0.0.9
 pytest==8.2.0
 pytest-asyncio==0.23.6
 
-# v2-step-07: Langfuse 全链路观测 (轻量 ~3MB,无 ML 依赖,可选)
-# 不配 LANGFUSE_PUBLIC_KEY/SECRET_KEY 时自动 disabled,行为不变
+# v2-step-07: Langfuse 全链观测 (轻量 ~3MB, 无 ML 依赖, 可选)
+# 不配 LANGFUSE_PUBLIC_KEY/SECRET_KEY 时自动 disabled, 行为不变
 langfuse==2.50.0
 
 # v2-step-09: sqlglot SQL AST 方言转译 (~2MB 纯 Python 零依赖)
 # 替代 Jinja2 字符串拼接, 走 MySQL → openGauss/PostgreSQL AST 重写
 sqlglot==25.16.1
 
+# v2-step-12: CRAG web_search 补充检索 (零 key, ~200KB 纯 Python)
+# 不装也能跑: CRAG 降级为仅本地 doc, web_search 节点返 []
+duckduckgo-search==6.2.10
+
 # v2-step-04: 要启用 "真 BGE-M3 + bge-reranker-v2-m3" 才装 ML 重依赖。
 # 安装方式:  pip install -r requirements-ml.txt  或  docker build --build-arg BUILD_ML=1
-# 不装也能跑,退化到 1024 维 hash 向量 + BM25 顺序。
+# 不装也能跑, 退化到 1024 维 hash 向量 + BM25 顺序。
