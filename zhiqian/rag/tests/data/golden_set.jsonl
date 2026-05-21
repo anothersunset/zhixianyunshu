@@ -1,0 +1,20 @@
+{"id":"q01","kind":"transpile","question":"把 MySQL 的 DATE_FORMAT(t,'%Y-%m') 转到 openGauss","input_sql":"SELECT DATE_FORMAT(t, '%Y-%m') AS m FROM logs","source":"mysql","target":"opengauss","expected_tokens":["TO_CHAR","YYYY-MM"],"forbidden_tokens":["DATE_FORMAT"]}
+{"id":"q02","kind":"transpile","question":"IFNULL 在 openGauss 怎么写","input_sql":"SELECT IFNULL(nick, name) AS d FROM users","source":"mysql","target":"opengauss","expected_tokens":["COALESCE"],"forbidden_tokens":["IFNULL"]}
+{"id":"q03","kind":"transpile","question":"GROUP_CONCAT SEPARATOR ',' 到 openGauss","input_sql":"SELECT GROUP_CONCAT(id SEPARATOR ',') FROM o GROUP BY uid","source":"mysql","target":"opengauss","expected_tokens":["STRING_AGG"],"forbidden_tokens":["GROUP_CONCAT"]}
+{"id":"q04","kind":"transpile","question":"LIMIT 10,20 到 openGauss 怎么写","input_sql":"SELECT * FROM t LIMIT 10, 20","source":"mysql","target":"opengauss","expected_tokens":["LIMIT 20","OFFSET 10"],"forbidden_tokens":["LIMIT 10,"]}
+{"id":"q05","kind":"transpile","question":"JSON_EXTRACT 到 openGauss","input_sql":"SELECT JSON_EXTRACT(payload, '$.name') FROM evt","source":"mysql","target":"opengauss","expected_tokens":["JSON_EXTRACT_PATH"],"forbidden_tokens":[]}
+{"id":"q06","kind":"transpile","question":"FROM_UNIXTIME 到 openGauss","input_sql":"SELECT FROM_UNIXTIME(1704067200) AS t","source":"mysql","target":"opengauss","expected_tokens":["TO_TIMESTAMP"],"forbidden_tokens":["FROM_UNIXTIME"]}
+{"id":"q07","kind":"transpile","question":"带反引号的表名 到 openGauss","input_sql":"SELECT * FROM `users` u","source":"mysql","target":"opengauss","expected_tokens":["\"users\""],"forbidden_tokens":["`users`"]}
+{"id":"q08","kind":"transpile","question":"AUTO_INCREMENT 在 openGauss 怎么表达","input_sql":"CREATE TABLE t (id INT AUTO_INCREMENT PRIMARY KEY, n VARCHAR(50))","source":"mysql","target":"opengauss","expected_tokens":["SERIAL"],"forbidden_tokens":[]}
+{"id":"q10","kind":"retrieve","question":"DATE_FORMAT 怎么转到 openGauss","top_k":5,"expected_doc_ids":["doc-1"]}
+{"id":"q11","kind":"retrieve","question":"IFNULL 跨库转换","top_k":5,"expected_doc_ids":["doc-2"]}
+{"id":"q12","kind":"retrieve","question":"openGauss JDBC URL 如何写","top_k":5,"expected_doc_ids":["doc-3"]}
+{"id":"q13","kind":"retrieve","question":"Maven 里加 openGauss 驱动","top_k":5,"expected_doc_ids":["doc-4"]}
+{"id":"q14","kind":"retrieve","question":"分页语法从 MySQL 到 openGauss","top_k":5,"expected_doc_ids":["doc-5"]}
+{"id":"q15","kind":"retrieve","question":"BigDecimal 字段映射到什么类型","top_k":5,"expected_doc_ids":["doc-6"]}
+{"id":"q20","kind":"qa","question":"如何把 MySQL 的 IFNULL 转到 openGauss","expected_keywords":["COALESCE"],"min_facts":1}
+{"id":"q21","kind":"qa","question":"如何准备 openGauss 的 JDBC 连接","expected_keywords":["jdbc:opengauss","5432"],"min_facts":2}
+{"id":"q22","kind":"qa","question":"openGauss 的分页语法是什么","expected_keywords":["LIMIT","OFFSET"],"min_facts":2}
+{"id":"q23","kind":"qa","question":"MySQL 中的 DATE_FORMAT 如何表达为 openGauss 函数","expected_keywords":["TO_CHAR"],"min_facts":1}
+{"id":"q24","kind":"qa","question":"从 MySQL 迁到 openGauss 需要哪些依赖改动","expected_keywords":["opengauss-jdbc"],"min_facts":1}
+{"id":"q25","kind":"qa","question":"BigDecimal 映射不匹配怎么办","expected_keywords":["NUMERIC"],"min_facts":1}
