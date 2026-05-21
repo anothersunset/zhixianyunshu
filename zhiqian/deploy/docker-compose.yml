@@ -31,7 +31,6 @@ services:
       APP_JWT_SECRET: ${JWT_SECRET:?请在 .env 中设置 JWT_SECRET}
       APP_ADMIN_PASSWORD: ${ADMIN_PASSWORD:?请在 .env 中设置 ADMIN_PASSWORD}
       APP_RAG_BASE_URL: http://rag:8001
-      # v2-step-02 新增：LLM 变量透传。未设置则为空字串，后端走 MockLlmClient。
       LLM_PROVIDER: ${LLM_PROVIDER:-deepseek}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com/v1}
@@ -57,10 +56,23 @@ services:
     build:
       context: ../rag
       dockerfile: Dockerfile
+      args:
+        # v2-step-04：默认 0 保持轻依赖；BUILD_ML=1 启用 BGE-M3 + Reranker 真模型。
+        BUILD_ML: ${RAG_BUILD_ML:-0}
     container_name: zhiqian-rag
     restart: unless-stopped
     environment:
       ZHIQIAN_RAG_CHROMA_PATH: /data/.chroma
+      # v2-step-04：BGE-M3 / Reranker 运行期开关。BUILD_ML=0 时这些变量也能设 true，代码会自动检测并退化。
+      RAG_USE_BGE_M3: ${RAG_USE_BGE_M3:-true}
+      RAG_BGE_MODEL: ${RAG_BGE_MODEL:-BAAI/bge-m3}
+      RAG_BGE_FP16: ${RAG_BGE_FP16:-true}
+      RAG_USE_RERANKER: ${RAG_USE_RERANKER:-true}
+      RAG_RERANKER_MODEL: ${RAG_RERANKER_MODEL:-BAAI/bge-reranker-v2-m3}
+      RAG_RERANKER_FP16: ${RAG_RERANKER_FP16:-true}
+      RAG_EMBEDDING_DIM: ${RAG_EMBEDDING_DIM:-1024}
+      # HuggingFace 镜像源（仅在 BUILD_ML=1 且需要拉取模型时生效）
+      HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}
     volumes:
       - ragdata:/data
     ports:
@@ -70,7 +82,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
-      start_period: 20s
+      start_period: 30s
 
   web:
     build:

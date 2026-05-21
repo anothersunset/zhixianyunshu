@@ -8,11 +8,12 @@ from app.pipelines.critic import SelfRagCritic
 from app.pipelines.rewriter import QueryRewriter
 from app.pipelines.validation import generate_validation_script, validate_request_payload
 from app.config import settings
+from app.api.rerank import router as rerank_router
 
 app = FastAPI(
     title="ZhiQian RAG Service",
-    description="智迁云枢 RAG 服务：BM25 + 嵌入检索、Self-RAG critic、验证脚本生成",
-    version="0.2.0",
+    description="智迁云枢 RAG：BM25 + BGE-M3 向量 + bge-reranker-v2-m3 重排 + Self-RAG critic + 验证脚本生成",
+    version="0.3.0",
 )
 
 app.add_middleware(
@@ -27,6 +28,9 @@ app.add_middleware(
 retriever = HybridRetriever()
 critic = SelfRagCritic()
 rewriter = QueryRewriter()
+
+# v2-step-04：独立的 /rerank 端点（供后端外部调用复用同一加载的模型）
+app.include_router(rerank_router, prefix="/rerank")
 
 
 class QueryReq(BaseModel):
@@ -43,6 +47,8 @@ class DocChunk(BaseModel):
     score: float
     source: str
     meta: Optional[Dict[str, Any]] = None
+    rerank_score: Optional[float] = None
+    bm25_score: Optional[float] = None
 
 
 class QueryResp(BaseModel):
@@ -50,11 +56,24 @@ class QueryResp(BaseModel):
     rewritten: Optional[str] = None
     chunks: List[DocChunk]
     critique: Optional[Dict[str, Any]] = None
+    embed_real: bool = False
+    rerank_real: bool = False
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "zhiqian-rag", "version": app.version}
+    rr = getattr(retriever, "_reranker", None)
+    return {
+        "status": "ok",
+        "service": "zhiqian-rag",
+        "version": app.version,
+        "bge_m3": {"enabled": settings.use_bge_m3, "model": settings.bge_model},
+        "reranker": {
+            "enabled": settings.use_reranker,
+            "model": settings.reranker_model,
+            "available": (rr.available if rr is not None else False),
+        },
+    }
 
 
 @app.post("/query", response_model=QueryResp)
@@ -63,11 +82,14 @@ def query(req: QueryReq):
     rewritten = rewriter.rewrite(q) if req.rewrite else None
     chunks_raw = retriever.search(rewritten or q, top_k=req.top_k, filters=req.filters)
     critique = critic.critique(q, chunks_raw) if req.critic else None
+    rr = getattr(retriever, "_reranker", None)
     return QueryResp(
         question=q,
         rewritten=rewritten,
-        chunks=[DocChunk(**c) for c in chunks_raw],
+        chunks=[DocChunk(**{k: v for k, v in c.items() if k in DocChunk.model_fields}) for c in chunks_raw],
         critique=critique,
+        embed_real=False,  # 本处为 BM25 路径，step 5 接 Qdrant 后会走 dense
+        rerank_real=(rr.available if rr is not None else False),
     )
 
 

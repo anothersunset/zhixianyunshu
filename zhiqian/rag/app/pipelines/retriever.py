@@ -2,10 +2,17 @@ from __future__ import annotations
 
 from typing import List, Dict, Any, Optional
 from rank_bm25 import BM25Okapi
+import logging
 import re
 
-# 轻量内存 BM25＋TF伪嵌入的混合检索器。
-# 本地部署未接入 BGE-M3 / Faiss 时依然可运行，足以演示 Self-RAG 流程。
+from app.config import settings
+from app.core.reranker import CrossEncoderReranker
+
+log = logging.getLogger(__name__)
+
+# v2-step-04：BM25 粗排 + bge-reranker-v2-m3 交叉编码器精排。
+# - reranker.available=true 时：BM25 拉取 top_k*5 候选，重排后取 top_k
+# - false 时：退化到 v1 纯BM25 顺序，保证 0 依赖环境也能跑
 
 
 _DEMO_DOCS: List[Dict[str, Any]] = [
@@ -49,38 +56,73 @@ _DEMO_DOCS: List[Dict[str, Any]] = [
 
 
 def _tokenize(text: str) -> List[str]:
-    return [t for t in re.split(r"[\s,.;:!?()\[\]{}<>=#'\"\u3002\uff0c\uff1b\uff1a\uff01\uff1f\u3001]+", text.lower()) if t]
+    return [t for t in re.split(r"[\s,.;:!?()\[\]{}<>=#'\"\u3002\uff0c\uff1b\uff1a\uff01\uff1f\u3001]+", (text or "").lower()) if t]
 
 
 class HybridRetriever:
-    def __init__(self, docs: Optional[List[Dict[str, Any]]] = None):
+    def __init__(
+        self,
+        docs: Optional[List[Dict[str, Any]]] = None,
+        reranker: Optional[CrossEncoderReranker] = None,
+    ):
         self.docs = docs if docs is not None else _DEMO_DOCS
         self._tokens = [_tokenize(d["text"]) for d in self.docs]
         self._bm25 = BM25Okapi(self._tokens) if self._tokens else None
+        if reranker is not None:
+            self._reranker = reranker
+        elif settings.use_reranker:
+            self._reranker = CrossEncoderReranker(
+                model_path=settings.reranker_model, use_fp16=settings.reranker_fp16
+            )
+        else:
+            self._reranker = None
+        if self._reranker is not None:
+            log.info(
+                "[HybridRetriever] reranker=%s, available=%s",
+                settings.reranker_model,
+                self._reranker.available,
+            )
 
-    def search(self, question: str, top_k: int = 5,
-               filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def search(
+        self,
+        question: str,
+        top_k: int = 5,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> List[Dict[str, Any]]:
         if not self.docs or self._bm25 is None:
             return []
         scores = self._bm25.get_scores(_tokenize(question))
-        ranked = sorted(
-            zip(scores, self.docs),
-            key=lambda x: x[0],
-            reverse=True,
-        )
-        results: List[Dict[str, Any]] = []
-        for score, d in ranked:
+        ranked = sorted(zip(scores, self.docs), key=lambda x: x[0], reverse=True)
+        # 粗排：多取一些候选给交叉编码器重排
+        coarse_k = max(top_k * 5, top_k)
+        coarse: List[Dict[str, Any]] = []
+        for bm25_score, d in ranked:
             if filters:
                 meta = d.get("meta") or {}
                 if any(meta.get(k) != v for k, v in filters.items()):
                     continue
-            results.append({
+            coarse.append({
                 "id": d["id"],
                 "text": d["text"],
-                "score": float(score),
+                "score": float(bm25_score),
+                "bm25_score": float(bm25_score),
                 "source": d.get("source", "unknown"),
                 "meta": d.get("meta"),
             })
-            if len(results) >= top_k:
+            if len(coarse) >= coarse_k:
                 break
-        return results
+        if not coarse:
+            return []
+        # 精排
+        if self._reranker is not None and self._reranker.available:
+            texts = [c["text"] for c in coarse]
+            reranked = self._reranker.rerank(question, texts, top_n=top_k)
+            results: List[Dict[str, Any]] = []
+            for idx, rscore in reranked:
+                item = dict(coarse[idx])
+                item["rerank_score"] = float(rscore)
+                item["score"] = float(rscore)  # 上层 score 面向“最后的分”语义
+                results.append(item)
+            return results
+        # 退化：直接取 BM25 前 top_k
+        return coarse[:top_k]

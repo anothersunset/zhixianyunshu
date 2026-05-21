@@ -1,0 +1,18 @@
+# v2-step-04：重 ML 依赖，仅需启用 BGE-M3 / Reranker / GraphRAG 时安装。
+# 总大小 ~2GB (含torch CPU + transformers + FlagEmbedding)。
+# 首次加载模型会从 HuggingFace 拉 ~2GB权重，请保证网络。可用镜像源：
+#   export HF_ENDPOINT=https://hf-mirror.com
+
+-r requirements.txt
+
+# PyTorch CPU 版（GPU 用户请手动装 +cu121 版本）
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.4.0+cpu ; platform_system != "Darwin"
+torch==2.4.0 ; platform_system == "Darwin"
+
+transformers==4.44.2
+sentencepiece==0.2.0
+FlagEmbedding==1.2.11
+accelerate==0.34.2
+# 可选：Qdrant 客户端（step 5 会用到）
+qdrant-client==1.11.3
