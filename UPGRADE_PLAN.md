@@ -18,13 +18,13 @@
 | 10 | feat(web): Monaco SQL Diff | ✅ |
 | 11 | test(rag): RAGAS + golden set 20 | ✅ |
 
-### Phase 2 — Agent + GraphRAG — ⏳ 0/6
+### Phase 2 — Agent + GraphRAG — 🟡 3/6
 
 | # | 提交 | 状态 |
 | --- | --- | --- |
-| 12 | feat(rag): LangGraph Self-RAG→CRAG | ⏳ |
-| 13 | feat(rag): GraphRAG 索引 CKG | ⏳ |
-| 14 | feat(backend): Temporal worker | ⏳ |
+| 12 | feat(rag): LangGraph Self-RAG→CRAG | ✅ |
+| 13 | feat(rag): GraphRAG 索引 CKG | ✅ |
+| 14 | feat(backend): Temporal worker | ✅ |
 | 15 | feat(rag): Outlines 受约束解码 | ⏳ |
 | 16 | feat(web): Cytoscape.js CKG 可视化 | ⏳ |
 | 17 | test(backend): Spring Boot Test ≥0.8 | ⏳ |
@@ -73,6 +73,20 @@
 
 ---
 
+## Phase 2 进度 (3/6) — 2026-05-21 🟡
+
+**已完成**:
+- ✅ #12 LangGraph-style CRAG (retrieve→evaluate→correct/refine/web_search→generate)
+- ✅ #13 GraphRAG 索引 CKG (Louvain-Lite 社区 + local/global 双查询 + 8 测试)
+- ✅ #14 Temporal durable workflow (6 stage activity + QueryMethod + REST + docker profile=temporal)
+
+**待完成**:
+- ⏳ #15 Outlines 受约束解码 (强保证 JSON 输出 schema)
+- ⏳ #16 Cytoscape.js CKG 可视化 (前端图谱浏览)
+- ⏳ #17 Spring Boot Test ≥ 0.8 (Testcontainers + WebMvcTest)
+
+---
+
 ## 决策日志
 
 | 日期 | 决策 |
@@ -101,3 +115,12 @@
 | 2026-05-21 | 测试依赖独立 requirements-test.txt, 避免 langchain/datasets 污染产品镜像 |
 | 2026-05-21 | RAGAS 调 DeepSeek 走 OpenAI compatible (langchain-openai.ChatOpenAI), 零代码修改 |
 | 2026-05-21 | recall@5 阈值 0.80, faithfulness/relevancy 阈值 0.50 (保守, Phase 2 GraphRAG 后可取高) |
+| 2026-05-21 | CRAG 不引 langgraph 库, 自写 200 行 mini StateGraph runner (graphs/crag.py), 避免 pydantic v1 兼容问题 |
+| 2026-05-21 | CRAG evaluator 双轨: RAG_CRAG_USE_LLM_EVAL=1 走 DeepSeek, 否则启发式 (top doc score 阈值), 让无 key 环境也能跑 |
+| 2026-05-21 | GraphRAG 自实现 Louvain-Lite (BFS 连通分量 + type-based split), 不引 networkx, 50 节点阈值二次拆分 |
+| 2026-05-21 | GraphRagIndex 走全局单例 + lazy build, /index 端点重复调用幂等覆盖 |
+| 2026-05-21 | Temporal 默认 enabled=false, @ConditionalOnProperty 控制 bean 装载, 不开时 0 开销 |
+| 2026-05-21 | Temporal 不用 spring-boot-starter-alpha, 直接 io.temporal:temporal-sdk + 手写 3 bean, 避免 auto-config 越级 |
+| 2026-05-21 | TemporalActivities 委托现有 AgentRunner + 6 AgentTool bean, 不双护理业务逻辑 |
+| 2026-05-21 | Temporal docker compose 走 profile=temporal opt-in, 复用主 postgres (DBNAME=temporal/visibility), 不引独立 cassandra |
+| 2026-05-21 | TemporalMigrationController 用 ObjectProvider<WorkflowClient>, disabled 时返 503 而非 404, 给前端明确提示 |

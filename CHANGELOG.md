@@ -4,6 +4,148 @@
 
 ---
 
+## 🟡 Phase 2 进度 (3/6) — 2026-05-21
+
+**LangGraph CRAG + GraphRAG + Temporal worker 三大支柱已落地**。剩 Outlines 受约束解码、Cytoscape.js CKG 可视化、Spring Boot Test ≥0.8。
+
+---
+
+## [v2-step-14] 2026-05-21 — Temporal durable workflow worker
+
+**提交 SHA**: `4692d68f` (batch 1 骨架 7 类) + `39ac14c6` (batch 2 pom+yml+compose+controller)
+
+### 动机
+6 Agent 流水线动辄 30 分钟, 进程崩溃或重启就要重跑, 是工程化最大短板。Temporal 是业界 durable workflow 事实标准 (Uber/Snap/Coinbase 重资产编排都走), 能把每个 Agent 节点的输入输出持久化, crash 后从断点续跑, 还提供可视化 UI、重试、超时、并发治理。
+
+### 设计要点
+- **完全可选**: `app.temporal.enabled=false` (默认) 时 `@ConditionalOnProperty` 不装载任何 Temporal bean, AgentRunner 路径毫无变化。SDK jar 仅占镜像 ~25MB。
+- **复用现有 6 Agent**: `MigrationActivitiesImpl` (Spring `@Component`) 通过 `@Qualifier` 注入 6 个 AgentTool bean + AgentRunner, 不重写业务逻辑, 仅做 Temporal ↔ Spring 透传, 避免双护理。
+- **6 stage workflow**: `MigrationWorkflowImpl` 顺序调 schema → retrieve → reason → patch → critic → report, 每节点 ActivityOptions startToClose 10min + heartbeat 2min + RetryOptions 指数退避 (maxAttempts=3, initial 2s, max 30s, ×2)。
+- **QueryMethod 双轨**: SSE 适合活跃连接, `@QueryMethod currentStage()` 适合页面重打开后拉状态, 互补。
+- **轻量 record 入参**: MigrationRequest/Result 全 record + Map, 不依赖重型领域类, 避免 Temporal payload 序列化反序列化问题。
+- **TemporalWorkerStarter SmartLifecycle**: `start()` 注册 workflow impl class + activity bean, `workerFactory.start()`; `stop()` 优雅关闭。`getPhase()=100` 让 LLM/Langfuse 先就绪。
+- **REST 入口**: `POST /api/temporal/start` 提交 workflow 返 wid/runId, `GET /api/temporal/status/{wid}` 走 QueryMethod。`ObjectProvider<WorkflowClient>` 让 controller 在 disabled 时返 503 而非 404。
+- **docker compose profile=temporal**: 复用主 postgres (DBNAME=temporal + temporal_visibility, 通过 init-temporal-db.sql 预建), `temporalio/auto-setup:1.25.0` + UI `temporalio/ui:2.31.2` (8233 端口)。启动: `docker compose --profile temporal up -d`。
+
+### 变更项
+新增 10 个 Java 类 + 1 个 SQL + 1 个 controller:
+- `com.zhiqian.temporal.TemporalProperties` (8 个 @ConfigurationProperties)
+- `com.zhiqian.temporal.TemporalConfig` (@ConditionalOnProperty 3 bean: WorkflowServiceStubs + WorkflowClient + WorkerFactory)
+- `com.zhiqian.temporal.workflow.MigrationRequest` / `MigrationResult` (record)
+- `com.zhiqian.temporal.workflow.MigrationWorkflow` (@WorkflowInterface + QueryMethod)
+- `com.zhiqian.temporal.workflow.MigrationWorkflowImpl`
+- `com.zhiqian.temporal.workflow.MigrationActivities` (@ActivityInterface, 6 method)
+- `com.zhiqian.temporal.workflow.MigrationActivitiesImpl` (@Component, 委托 AgentRunner)
+- `com.zhiqian.temporal.TemporalWorkerStarter` (SmartLifecycle)
+- `com.zhiqian.temporal.TemporalMigrationController` (POST /start, GET /status/{wid})
+- `deploy/init-temporal-db.sql` (create database temporal + temporal_visibility)
+
+修改: `backend/pom.xml` (+temporal-sdk 1.27.0 + temporal-testing test scope), `application.yml` (+app.temporal.* 八参数), `deploy/docker-compose.yml` (+temporal + temporal-ui, profile=temporal, 复用 postgres)。
+
+### 验证
+```bash
+# 默认不启 — 完全不影响
+docker compose up -d  # postgres + backend + rag + web
+
+# 开启 Temporal
+export TEMPORAL_ENABLED=true
+docker compose --profile temporal up -d
+open http://localhost:8233   # Temporal UI
+curl http://localhost:8080/actuator/health  # 含 temporal up
+
+# 跑 workflow
+curl -X POST http://localhost:8080/api/temporal/start \
+  -H 'Authorization: Bearer <JWT>' -H 'Content-Type: application/json' \
+  -d '{"taskId":1,"projectId":1,"sourceDialect":"mysql","targetDialect":"opengauss"}'
+# => {wid: 'migration-1-1747...', runId: '...', taskQueue: 'zhiqian-migration'}
+
+curl http://localhost:8080/api/temporal/status/migration-1-1747...
+# => {stage: 'REASON'}
+
+# UI 上能看到 6 stage activity 顺序跑完, 重试可见, payload 可见
+```
+
+### 回滚
+`git revert 39ac14c6 4692d68f` → controller / pom / yml / compose / SQL 全恢复; Java 类删除, 不影响 AgentRunner 路径。
+
+---
+
+## [v2-step-13] 2026-05-21 — GraphRAG 索引 CKG (Louvain-Lite 社区 + 局部/全局双查询)
+
+**提交 SHA**: `e43729a6`
+
+### 动机
+纯向量检索对「这个表被哪些方法读? 调用链路上有什么影响?」这种需要图结构推理的问题答不好。GraphRAG (微软 2024) 把代码知识图谱按社区划分, 局部查询走实体 + 邻居, 全局查询走社区摘要, 是 SOTA 解法。
+
+### 设计要点
+- **CommunityDetector (Louvain-Lite)**: BFS 找连通分量, 大于 max_community_size=50 时按节点 type 二次拆分。简单可解释, 零外部依赖 (networkx 也不引)。
+- **GraphRagIndex API**:
+  - `.build(nodes, edges)` 返 `{n_nodes, n_edges, n_communities}`
+  - `.stats()` 索引诊断
+  - `.query_local(question, max_entities=3, hop=1)` 关键词命中实体 → 1 跳邻居 → 拼上下文
+  - `.query_global(question, max_reports=3)` 跨社区找最相关报告 → 拼摘要上下文
+- **CommunityReport dataclass**: id/title/summary/keywords/node_ids/type_breakdown — 五字段足以驱动 LLM 生成最终答案。
+- **3 REST 端点**: `POST /graphrag/index` 入图, `POST /graphrag/query/local` + `POST /graphrag/query/global` 双轨, `GET /graphrag/stats`。未 index 时 409。
+- **15 节点 + 18 边测试 fixture**: 模拟 order/payment/utils 三模块, 含 File/Class/Method/Table/Column 五种 type, contains/has_method/uses_table/has_column/reads/calls 六种边, 8 个测试覆盖 index_stats / local_hit / local_with_neighbors / local_no_hit / global / global_empty / community_reports_have_keywords / stats_method。
+
+### 变更项
+新增: `rag/app/graphs/community.py`, `rag/app/graphs/graphrag.py`, `rag/app/api/graphrag.py`, `rag/tests/test_graphrag.py`。
+修改: `rag/app/main.py` (0.7.0 → 0.8.0, 注册 graphrag_router, +graphrag_enabled / graphrag_indexed_nodes / graphrag_communities 三个 health cap, 全局 `graphrag_index = GraphRagIndex()`)。
+
+### 验证
+```bash
+cd zhiqian/rag && pytest tests/test_graphrag.py -v
+# 8 passed in 0.3s
+
+curl -s http://localhost:8001/health | jq '.capabilities | {graphrag_enabled, graphrag_indexed_nodes, graphrag_communities}'
+# => {graphrag_enabled: true, graphrag_indexed_nodes: 0, graphrag_communities: 0}
+
+# 入图 + 查询 see tests/test_graphrag.py fixture
+```
+
+### 回滚
+`git revert <SHA>` → /graphrag/* 端点消失; HybridRetriever 不受影响。
+
+---
+
+## [v2-step-12] 2026-05-21 — LangGraph-style Self-RAG → CRAG
+
+**提交 SHA**: `c881dc77` (batch 1 graphs 4 文件) + `2e76a1a6` (batch 2 web_search + crag runner + api + main + req)
+
+### 动机
+常规 RAG 检索质量差时直接生成幻觉。CRAG (Corrective RAG) 加一个 evaluator 给检索打分, 不够好时走 web_search 补救, 再 refine 问题重检索, 是 CRAG 论文的主架构。
+
+### 设计要点
+- **不引 langgraph 重依赖**: 自己写 mini StateGraph runner (graphs/crag.py), 200 行可读, 无 networkx/pydantic v1 兼容问题。
+- **CragState 节点序列**: retrieve → evaluate → branch:
+  - `correct`: refine → generate
+  - `ambiguous`: web_search + refine → generate
+  - `incorrect`: web_search → refine → generate
+- **3 路评估**: evaluator 走 LLM (DeepSeek) 时如果 RAG_CRAG_USE_LLM_EVAL=1, 否则启发式 (top doc score 阈值)。
+- **web_searcher.py**: 默认 duckduckgo-search (无需 key), 可选 SearXNG (RAG_SEARXNG_URL)。
+- **refiner**: 把 question + 已检索证据丢给 LLM 重写 query, 提高第二轮召回。
+- **generate**: DEEPSEEK_API_KEY 在场时走 LLM, 否则降级到 template fallback (拼证据 + 模板)。
+- **CragRunner API**: `.run(question, top_k=5, use_web=True) -> CragState`。整 run 包 Langfuse trace, 每节点一个 span。
+- **POST /crag/query**: 入参 question + top_k + use_web, 返 state.answer + state.path (走了哪些节点) + state.evaluations。
+
+### 变更项
+新增 batch 1: `rag/app/graphs/{__init__,state,evaluator,refiner}.py`。
+新增 batch 2: `rag/app/graphs/web_search.py`, `rag/app/graphs/crag.py`, `rag/app/api/crag.py`。
+修改: `rag/app/main.py` (0.6.0 → 0.7.0, +crag_router, +crag_enabled / langgraph_style_crag health cap), `rag/requirements.txt` (+duckduckgo-search==6.2.10)。
+
+### 验证
+```bash
+curl -s -X POST http://localhost:8001/crag/query \
+  -H 'Content-Type: application/json' \
+  -d '{"question":"openGauss 怎么模拟 mysql 的 ON UPDATE CURRENT_TIMESTAMP?","top_k":5,"use_web":true}'
+# => { answer: "...", path: ["retrieve","evaluate","web_search","refine","generate"], evaluations: [...] }
+```
+
+### 回滚
+`git revert 2e76a1a6 c881dc77` → /crag/* 端点 + graphs/ 目录消失; 主 /query 不受影响。
+
+---
+
 ## 🟢 Phase 1 milestone (11/11) — 2026-05-21
 
 **RAG 主链路可交付**。包括: DeepSeek LLM 接入 + 6 Agent 迁移流水线 + BGE-M3+重排 + Qdrant+RRF + Late/Semantic Chunking + Langfuse 双端 trace + sqlglot AST 转译 + Monaco SQL Diff Web + RAGAS+golden set 衡量。
