@@ -1,6 +1,6 @@
 # 智迁云枢 v2 升级路线图
 
-## 总进度表 (32 提交)
+## 总进度表 (37 提交)
 
 ### Phase 1 — 真 LLM + 真检索 (P0) — ✅ 11/11
 
@@ -29,17 +29,17 @@
 | 16 | feat(web): Cytoscape.js CKG 可视化 | ✅ |
 | 17 | test(backend): Spring Boot Test ≥0.8 | ✅ |
 
-### Phase 3 — 云原生 + 真库 + 协议 — 🟡 2/7
+### Phase 3 — 云原生 + 真库 + 协议 — ✅ 7/7
 
 | # | 提交 | 状态 |
 | --- | --- | --- |
 | 18 | feat(deploy): Kustomize base+overlays (Helm pivot) | ✅ |
 | 19 | feat(deploy): ArgoCD + Kustomize app | ✅ |
-| 20 | feat(deploy): KubeRay + vLLM | ⏳ |
-| 21 | feat(backend): Debezium 3.0 CDC | ⏳ |
-| 22 | feat(backend): pgloader / MTK 适配 | ⏳ |
-| 23 | feat(rag): MCP Server | ⏳ |
-| 24 | feat(backend): A2A 协议 | ⏳ |
+| 20 | feat(deploy): KubeRay + vLLM | ✅ |
+| 21 | feat(backend): Debezium 3.0 CDC | ✅ |
+| 22 | feat(backend): pgloader / MTK 适配 | ✅ |
+| 23 | feat(rag): MCP Server | ✅ |
+| 24 | feat(backend): A2A 协议 | ✅ |
 
 ### 加分彩蛋 — ⏳ 0/8
 
@@ -68,18 +68,17 @@ LangGraph CRAG + GraphRAG + Temporal + Outlines + Cytoscape + JaCoCo。
 
 ---
 
-## Phase 3 进度 (2/7) — 2026-05-21 🟡
+## Phase 3 milestone (7/7) — 2026-05-21 ✅
 
-**已完成**:
+**云原生 Kustomize + ArgoCD GitOps + KubeRay/vLLM + Debezium 3.0 CDC + pgloader/MTK + MCP Server + A2A 协议**。
+
 - ✅ #18 Kustomize base + overlays (Helm pivot)
-- ✅ #19 ArgoCD GitOps: AppProject zhiqian + Application zhiqian-dev (automated) + zhiqian-prod (manual+selfHeal+ignoreDifferences) + app-of-apps.yaml + bootstrap.sh + README
-
-**待完成**:
-- ⏳ #20 KubeRay + vLLM (可选 GPU 推理)
-- ⏳ #21 Debezium 3.0 CDC (MySQL → Kafka → openGauss)
-- ⏳ #22 pgloader / MTK 迁移工具适配层
-- ⏳ #23 MCP Server (让 ZhiQian 作为 MCP 工具被别的 AI 调用)
-- ⏳ #24 A2A 协议 (多 Agent 互联)
+- ✅ #19 ArgoCD GitOps: AppProject + Application dev (auto) / prod (manual+selfHeal+ignoreDiff) + app-of-apps + bootstrap.sh
+- ✅ #20 KubeRay + vLLM: standalone Deployment + RayService CRD + Spring vllm profile
+- ✅ #21 Debezium 3.0 CDC: MySQL→Kafka→openGauss + CdcConnectClient REST 包装 + ObjectProvider 守卫
+- ✅ #22 pgloader / Ora2Pg / ZhiQian-Native 三路适配 + MigrationToolFactory.recommend(src,tgt)
+- ✅ #23 MCP Server: 6 tools (transpile/explain/schema/risk/retrieve/migrate) + JSON-RPC 2.0 + Claude Desktop 兼容
+- ✅ #24 A2A 协议: AgentCard + tasks/send + sendSubscribe SSE + 4 skills
 
 ---
 
@@ -135,3 +134,16 @@ LangGraph CRAG + GraphRAG + Temporal + Outlines + Cytoscape + JaCoCo。
 | 2026-05-21 | ArgoCD prod ignoreDifferences 跳过 replicas (HPA) 与 Secret.data (External Secrets) |
 | 2026-05-21 | ArgoCD bootstrap.sh 一键: ns+install+wait+apply project/app+输出密码 |
 | 2026-05-21 | App-of-apps 可选, recurse=false + include filter |
+| 2026-05-21 | #20 vLLM 两路: Deployment (单机演示) + RayService (生产弹性) |
+| 2026-05-21 | vLLM 启动慢, startupProbe failureThreshold=60 |
+| 2026-05-21 | Spring profile=vllm 切 api-key=EMPTY + base-url=vllm 内 svc |
+| 2026-05-21 | #21 Debezium 3.0 走 docker profile=cdc 默认不起 |
+| 2026-05-21 | CdcConfiguration ObjectProvider 守卫, enabled=false 时 controller 返 503 |
+| 2026-05-21 | opengauss-sink 用 PostgreSqlDatabaseDialect, upsert+delete.enabled |
+| 2026-05-21 | RegexRouter SMT 剪 topic 前缀, 让 source/target 表名对齐 |
+| 2026-05-21 | #22 MigrationTool 接口 + matchScore 0.0-1.0 智能推荐, ZhiQian 不再排他 |
+| 2026-05-21 | pgloader image dimitri/pgloader:ccl.latest, ora2pg image georgmoser/ora2pg:24.3 |
+| 2026-05-21 | #23 MCP 实现 JSON-RPC 2.0 over HTTP (非 stdio), 服务化部署更友好 |
+| 2026-05-21 | MCP 6 工具复用 RAG endpoint 零业务改动, httpx.AsyncClient 内部转发 |
+| 2026-05-21 | #24 A2A 单机 store ConcurrentHashMap, 生产换 RedisHash |
+| 2026-05-21 | A2A sendSubscribe SSE 推 task/status/artifact 事件, 兼容 Google A2A spec 0.2.x |
