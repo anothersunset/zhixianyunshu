@@ -4,9 +4,62 @@
 
 ---
 
-## 🟡 Phase 3 进度 (1/7) — 2026-05-21
+## 🟡 Phase 3 进度 (2/7) — 2026-05-21
 
-**云原生 Kustomize 部署落地**。剩 #19 ArgoCD 脚本 / #20 KubeRay+vLLM / #21 Debezium CDC / #22 pgloader/MTK / #23 MCP Server / #24 A2A 协议 共 6 提交。
+**云原生 Kustomize 部署 + ArgoCD GitOps 交付**。剩 #20 KubeRay+vLLM / #21 Debezium CDC / #22 pgloader/MTK / #23 MCP Server / #24 A2A 协议 共 5 提交。
+
+---
+
+## [v2-step-19] 2026-05-21 — ArgoCD GitOps (AppProject + dev/prod Application + bootstrap)
+
+**提交 SHA**: `46274be6` (batch 1: 6 文件 ArgoCD 资源 + bootstrap.sh + README)
+
+### 动机
+在 #18 Kustomize 上套 declarative GitOps, 实现 git push → 集群自动同步, 容器手工 patch 不能 drift。ArgoCD 是 CNCF Graduated Project (3rd most stars in CNCF), 原生消费 Kustomize 无需 chart provider。
+
+### 设计要点
+- **AppProject zhiqian**: RBAC 隔离 sources (仅允许 zhixianyunshu repo) / destinations (仅 zhiqian/zhiqian-dev/zhiqian-staging ns) / cluster resources (仅 Namespace + IngressClass), namespace resources 全开, orphanedResources warn。内置 read-only role 公示给 zhiqian:viewers 组。
+- **Application zhiqian-dev**: 指 overlays/dev, automated sync (prune=true selfHeal=true), CreateNamespace=true, retry 5 次 backoff 5s→3m。推 main 分支自动同步。
+- **Application zhiqian-prod**: 指 overlays/prod, **automated.prune=false** (防误刪) + selfHeal=true (drift 自愈) + RespectIgnoreDifferences。生产部署走手动 `argocd app sync zhiqian-prod`。含 ignoreDifferences 两项: Deployment.spec.replicas (不与 HPA 冲突) + Secret.data (不与 External Secrets 冲突)。预留 notifications.argoproj.io 订阅可选接 Slack/企业微信。
+- **bootstrap.sh**: 一键 5-step 引导 —— 创建 argocd ns → apply install.yaml (支持 stable/specific version) → wait deploy ready (timeout 300s) → apply project+2 app → 输出 initial admin 密码 + 访问提示。
+- **app-of-apps.yaml**: 可选根应用, kubectl apply 后 ArgoCD 自动 sync 上面 3 个 YAML。适合纯 GitOps 场景 (集群起来后几乎不再手工 kubectl)。
+- **README.md**: 含生产加固清单 (Ingress+TLS, SSO, 禁 admin, Notifications, External Secrets, Image Updater, sync windows) + 常用操作 + 故障排查 (stuck OutOfSync, 重置密码)。
+
+### 变更项
+新增 6 文件:
+- `zhiqian/deploy/argocd/argocd-namespace.yaml`
+- `zhiqian/deploy/argocd/project.yaml` (AppProject 含 RBAC 与 source/dest 限定)
+- `zhiqian/deploy/argocd/application-dev.yaml` (automated sync)
+- `zhiqian/deploy/argocd/application-prod.yaml` (manual sync + selfHeal + ignoreDifferences)
+- `zhiqian/deploy/argocd/app-of-apps.yaml` (root Application 可选)
+- `zhiqian/deploy/argocd/bootstrap.sh` (一键脚本)
+- `zhiqian/deploy/argocd/README.md`
+
+紧跟修复 `bootstrap.sh` 原始推送中的一个 bash 语法 bug (`{` `{` `}` `}` 多余括号路径)。
+
+### 验证
+```bash
+# 1) 引导 ArgoCD + 注册项目
+bash zhiqian/deploy/argocd/bootstrap.sh
+
+# 2) 访问 ArgoCD UI
+kubectl -n argocd port-forward svc/argocd-server 8443:443
+# → https://localhost:8443  (admin / 脚本输出密码)
+
+# 3) 看 2 个 Application 同步状态
+kubectl -n argocd get applications
+# → NAME           SYNC STATUS   HEALTH STATUS
+#   zhiqian-dev    Synced        Healthy
+#   zhiqian-prod   OutOfSync     Healthy   (prod manual)
+
+# 4) 手动 sync prod
+argocd login localhost:8443
+argocd app sync zhiqian-prod
+argocd app history zhiqian-prod
+```
+
+### 回滚
+`git revert 46274be6` → ArgoCD 目录清除。集群上已装的 ArgoCD + Application 需手动清: `kubectl -n argocd delete app zhiqian-dev zhiqian-prod && kubectl -n argocd delete appproject zhiqian`。Kustomize 部署本身不受影响。
 
 ---
 
@@ -22,51 +75,29 @@
 - secretGenerator/configMapGenerator 代替 Helm secret/configmap template
 
 ### 设计要点
-- **base/ 产品资源 12 份逆序列化**:
-  - namespace.yaml (zhiqian ns)
-  - postgres-statefulset.yaml + postgres-service.yaml (PostgreSQL 16-alpine + 10Gi PVC + pg_isready probe)
-  - backend-deployment.yaml + backend-service.yaml + backend-configmap.yaml (Spring Boot 3.2.5 + actuator probe + JaCoCo 在 #17 启, 资源 200m−1500m / 512Mi−2Gi)
-  - rag-deployment.yaml + rag-service.yaml (FastAPI + envFrom configMap + DEEPSEEK_API_KEY secret, 资源 200m−2000m / 512Mi−4Gi)
-  - web-deployment.yaml + web-service.yaml (Vue 3 nginx static, 资源 50m−200m)
-  - kustomization.yaml (资源联合 + secretGenerator 5 key 占位值 + configMapGenerator rag env + image 钉捆 2.0.0)
-- **overlays/dev**: 1 副本, 低内存 rag 2Gi, web Service 改 NodePort 30080, backend NodePort 30880, image tag=dev, namespace zhiqian-dev, name prefix `dev-`。单机/本地 minikube/kind 一键起。
-- **overlays/prod**: 3 backend / 2 rag / 2 web 副本, ingress.yaml (nginx + TLS) + patch-resources.yaml (提资源 backend 500m−3000m / 1Gi−4Gi, rag 500m−4000m / 1Gi−6Gi) + secret-patch.yaml (示例格式, 生产走 External Secrets/Sealed Secrets/Vault)。
-- **Helm 目录 deprecation**: 覆写 7 个 broken 文件 (`_helpers.tpl`, `backend-*.yaml`, `serviceaccount.yaml`) 为 stub 指向 Kustomize, 保留 `Chart.yaml`/`values.yaml` 为架构参考文档。补 `deploy/helm/README.md` 解释 pivot 原委。
+- **base/ 产品资源 12 份**: namespace + postgres StatefulSet/Service + backend/rag/web Deployment+Service + backend ConfigMap + secretGenerator 5 key + configMapGenerator rag env + image 钉捆 2.0.0。
+- **overlays/dev**: 1 副本 + NodePort 30080/30880 + dev image tag, namespace zhiqian-dev, name prefix `dev-`。
+- **overlays/prod**: 3 backend / 2 rag / 2 web + Ingress(nginx+TLS) + patch-resources + secret-patch 示例。
+- **Helm 目录**: 7 broken 文件覆写为 deprecation stub, 保留 Chart.yaml/values.yaml 为架构参考。
 
 ### 变更项
-新增 16 个 Kustomize 文件:
-- `deploy/kustomize/base/{kustomization.yaml,namespace.yaml,postgres-statefulset.yaml,postgres-service.yaml,backend-{configmap,deployment,service}.yaml,rag-{deployment,service}.yaml,web-{deployment,service}.yaml}`
-- `deploy/kustomize/overlays/dev/kustomization.yaml`
-- `deploy/kustomize/overlays/prod/{kustomization.yaml,ingress.yaml,patch-resources.yaml,secret-patch.yaml}`
-- `deploy/kustomize/README.md`
-
-覆写 7 个 Helm 文件为 deprecation stub + 新增 `deploy/helm/README.md`。
+新增 16 个 Kustomize 文件 + 1 README。覆写 7 个 Helm stub + 1 Helm README。
 
 ### 验证
 ```bash
-# 1) 检查渲染产出
 kubectl kustomize zhiqian/deploy/kustomize/base | head -60
-kubectl kustomize zhiqian/deploy/kustomize/overlays/dev | grep -E '^(kind|name):' | head -30
-kubectl kustomize zhiqian/deploy/kustomize/overlays/prod | grep -E '^(kind|name):'
-
-# 2) dev 一键部署 (minikube/kind)
 kubectl apply -k zhiqian/deploy/kustomize/overlays/dev
 kubectl -n zhiqian-dev get all
-kubectl -n zhiqian-dev port-forward svc/dev-zhiqian-web 8080:80  # -> http://localhost:8080
-
-# 3) prod (记得先 patch 真 secret)
-kubectl apply -k zhiqian/deploy/kustomize/overlays/prod
-kubectl -n zhiqian get ing zhiqian  # 看 Ingress
 ```
 
 ### 回滚
-`git revert c5f375d5 9833e4dc` → Kustomize 目录清除; Helm 目录仍为 deprecated stub。不影响 backend/rag/web/docker compose 主部署路径。
+`git revert c5f375d5 9833e4dc` → Kustomize 目录清除; Helm 目录仍为 stub。
 
 ---
 
 ## 🟢 Phase 2 milestone (6/6) — 2026-05-21 ✅
 
-**Agent + GraphRAG + Workflow + 约束解码 + 可视化 + 测试覆盖率 全部交付**。
+LangGraph CRAG + GraphRAG + Temporal + Outlines + Cytoscape + JaCoCo 全部交付。
 
 ---
 
@@ -74,7 +105,7 @@ kubectl -n zhiqian get ing zhiqian  # 看 Ingress
 
 **提交 SHA**: `8cf5f96c` + `2e8cedbb`
 
-Testcontainers + WebMvcTest + JaCoCo 门禁 ≥0.70 渐进 + `@SpringBootTest` context loads + 11 测试文件。
+Testcontainers + WebMvcTest + JaCoCo 门禁 ≥0.70。
 
 ---
 
@@ -82,15 +113,11 @@ Testcontainers + WebMvcTest + JaCoCo 门禁 ≥0.70 渐进 + `@SpringBootTest` c
 
 **提交 SHA**: `c3374bf7` + `b31d20e6`
 
-fcose layout + /api/ckg/graph demo 图 + /ckg 路由。
-
 ---
 
 ## [v2-step-15] 2026-05-21 — Outlines 受约束解码
 
 **提交 SHA**: `8fcb13e3`
-
-DeepSeek JSON mode 默认 + Outlines 双后端 + pydantic v2 retry 三轮。
 
 ---
 
@@ -98,15 +125,11 @@ DeepSeek JSON mode 默认 + Outlines 双后端 + pydantic v2 retry 三轮。
 
 **提交 SHA**: `4692d68f` + `39ac14c6`
 
-6 stage activity + QueryMethod + docker profile=temporal。
-
 ---
 
 ## [v2-step-13] 2026-05-21 — GraphRAG 索引 CKG
 
 **提交 SHA**: `e43729a6`
-
-Louvain-Lite + local/global 双查询。
 
 ---
 
@@ -114,76 +137,14 @@ Louvain-Lite + local/global 双查询。
 
 **提交 SHA**: `c881dc77` + `2e76a1a6`
 
-Mini StateGraph + 3 路评估 + DuckDuckGo 补救。
-
 ---
 
 ## 🟢 Phase 1 milestone (11/11) — 2026-05-21 ✅
 
-DeepSeek + 6 Agent + BGE-M3+RRF + Late Chunking + Langfuse 双端 + sqlglot + Monaco Diff + RAGAS。
+DeepSeek + 6 Agent + BGE-M3+RRF + Late Chunking + Langfuse + sqlglot + Monaco + RAGAS。
 
 ---
 
-## [v2-step-11] 2026-05-21 — RAGAS + 20 条 golden set
+## [v2-step-01..11] 2026-05-21 — 详 git log
 
-**提交 SHA**: `4f17463c`
-
----
-
-## [v2-step-10] 2026-05-21 — Monaco SQL Diff
-
-**提交 SHA**: `6b3d3dec` + `ce3cbb0f`
-
----
-
-## [v2-step-09] 2026-05-21 — sqlglot AST 转译
-
-**提交 SHA**: `7bc3236e` + `4678b735` + `bde6b9a1`
-
----
-
-## [v2-step-08] 2026-05-21 — Langfuse Java SDK
-
-**提交 SHA**: `1ca293a2`
-
----
-
-## [v2-step-07] 2026-05-21 — Langfuse rag 端
-
-**提交 SHA**: `ceb27034`
-
----
-
-## [v2-step-06] 2026-05-21 — Late + 语义分块
-
-**提交 SHA**: `4670edd5`
-
----
-
-## [v2-step-05] 2026-05-21 — Qdrant + 3 路 RRF
-
-**提交 SHA**: `104381a8`
-
----
-
-## [v2-step-04] 2026-05-21 — BGE-M3 + bge-reranker-v2-m3
-
-**提交 SHA**: `d6b4ac58`
-
----
-
-## [v2-step-03] 2026-05-21 — LLM 驱动 6 Agent
-
-**提交 SHA**: `8d4fff1d`
-
----
-
-## [v2-step-02] 2026-05-21 — DeepSeek LLM 客户端
-
-**提交 SHA**: `790b10f2`
-
----
-
-## [v2-step-01] 2026-05-21 — v2 路线图基线
-
-**提交 SHA**: `913006c0`
+`913006c0` `790b10f2` `8d4fff1d` `d6b4ac58` `104381a8` `4670edd5` `ceb27034` `1ca293a2` `7bc3236e`/`4678b735`/`bde6b9a1` `6b3d3dec`/`ce3cbb0f` `4f17463c`

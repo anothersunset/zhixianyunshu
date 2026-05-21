@@ -11,11 +11,7 @@ echo "→ [1/5] 创建 argocd 命名空间"
 kubectl apply -f "${HERE}/argocd-namespace.yaml"
 
 echo "→ [2/5] 安装 ArgoCD ${ARGOCD_VERSION}"
-if [[ "${ARGOCD_VERSION}" == "stable" ]]; then
-  MANIFEST_URL="https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml"
-else
-  MANIFEST_URL="https://raw.githubusercontent.com/argoproj/argo-cd/${ARGOCD_VERSION}/manifests/install.yaml"
-fi
+MANIFEST_URL="https://raw.githubusercontent.com/argoproj/argo-cd/${ARGOCD_VERSION}/manifests/install.yaml"
 kubectl apply -n "${NS}" -f "${MANIFEST_URL}"
 
 echo "→ [3/5] 等待 ArgoCD server ready (最多 5 min)"

@@ -29,12 +29,12 @@
 | 16 | feat(web): Cytoscape.js CKG 可视化 | ✅ |
 | 17 | test(backend): Spring Boot Test ≥0.8 | ✅ |
 
-### Phase 3 — 云原生 + 真库 + 协议 — 🟡 1/7
+### Phase 3 — 云原生 + 真库 + 协议 — 🟡 2/7
 
 | # | 提交 | 状态 |
 | --- | --- | --- |
 | 18 | feat(deploy): Kustomize base+overlays (Helm pivot) | ✅ |
-| 19 | feat(deploy): ArgoCD + Kustomize app | ⏳ |
+| 19 | feat(deploy): ArgoCD + Kustomize app | ✅ |
 | 20 | feat(deploy): KubeRay + vLLM | ⏳ |
 | 21 | feat(backend): Debezium 3.0 CDC | ⏳ |
 | 22 | feat(backend): pgloader / MTK 适配 | ⏳ |
@@ -58,7 +58,7 @@
 
 ## Phase 1 milestone (11/11) — 2026-05-21 ✅
 
-真 LLM + 6 Agent + BGE-M3+RRF + Late Chunking + Langfuse 双端 + sqlglot + Monaco Diff + RAGAS。
+真 LLM + 6 Agent + BGE-M3+RRF + Late Chunking + Langfuse + sqlglot + Monaco + RAGAS。
 
 ---
 
@@ -68,17 +68,13 @@ LangGraph CRAG + GraphRAG + Temporal + Outlines + Cytoscape + JaCoCo。
 
 ---
 
-## Phase 3 进度 (1/7) — 2026-05-21 🟡
+## Phase 3 进度 (2/7) — 2026-05-21 🟡
 
 **已完成**:
 - ✅ #18 Kustomize base + overlays (Helm pivot)
-  - base/ 12 资源: namespace + postgres StatefulSet + backend/rag/web Deployment+Service + backend ConfigMap + secretGenerator + configMapGenerator + image 钉捆 2.0.0
-  - overlays/dev: 1 副本 + NodePort 30080/30880 + dev image tag
-  - overlays/prod: 3 backend / 2 rag / 2 web + Ingress(nginx+TLS) + patch-resources + secret-patch 示例
-  - Helm 目录 deprecation stub, 保留 Chart.yaml/values.yaml 为架构参考
+- ✅ #19 ArgoCD GitOps: AppProject zhiqian + Application zhiqian-dev (automated) + zhiqian-prod (manual+selfHeal+ignoreDifferences) + app-of-apps.yaml + bootstrap.sh + README
 
 **待完成**:
-- ⏳ #19 ArgoCD Application (指向 deploy/kustomize/overlays/prod) + GitOps 脚本
 - ⏳ #20 KubeRay + vLLM (可选 GPU 推理)
 - ⏳ #21 Debezium 3.0 CDC (MySQL → Kafka → openGauss)
 - ⏳ #22 pgloader / MTK 迁移工具适配层
@@ -92,7 +88,7 @@ LangGraph CRAG + GraphRAG + Temporal + Outlines + Cytoscape + JaCoCo。
 | 日期 | 决策 |
 | --- | --- |
 | 2026-05-21 | LLM = DeepSeek-V3.1 |
-| 2026-05-21 | docker compose 主 + Helm 副 |
+| 2026-05-21 | docker compose 主 + Helm 副 (后 #18 pivot Kustomize) |
 | 2026-05-21 | 公开数据 Sakila/CM/Employees |
 | 2026-05-21 | RestClient 不用 Spring AI |
 | 2026-05-21 | api-key 为空优雅降级 |
@@ -102,38 +98,40 @@ LangGraph CRAG + GraphRAG + Temporal + Outlines + Cytoscape + JaCoCo。
 | 2026-05-21 | Qdrant 走 docker profile=ml |
 | 2026-05-21 | RRF k=60 |
 | 2026-05-21 | Late Chunking 默认 semantic |
-| 2026-05-21 | char→token 近似映射不依赖 offset_mapping |
-| 2026-05-21 | Langfuse 不入 pydantic Settings, secret 不进日志 |
-| 2026-05-21 | retriever.search 加 parent_trace 透传 |
-| 2026-05-21 | Java 走 RestClient + Public Ingestion API |
+| 2026-05-21 | char→token 近似映射 |
+| 2026-05-21 | Langfuse secret 不进日志 |
+| 2026-05-21 | retriever.search parent_trace 透传 |
+| 2026-05-21 | Java RestClient + Public Ingestion API |
 | 2026-05-21 | ThreadLocal trace context |
 | 2026-05-21 | sqlglot opengauss alias postgres |
-| 2026-05-21 | explain_transpile 用 substring 探测 |
-| 2026-05-21 | Monaco worker 走主线程 (data: URL) |
-| 2026-05-21 | web /sql-transpile 直调 rag (CORS=*) |
-| 2026-05-21 | Vue 模板全面 v-text/computed |
+| 2026-05-21 | Monaco worker data: URL |
+| 2026-05-21 | Vue 模板 v-text/computed |
 | 2026-05-21 | 测试依赖独立 requirements-test.txt |
-| 2026-05-21 | RAGAS 调 DeepSeek 走 OpenAI compatible |
-| 2026-05-21 | recall@5 阈值 0.80, faithfulness/relevancy 0.50 |
-| 2026-05-21 | CRAG 不引 langgraph, 自写 200 行 mini StateGraph |
-| 2026-05-21 | CRAG evaluator 双轨 (LLM + 启发式) |
+| 2026-05-21 | RAGAS DeepSeek OpenAI compatible |
+| 2026-05-21 | recall@5 0.80, faithfulness 0.50 |
+| 2026-05-21 | CRAG 不引 langgraph, 自写 mini StateGraph |
+| 2026-05-21 | CRAG evaluator 双轨 LLM+启发式 |
 | 2026-05-21 | GraphRAG 自实现 Louvain-Lite |
-| 2026-05-21 | GraphRagIndex 全局单例 + lazy build |
+| 2026-05-21 | GraphRagIndex 全局单例 lazy build |
 | 2026-05-21 | Temporal 默认 enabled=false |
 | 2026-05-21 | Temporal 不用 spring-boot-starter-alpha |
 | 2026-05-21 | TemporalActivities 委托 AgentRunner |
 | 2026-05-21 | Temporal docker profile=temporal opt-in |
-| 2026-05-21 | TemporalMigrationController ObjectProvider 返 503 |
-| 2026-05-21 | Outlines 双后端: DeepSeek JSON mode + Outlines 可选 |
-| 2026-05-21 | Structured output retry pydantic 错误反馈最多 3 次 |
-| 2026-05-21 | jsonschema 必装, outlines 注释行可选 |
-| 2026-05-21 | Cytoscape.js + cytoscape-fcose lazy import |
-| 2026-05-21 | /api/ckg/graph 阶段性返 demo 图 |
-| 2026-05-21 | JaCoCo BUNDLE line coverage 门禁 0.70 起步 |
-| 2026-05-21 | JaCoCo excludes `temporal.workflow.**` / `bootstrap/**` / `*Application*` |
-| 2026-05-21 | Testcontainers PostgresIntegrationTest EnabledIfEnvVar=RUN_TESTCONTAINERS |
-| 2026-05-21 | application-test.yml 单 profile 覆盖所有 Spring 上下文测试 |
-| 2026-05-21 | mockito-inline 而非 mockito-core |
-| 2026-05-21 | #18 pivot Helm → Kustomize: 平台 URL 压缩机制不能保留 `{`+`{` Helm template 语法, 纯 YAML Kustomize 是 #19 ArgoCD 首选交付格式 |
-| 2026-05-21 | Kustomize secretGenerator 走占位值, 生产 patch 走 External Secrets/Sealed Secrets/Vault, 不提交真 secret |
-| 2026-05-21 | overlays dev/prod 分开: dev=NodePort+低资源, prod=Ingress+HA+严资源 |
+| 2026-05-21 | TemporalMigrationController ObjectProvider 503 |
+| 2026-05-21 | Outlines 双后端: DeepSeek JSON + Outlines |
+| 2026-05-21 | Structured retry pydantic 错误反馈 ×3 |
+| 2026-05-21 | jsonschema 必装, outlines 可选 |
+| 2026-05-21 | Cytoscape + fcose lazy import |
+| 2026-05-21 | /api/ckg/graph 阶段 demo 图 |
+| 2026-05-21 | JaCoCo BUNDLE 0.70 起步 |
+| 2026-05-21 | JaCoCo excludes temporal.workflow / bootstrap / Application |
+| 2026-05-21 | Testcontainers PostgresIT EnabledIfEnvVar |
+| 2026-05-21 | application-test.yml 单 profile |
+| 2026-05-21 | mockito-inline |
+| 2026-05-21 | #18 pivot Helm → Kustomize (URL 压缩) |
+| 2026-05-21 | Kustomize secretGenerator 占位, 生产 External Secrets |
+| 2026-05-21 | overlays dev=NodePort+低资源 / prod=Ingress+HA |
+| 2026-05-21 | #19 ArgoCD AppProject 限定 source/dest/RBAC, dev=automated prod=manual+selfHeal |
+| 2026-05-21 | ArgoCD prod ignoreDifferences 跳过 replicas (HPA) 与 Secret.data (External Secrets) |
+| 2026-05-21 | ArgoCD bootstrap.sh 一键: ns+install+wait+apply project/app+输出密码 |
+| 2026-05-21 | App-of-apps 可选, recurse=false + include filter |
