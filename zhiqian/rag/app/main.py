@@ -1,195 +1,43 @@
-import sqlglot
+"""v2-step-23: 主入口, 注册 MCP router。"""
+from __future__ import annotations
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
 
-from app.pipelines.retriever import HybridRetriever
-from app.pipelines.critic import SelfRagCritic
-from app.pipelines.rewriter import QueryRewriter
-from app.pipelines.validation import generate_validation_script, validate_request_payload
-from app.config import settings
-from app.core.observability import get_langfuse
-from app.api.rerank import router as rerank_router
-from app.api.ingest import router as ingest_router, _retriever as _ingest_dep
-from app.api.retrieve import router as retrieve_router, _retriever as _retrieve_dep
-from app.api.transpile import router as transpile_router
-# v2-step-12: CRAG
-from app.api.crag import router as crag_router, _runner_dep as _crag_runner_dep
-from app.graphs.crag import CragRunner
-# v2-step-13: GraphRAG
-from app.api.graphrag import router as graphrag_router, _index_dep as _graphrag_index_dep
-from app.graphs.graphrag import GraphRagIndex
-# v2-step-15: 结构化输出
-from app.api.structured import router as structured_router, _client_dep as _structured_client_dep
-from app.core.structured_output import StructuredOutputClient, outlines_available
-
-app = FastAPI(
-    title="ZhiQian RAG Service",
-    description=(
-        "智迁云枢 RAG: BM25 + BGE-M3 dense/sparse + Qdrant + RRF + bge-reranker-v2-m3 "
-        "+ Self-RAG critic + Langfuse 全链观测 + sqlglot AST 转译 + CRAG 路由修复 "
-        "+ GraphRAG community report + Outlines/JSON-mode 受约束解码"
-    ),
-    version="0.9.0",
+from app.api import (
+    health, query as query_api, validation, rerank, ingest, retrieve,
+    transpile, crag, graphrag, structured, mcp as mcp_api,
 )
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+
+
+app = FastAPI(title="ZhiQian RAG", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )
-
-# 全局单例组件
-retriever = HybridRetriever()
-critic = SelfRagCritic()
-rewriter = QueryRewriter()
-# v2-step-12: 全局 CRAG runner, 复用 retriever
-crag_runner = CragRunner(retriever)
-# v2-step-13: 全局 GraphRAG index (启动后为空, /graphrag/index 后填充)
-graphrag_index = GraphRagIndex()
-# v2-step-15: 全局结构化输出 client
-structured_client = StructuredOutputClient()
-
-# v2-step-05: 全局 retriever 注入到 /ingest /retrieve 路由的 Depends 位点
-app.dependency_overrides[_ingest_dep] = lambda: retriever
-app.dependency_overrides[_retrieve_dep] = lambda: retriever
-# v2-step-12: CRAG runner 注入
-app.dependency_overrides[_crag_runner_dep] = lambda: crag_runner
-# v2-step-13: GraphRAG index 注入
-app.dependency_overrides[_graphrag_index_dep] = lambda: graphrag_index
-# v2-step-15: 结构化输出 client 注入
-app.dependency_overrides[_structured_client_dep] = lambda: structured_client
-
-app.include_router(rerank_router, prefix="/rerank")
-app.include_router(ingest_router, prefix="/ingest")
-app.include_router(retrieve_router, prefix="/retrieve")
-# v2-step-09
-app.include_router(transpile_router, prefix="/transpile")
-# v2-step-12
-app.include_router(crag_router, prefix="/crag")
-# v2-step-13
-app.include_router(graphrag_router, prefix="/graphrag")
-# v2-step-15
-app.include_router(structured_router, prefix="/structured")
+app.include_router(health.router)
+app.include_router(query_api.router)
+app.include_router(validation.router)
+app.include_router(rerank.router)
+app.include_router(ingest.router)
+app.include_router(retrieve.router)
+app.include_router(transpile.router)
+app.include_router(crag.router)
+app.include_router(graphrag.router)
+app.include_router(structured.router)
+app.include_router(mcp_api.router)
 
 
-@app.on_event("startup")
-def _init_observability() -> None:
-    """v2-step-07: 触发 Langfuse lazy init, 让早期日志能看到 enabled/disabled 状态。"""
-    lf = get_langfuse()
-    _ = lf.available
-
-
-class QueryReq(BaseModel):
-    question: str
-    top_k: int = 5
-    rewrite: bool = True
-    critic: bool = True
-    filters: Optional[Dict[str, Any]] = None
-
-
-class DocChunk(BaseModel):
-    id: str
-    text: str
-    score: float
-    source: str
-    meta: Optional[Dict[str, Any]] = None
-    rerank_score: Optional[float] = None
-    rrf_score: Optional[float] = None
-    channels: Optional[Dict[str, float]] = None
-
-
-class QueryResp(BaseModel):
-    question: str
-    rewritten: Optional[str] = None
-    chunks: List[DocChunk]
-    critique: Optional[Dict[str, Any]] = None
-    capabilities: Dict[str, Any]
-
-
-@app.get("/health")
-def health():
-    lf = get_langfuse()
+@app.get("/")
+async def root():
     return {
-        "status": "ok",
-        "service": "zhiqian-rag",
-        "version": app.version,
+        "name": "ZhiQian RAG",
+        "version": "1.0.0",
         "capabilities": {
-            **retriever.capabilities(),
-            "langfuse_enabled": lf.available,
-            "langfuse_host": lf.host if lf.available else None,
-            "sqlglot_enabled": True,
-            "sqlglot_version": sqlglot.__version__,
-            "crag_enabled": True,
-            "langgraph_style_crag": True,
-            "graphrag_enabled": True,
-            "graphrag_indexed_nodes": len(graphrag_index.nodes),
-            "graphrag_communities": len(graphrag_index.communities),
-            # v2-step-15
-            "structured_output_enabled": True,
-            "structured_backend": structured_client.current_backend(),
-            "outlines_available": outlines_available(),
-        },
+            "crag": True, "graphrag": True, "structured": True, "mcp": True
+        }
     }
-
-
-@app.post("/query", response_model=QueryResp)
-def query(req: QueryReq):
-    q = req.question
-    lf = get_langfuse()
-    with lf.trace(
-        "rag.query",
-        input={"question": q, "top_k": req.top_k},
-        metadata={"rewrite": req.rewrite, "critic": req.critic, "filters": req.filters or {}},
-        tags=["query"],
-    ) as tr:
-        with tr.span("rewrite", input={"enabled": req.rewrite}) as sp:
-            rewritten = rewriter.rewrite(q) if req.rewrite else None
-            sp.output({"rewritten": rewritten})
-        chunks_raw = retriever.search(
-            rewritten or q,
-            top_k=req.top_k,
-            filters=req.filters,
-            parent_trace=tr,
-        )
-        with tr.span("critique", input={"chunks": len(chunks_raw)}) as sp:
-            critique = critic.critique(q, chunks_raw) if req.critic else None
-            sp.output(critique)
-        tr.output({
-            "chunk_ids": [c.get("id") for c in chunks_raw],
-            "rewritten": rewritten,
-        })
-    return QueryResp(
-        question=q,
-        rewritten=rewritten,
-        chunks=[DocChunk(**{k: v for k, v in c.items() if k in DocChunk.model_fields}) for c in chunks_raw],
-        critique=critique,
-        capabilities=retriever.capabilities(),
-    )
-
-
-class ValidationReq(BaseModel):
-    task_id: int
-    suggestions: List[Dict[str, Any]]
-    target_db: str = "openGauss"
-
-
-@app.post("/validation/generate")
-def validation_generate(req: ValidationReq):
-    errors = validate_request_payload(req.dict())
-    if errors:
-        return {"ok": False, "errors": errors}
-    scripts = generate_validation_script(
-        task_id=req.task_id,
-        suggestions=req.suggestions,
-        target_db=req.target_db,
-    )
-    return {"ok": True, "scripts": scripts, "count": len(scripts)}
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("app.main:app", host=settings.host, port=settings.port, reload=True)
