@@ -19,9 +19,12 @@ public class JwtService {
     private final long ttlMillis;
 
     public JwtService(
-        @Value("${app.jwt.secret:change-me-please-change-me-please-32bytes-min}") String secret,
-        @Value("${app.jwt.ttl-minutes:720}") long ttlMinutes
+        @Value("${app.jwt.secret}") String secret,
+        @Value("${app.jwt.ttl-minutes:60}") long ttlMinutes
     ) {
+        if (secret.length() < 32) {
+            throw new IllegalArgumentException("APP_JWT_SECRET 长度至少 32 字节");
+        }
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.ttlMillis = ttlMinutes * 60_000L;
     }

@@ -12,7 +12,7 @@ spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/zhiqian}
     username: ${SPRING_DATASOURCE_USERNAME:zhiqian}
-    password: ${SPRING_DATASOURCE_PASSWORD:zhiqian123}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
   flyway:
     enabled: true
@@ -27,8 +27,10 @@ management:
 
 app:
   jwt:
-    secret: ${APP_JWT_SECRET:change-me-please-change-me-please-32bytes-min}
-    ttl-minutes: ${APP_JWT_TTL_MINUTES:720}
+    secret: ${APP_JWT_SECRET}
+    ttl-minutes: ${APP_JWT_TTL_MINUTES:60}
+  admin:
+    password: ${APP_ADMIN_PASSWORD}
   rag:
     base-url: ${APP_RAG_BASE_URL:http://localhost:8001}
 
