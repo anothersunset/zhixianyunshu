@@ -1,0 +1,96 @@
+# v2-step-20: KubeRay RayService (选型 C, 高可用 + autoscaler + 热升级)
+# 依赖 KubeRay Operator (先 helm install kuberay/kuberay-operator)
+apiVersion: ray.io/v1
+kind: RayService
+metadata:
+  name: rayservice-vllm
+  namespace: zhiqian
+spec:
+  serviceUnhealthySecondThreshold: 900
+  deploymentUnhealthySecondThreshold: 900
+  serveConfigV2: |
+    applications:
+      - name: llm
+        route_prefix: /
+        import_path: vllm.entrypoints.openai.api_server:build_app
+        args:
+          model: Qwen/Qwen2.5-7B-Instruct
+          served_model_name: Qwen/Qwen2.5-7B-Instruct
+          max_model_len: 16384
+          gpu_memory_utilization: 0.85
+          dtype: auto
+        deployments:
+          - name: VLLMDeployment
+            num_replicas: 1
+            max_concurrent_queries: 64
+            ray_actor_options:
+              num_gpus: 1
+  rayClusterConfig:
+    rayVersion: "2.34.0"
+    headGroupSpec:
+      rayStartParams:
+        dashboard-host: "0.0.0.0"
+        num-gpus: "0"
+      template:
+        spec:
+          containers:
+            - name: ray-head
+              image: rayproject/ray-ml:2.34.0-py310
+              resources:
+                limits:
+                  cpu: "2"
+                  memory: 8Gi
+                requests:
+                  cpu: "1"
+                  memory: 4Gi
+              env:
+                - name: HF_ENDPOINT
+                  value: https://hf-mirror.com
+              volumeMounts:
+                - name: models
+                  mountPath: /home/ray/.cache/huggingface
+          volumes:
+            - name: models
+              persistentVolumeClaim:
+                claimName: vllm-models
+    workerGroupSpecs:
+      - groupName: gpu-worker
+        replicas: 1
+        minReplicas: 1
+        maxReplicas: 4
+        rayStartParams:
+          num-gpus: "1"
+        template:
+          spec:
+            runtimeClassName: nvidia
+            tolerations:
+              - key: nvidia.com/gpu
+                operator: Exists
+            containers:
+              - name: ray-worker
+                image: rayproject/ray-ml:2.34.0-py310-gpu
+                resources:
+                  limits:
+                    nvidia.com/gpu: 1
+                    cpu: "4"
+                    memory: 24Gi
+                  requests:
+                    nvidia.com/gpu: 1
+                    cpu: "2"
+                    memory: 16Gi
+                env:
+                  - name: HF_ENDPOINT
+                    value: https://hf-mirror.com
+                volumeMounts:
+                  - name: models
+                    mountPath: /home/ray/.cache/huggingface
+                  - name: shm
+                    mountPath: /dev/shm
+            volumes:
+              - name: models
+                persistentVolumeClaim:
+                  claimName: vllm-models
+              - name: shm
+                emptyDir:
+                  medium: Memory
+                  sizeLimit: 8Gi

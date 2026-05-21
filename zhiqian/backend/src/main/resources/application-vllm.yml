@@ -1,0 +1,13 @@
+# v2-step-20: backend vLLM profile
+# 启用: SPRING_PROFILES_ACTIVE=vllm java -jar app.jar
+# 或 K8s env: SPRING_PROFILES_ACTIVE=vllm
+app:
+  llm:
+    provider: deepseek    # vLLM 兼容 OpenAI API, 复用 deepseek client
+    api-key: "EMPTY"      # vLLM 不检 key 但不能为空
+    base-url: ${VLLM_BASE_URL:http://vllm.zhiqian.svc.cluster.local:8000/v1}
+    chat-model: ${VLLM_CHAT_MODEL:Qwen/Qwen2.5-7B-Instruct}
+    reasoner-model: ${VLLM_REASONER_MODEL:Qwen/Qwen2.5-7B-Instruct}
+    temperature: 0.2
+    max-tokens: 4096
+    timeout-seconds: 120
