@@ -11,6 +11,9 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.util.List;
 import java.util.stream.StreamSupport;
 
+/**
+ * v2-step-03 修改：SSE 街口从 TaskSseDemoEmitter 切换到 TaskExecutionService，背后走 LLM 驱动的真流水线。
+ */
 @RestController
 @RequestMapping("/api/tasks")
 @RequiredArgsConstructor
@@ -18,7 +21,7 @@ public class TaskController {
 
     private final TaskRepository taskRepository;
     private final SuggestionRepository suggestionRepository;
-    private final TaskSseDemoEmitter sseEmitter;
+    private final TaskExecutionService executionService;
 
     @GetMapping
     public Result<List<Task>> list() {
@@ -41,6 +44,6 @@ public class TaskController {
 
     @GetMapping(value = "/{id}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream(@PathVariable Long id) {
-        return sseEmitter.subscribe(id);
+        return executionService.subscribe(id);
     }
 }
