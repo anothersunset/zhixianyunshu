@@ -1,0 +1,31 @@
+{
+  "_comment": "v2-step-31: SLSA provenance attestation 模板.",
+  "_type": "https://in-toto.io/Statement/v1",
+  "subject": [
+    {
+      "name": "sbom.cdx.json",
+      "digest": { "sha256": "<fill-by-ci>" }
+    }
+  ],
+  "predicateType": "https://slsa.dev/provenance/v1",
+  "predicate": {
+    "buildDefinition": {
+      "buildType": "https://github.com/actions/runner-images",
+      "externalParameters": {
+        "workflow": {
+          "ref": "refs/heads/main",
+          "repository": "https://github.com/anothersunset/zhixianyunshu",
+          "path": ".github/workflows/supply-chain.yml"
+        }
+      }
+    },
+    "runDetails": {
+      "builder": { "id": "https://github.com/actions/runner" },
+      "metadata": {
+        "invocationId": "<fill-by-ci>",
+        "startedOn": "<fill-by-ci>",
+        "finishedOn": "<fill-by-ci>"
+      }
+    }
+  }
+}
