@@ -1,0 +1,27 @@
+{
+  "_comment": "v2-step-21: JDBC sink connector → openGauss (PostgreSQL 兼容 dialect)",
+  "name": "zhiqian-opengauss-sink",
+  "config": {
+    "connector.class": "io.confluent.connect.jdbc.JdbcSinkConnector",
+    "tasks.max": "1",
+    "topics.regex": "zhiqian\\.src\\..*",
+    "connection.url": "jdbc:postgresql://opengauss:5432/target_db",
+    "connection.user": "zhiqian",
+    "connection.password": "zhiqian",
+    "dialect.name": "PostgreSqlDatabaseDialect",
+    "insert.mode": "upsert",
+    "delete.enabled": "true",
+    "pk.mode": "record_key",
+    "auto.create": "true",
+    "auto.evolve": "true",
+    "table.name.format": "target_db.${topic}",
+    "transforms": "dropPrefix",
+    "transforms.dropPrefix.type": "org.apache.kafka.connect.transforms.RegexRouter",
+    "transforms.dropPrefix.regex": "zhiqian\\.src\\.source_db\\.(.*)",
+    "transforms.dropPrefix.replacement": "$1",
+    "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "key.converter.schemas.enable": "false",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false"
+  }
+}
