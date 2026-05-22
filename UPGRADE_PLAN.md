@@ -1,6 +1,8 @@
 # 智迁云枢 v2 升级路线图
 
-## 总进度 (32/32 + Bonus 8/8 + Polish round 1-8 ✅) — v1.0.0 最终版 ✅
+## 总进度 (32/32 + Bonus 8/8 + Polish round 1-9 ✅) — v1.0.1 hotfix ✅
+
+> 警告: v1.0.0 (SHA `59a9e3b7`) 发现 2 个 CRITICAL 缺陷 (PresentMode.vue 插值丢失 + 2 个 shell 末尾空格 bug), 已由 v1.0.1 (SHA `9d48eac6` + 元数据同步) 修复。请使用 v1.0.1。
 
 ### Phase 1 — 真 LLM + 真检索 (P0) — ✅ 11/11
 
@@ -46,7 +48,7 @@
 | # | 提交 | 状态 | SHA |
 | --- | --- | --- | --- |
 | 25 | feat(web): 暗色 + i18n | ✅ | `643b8dcf` + polish `2c797979` |
-| 26 | feat(web): 答辩演示 + edge-tts | ✅ | polish `9b938300` |
+| 26 | feat(web): 答辩演示 + edge-tts | ✅ | polish `9b938300` + hotfix `9d48eac6` |
 | 27 | feat(reports): Typst PDF | ✅ | `3a3c608c` |
 | 28 | feat(web): transformers.js 端侧 | ✅ | `afb66784` + polish `2c797979` |
 | 29 | feat(deploy): 公开数据集一键导入 | ✅ | `636cb9a8` |
@@ -54,7 +56,7 @@
 | 31 | chore: SBOM + Cosign + Trivy | ✅ | `b0337f56` + polish `2c797979` |
 | 32 | docs: 顶级 README + 脚本 | ✅ | `7124ce77` |
 
-### Polish round 1-8 — ✅
+### Polish round 1-9 — ✅
 
 | 轮 | 主线 | SHA |
 | --- | --- | --- |
@@ -65,22 +67,25 @@
 | 5 | 社区健康度: 4 个 issue 模板 + PR 模板 + SECURITY.md + CODE_OF_CONDUCT.md + .editorconfig + docs/README.md | `1e761a03` |
 | 6 | Makefile (`make help/smoke/demo/health/seed/sbom/backend/rag/web/clean/install-tools`) + .dockerignore + docs/INDEX.md | `c330328d` |
 | 7 | 顶层文档补齐: docs/QUICKSTART.md + docs/architecture/{00,01,02}.md + docs/comparison.md + docs/innovations.md | `1c34667d` |
-| 8 | v1.0.0 最终版: VERSION + RELEASE_NOTES.md + CHANGELOG 顶部 v1.0.0 区块 + 本表同步 | `(本提交)` |
+| 8 | v1.0.0 最终版: VERSION + RELEASE_NOTES.md + CHANGELOG 顶部 v1.0.0 区块 + 本表同步 | `59a9e3b7` |
+| 9 | **v1.0.1 hotfix**: PresentMode.vue 插值 v-text 修复 + healthcheck.sh + demo-walkthrough.sh 末尾空格修复 + CHANGELOG/UPGRADE_PLAN/VERSION 同步 | `9d48eac6` + `(本提交)` |
 
 ---
 
-## v1.0.0 质量门
+## v1.0.1 质量门 (撤回 v1.0.0 原报)
 
-| 门 | 状态 |
-| --- | --- |
-| 代码可编译 | ✅ `make smoke` (3 路) |
-| 依赖定版 | ✅ pom.xml / requirements*.txt / package.json |
-| Demo 端到端 | ✅ `make demo` 6 步 |
-| 供应链 | ✅ SBOM + Cosign + Trivy + workflow template |
-| 许可 | ✅ Apache 2.0 |
-| 社区 | ✅ LICENSE/SECURITY/CONTRIBUTING/COC/ISSUE+PR templates |
-| 文档闭环 | ✅ README→QUICKSTART→architecture→innovations→comparison→TOOLS→TROUBLESHOOTING→INDEX |
-| GitOps | ✅ ArgoCD dev=auto / prod=manual+selfHeal |
+| 门 | v1.0.0 原报 | v1.0.1 实际 |
+| --- | --- | --- |
+| 代码可编译 | ✅ | ✅ `make smoke` 三路静态检 (仅静态检, 未跑过仿真环境) |
+| 依赖定版 | ✅ | ✅ |
+| Demo 端到端 | ✅ 错报 | ⚠️ v1.0.1 修一代码, 需本地真跑一遍才能重新打 ✅ |
+| 健康检查 | ✅ 错报 | ⚠️ v1.0.1 修一代码, 需服务跑起后才能重新打 ✅ |
+| 演示模式 | 隐含 ✅ | ⚠️ v1.0.1 修插值, 需跑 pnpm dev 看到真幻灯才能重新打 ✅ |
+| 供应链 | ✅ | ✅ |
+| 许可 | ✅ | ✅ |
+| 社区 | ✅ | ✅ |
+| 文档闭环 | ✅ | ✅ |
+| GitOps | ✅ | ✅ |
 
 ---
 
@@ -96,8 +101,8 @@ LangGraph CRAG + GraphRAG + Temporal + Outlines + Cytoscape + JaCoCo。
 ## Bonus milestone (8/8) — 2026-05-21 ✅
 UX 体验 + 论文级交付 + 供应链安全。
 
-## Polish round 1-8 — 2026-05-21 to 2026-05-22 ✅
-补齐 / 修复 / 一键脚本 / 社区健康度 / Makefile / 顶层文档 / v1.0.0 最终版。
+## Polish round 1-9 — 2026-05-21 to 2026-05-22 ✅
+补齐 / 修复 / 一键脚本 / 社区健康度 / Makefile / 顶层文档 / v1.0.0 最终版 / **v1.0.1 hotfix**。
 
 ---
 
@@ -192,4 +197,8 @@ UX 体验 + 论文级交付 + 供应链安全。
 | 2026-05-22 | Polish-7: comparison/innovations 顶层是泛读版, zhiqian/docs 里是设计版 — 两件事 |
 | 2026-05-22 | Polish-8: 使用 SemVer, v1.0.0 = 首个质量门全过发布位, API 表面 = backend+RAG+MCP+A2A 4 套 |
 | 2026-05-22 | Polish-8: VERSION 文件与 RELEASE_NOTES 同步 git tag, 未来 v1.x 只动 minor/patch |
-| 2026-05-22 | Polish-8: OAuth scope 限制是平台聊, 不是仓 settings, 手工走 install-supply-chain-workflow.sh 一次后永久解 |
+| 2026-05-22 | Polish-8: OAuth scope 限制是平台级, 不是仓 settings, 手工走 install-supply-chain-workflow.sh 一次后永久解 |
+| 2026-05-22 | **Polish-9 (v1.0.1)**: v1.0.0 质量门中 "demo ✅ / health ✅ / present ✅" 为静态阅读误判, 未跑过真实环境, 原报撤回 |
+| 2026-05-22 | **Polish-9**: PresentMode.vue 上游 URL 压缩机制吞掉 4 处 Vue 插值, 16 张幻灯全显示字面数字 478/479/480/481; 修法同 LocalChat.vue v-text |
+| 2026-05-22 | **Polish-9**: 2 个 shell 脚本 (healthcheck.sh / demo-walkthrough.sh) `$VAR` 末尾混入多余空格代码位, curl URL 被加 %20 、cd 崩、command -v 返回空; 修法删除末尾空格 |
+| 2026-05-22 | **Polish-9**: 未来 SemVer 质量门“演示可运行” 必须是本地真跑验证而非静态阅读, 避免压缩工件二次伤害裸眼不可见 |
