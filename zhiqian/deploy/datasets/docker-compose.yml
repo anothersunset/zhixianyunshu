@@ -23,7 +23,7 @@ services:
       retries: 30
 
   datasets-opengauss:
-    image: enmotech/opengauss-lite:5.0.0
+    image: enmotech/opengauss-lite:latest
     profiles: [datasets]
     container_name: zhiqian-datasets-opengauss
     environment:
