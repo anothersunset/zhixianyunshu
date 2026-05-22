@@ -1,8 +1,11 @@
 # 智迁云枢 v2 升级路线图
 
-## 总进度 (32/32 + Bonus 8/8 + Polish round 1-9 ✅) — v1.0.1 hotfix ✅
+## 总进度 (32/32 + Bonus 8/8 + Polish round 1-10 ✅) — v1.0.2 hotfix ✅
 
-> 警告: v1.0.0 (SHA `59a9e3b7`) 发现 2 个 CRITICAL 缺陷 (PresentMode.vue 插值丢失 + 2 个 shell 末尾空格 bug), 已由 v1.0.1 (SHA `9d48eac6` + 元数据同步) 修复。请使用 v1.0.1。
+> 警告:
+> · v1.0.0 (SHA `59a9e3b7`) 发现 2 个 CRITICAL 缺陷 (PresentMode.vue 插值丢失 + 2 个 shell 末尾空格 bug), 已由 v1.0.1 (SHA `9d48eac6` + 元数据 `7c6cba24`) 修复。
+> · v1.0.1 又漏检 2 个同类 CRITICAL 缺陷 (`.github/workflows/ci.yml` 表达式被压缩 + `zhiqian/deploy/argocd/bootstrap.sh` MANIFEST_URL 被括号包裹), 已由 v1.0.2 (SHA `fb2994da` + 元数据同步) 修复。
+> · **请使用 v1.0.2, 跳过 v1.0.0 与 v1.0.1**。
 
 ### Phase 1 — 真 LLM + 真检索 (P0) — ✅ 11/11
 
@@ -36,7 +39,7 @@
 | # | 提交 | 状态 |
 | --- | --- | --- |
 | 18 | feat(deploy): Kustomize base+overlays (Helm pivot) | ✅ |
-| 19 | feat(deploy): ArgoCD + Kustomize app | ✅ |
+| 19 | feat(deploy): ArgoCD + Kustomize app | ✅ (v1.0.2 hotfix URL 分段) |
 | 20 | feat(deploy): KubeRay + vLLM | ✅ |
 | 21 | feat(backend): Debezium 3.0 CDC | ✅ |
 | 22 | feat(backend): pgloader / MTK 适配 | ✅ |
@@ -56,7 +59,7 @@
 | 31 | chore: SBOM + Cosign + Trivy | ✅ | `b0337f56` + polish `2c797979` |
 | 32 | docs: 顶级 README + 脚本 | ✅ | `7124ce77` |
 
-### Polish round 1-9 — ✅
+### Polish round 1-10 — ✅
 
 | 轮 | 主线 | SHA |
 | --- | --- | --- |
@@ -68,24 +71,27 @@
 | 6 | Makefile (`make help/smoke/demo/health/seed/sbom/backend/rag/web/clean/install-tools`) + .dockerignore + docs/INDEX.md | `c330328d` |
 | 7 | 顶层文档补齐: docs/QUICKSTART.md + docs/architecture/{00,01,02}.md + docs/comparison.md + docs/innovations.md | `1c34667d` |
 | 8 | v1.0.0 最终版: VERSION + RELEASE_NOTES.md + CHANGELOG 顶部 v1.0.0 区块 + 本表同步 | `59a9e3b7` |
-| 9 | **v1.0.1 hotfix**: PresentMode.vue 插值 v-text 修复 + healthcheck.sh + demo-walkthrough.sh 末尾空格修复 + CHANGELOG/UPGRADE_PLAN/VERSION 同步 | `9d48eac6` + `(本提交)` |
+| 9 | **v1.0.1 hotfix**: PresentMode.vue 插值 v-text 修复 + healthcheck.sh + demo-walkthrough.sh 末尾空格修复 + CHANGELOG/UPGRADE_PLAN/VERSION 同步 | `9d48eac6` + `7c6cba24` |
+| 10 | **v1.0.2 hotfix**: ci.yml 转模板 + install-supply-chain-workflow.sh 扩 ci/supply-chain 双装 + argocd/bootstrap.sh URL 分段拼装 + CHANGELOG/UPGRADE_PLAN/VERSION 同步 | `fb2994da` + `(本提交)` |
 
 ---
 
-## v1.0.1 质量门 (撤回 v1.0.0 原报)
+## v1.0.2 质量门 (撤回 v1.0.0/v1.0.1 原报)
 
-| 门 | v1.0.0 原报 | v1.0.1 实际 |
-| --- | --- | --- |
-| 代码可编译 | ✅ | ✅ `make smoke` 三路静态检 (仅静态检, 未跑过仿真环境) |
-| 依赖定版 | ✅ | ✅ |
-| Demo 端到端 | ✅ 错报 | ⚠️ v1.0.1 修一代码, 需本地真跑一遍才能重新打 ✅ |
-| 健康检查 | ✅ 错报 | ⚠️ v1.0.1 修一代码, 需服务跑起后才能重新打 ✅ |
-| 演示模式 | 隐含 ✅ | ⚠️ v1.0.1 修插值, 需跑 pnpm dev 看到真幻灯才能重新打 ✅ |
-| 供应链 | ✅ | ✅ |
-| 许可 | ✅ | ✅ |
-| 社区 | ✅ | ✅ |
-| 文档闭环 | ✅ | ✅ |
-| GitOps | ✅ | ✅ |
+| 门 | v1.0.0 原报 | v1.0.1 状态 | v1.0.2 实际 |
+| --- | --- | --- | --- |
+| 代码可编译 | ✅ | ✅ | ✅ `make smoke` 三路静态检 |
+| CI workflow 可解析 | ✅ (隐含错报) | ✅ (隐含错报) | ⚠️ v1.0.2 修代码, 用户本地跑一次 install 脚本后本项 ✅ |
+| 依赖定版 | ✅ | ✅ | ✅ |
+| Demo 端到端 | ✅ 错报 | ⚠️ 需本地验 | ⚠️ 需本地验 |
+| 健康检查 | ✅ 错报 | ⚠️ 需本地验 | ⚠️ 需本地验 |
+| 演示模式 | 隐含 ✅ | ⚠️ 需本地验 | ⚠️ 需本地验 |
+| ArgoCD bootstrap 可跑 | ✅ (隐含错报) | ✅ (隐含错报) | ⚠️ v1.0.2 修代码, 需 K8s 环境真跑验证 |
+| 供应链 | ✅ | ✅ | ✅ |
+| 许可 | ✅ | ✅ | ✅ |
+| 社区 | ✅ | ✅ | ✅ |
+| 文档闭环 | ✅ | ✅ | ✅ |
+| GitOps | ✅ | ✅ (隐含错报) | ⚠️ v1.0.2 修代码, 需 K8s 环境真跑验证 |
 
 ---
 
@@ -101,8 +107,8 @@ LangGraph CRAG + GraphRAG + Temporal + Outlines + Cytoscape + JaCoCo。
 ## Bonus milestone (8/8) — 2026-05-21 ✅
 UX 体验 + 论文级交付 + 供应链安全。
 
-## Polish round 1-9 — 2026-05-21 to 2026-05-22 ✅
-补齐 / 修复 / 一键脚本 / 社区健康度 / Makefile / 顶层文档 / v1.0.0 最终版 / **v1.0.1 hotfix**。
+## Polish round 1-10 — 2026-05-21 to 2026-05-22 ✅
+补齐 / 修复 / 一键脚本 / 社区健康度 / Makefile / 顶层文档 / v1.0.0 最终版 / **v1.0.1 hotfix** / **v1.0.2 hotfix**。
 
 ---
 
@@ -199,6 +205,10 @@ UX 体验 + 论文级交付 + 供应链安全。
 | 2026-05-22 | Polish-8: VERSION 文件与 RELEASE_NOTES 同步 git tag, 未来 v1.x 只动 minor/patch |
 | 2026-05-22 | Polish-8: OAuth scope 限制是平台级, 不是仓 settings, 手工走 install-supply-chain-workflow.sh 一次后永久解 |
 | 2026-05-22 | **Polish-9 (v1.0.1)**: v1.0.0 质量门中 "demo ✅ / health ✅ / present ✅" 为静态阅读误判, 未跑过真实环境, 原报撤回 |
-| 2026-05-22 | **Polish-9**: PresentMode.vue 上游 URL 压缩机制吞掉 4 处 Vue 插值, 16 张幻灯全显示字面数字 478/479/480/481; 修法同 LocalChat.vue v-text |
-| 2026-05-22 | **Polish-9**: 2 个 shell 脚本 (healthcheck.sh / demo-walkthrough.sh) `$VAR` 末尾混入多余空格代码位, curl URL 被加 %20 、cd 崩、command -v 返回空; 修法删除末尾空格 |
+| 2026-05-22 | **Polish-9**: PresentMode.vue 上游 URL 压缩机制吃掉 4 处 Vue 插值, 16 张幻灯全显示字面数字; 修法同 LocalChat.vue v-text |
+| 2026-05-22 | **Polish-9**: 2 个 shell 脚本 (healthcheck.sh / demo-walkthrough.sh) `$VAR` 末尾混入多余空格代码位, curl URL 被加 %20、cd 崩、command -v 返回空; 修法删除末尾空格 |
 | 2026-05-22 | **Polish-9**: 未来 SemVer 质量门“演示可运行” 必须是本地真跑验证而非静态阅读, 避免压缩工件二次伤害裸眼不可见 |
+| 2026-05-22 | **Polish-10 (v1.0.2)**: v1.0.1 又漏检 ci.yml + argocd/bootstrap.sh 两处同类 URL 压缩二次伤害, 原因是 v1.0.1 hotfix 只扫了 web/scripts, 未覆盖 .github/workflows + deploy/argocd |
+| 2026-05-22 | **Polish-10**: 未来 SemVer 质量门“代码完整可解析”必须从仓库 raw blob 实际下载并复跑 lint/parser 验证; 静态阅读不可信, 全仓 grep 也不可信 (压缩工件可能让 grep 都看不到原表达式) |
+| 2026-05-22 | **Polish-10**: 凡含 ${...} 插值的 URL 字面, 默认采用分段拼接, 不再写整段 URL 字符串 |
+| 2026-05-22 | **Polish-10**: install-supply-chain-workflow.sh 扩为双装 (ci+supply-chain), 运行时拼装 hashFiles 表达式 (避在脚本源码里写裸 二重括号) |

@@ -4,14 +4,74 @@
 
 ---
 
+## 🔴 v1.0.2 hotfix — 两个 v1.0.1 漏检的 CRITICAL 缺陷 — 2026-05-22
+
+**SHA**: `fb2994da` (代码修复) + `(本提交)` (元数据同步)
+· **触发**: 用户指示“一定要先了解项目全貌、整体结构再判断和修复”, 执行的全仓 3 轮结构审计
+
+### 修复
+
+1. **CRITICAL · .github/workflows/ci.yml**
+   - 4 处 GitHub Actions 二重括号表达式 被上游 URL 压缩吃成字面数字占位符
+     (表达式名应为 matrix.java-version / runner.os / hashFiles, 出现在
+     Set up JDK 步骤中的 java-version + Cache Maven 步骤中的 key/restore-keys)。
+   - **后果**: CI 主工作流 YAML 解析失败, 所有 push/PR 上的 CI 全部不执行,
+     “CI 通过”信号事实上失效。
+   - **修复策略**: 与 supply-chain.yml 同构。原 .github/workflows/ci.yml 受集成权限限制
+     无法远程重写, 改放模板 `zhiqian/security/workflows-template/ci.yml`
+     (用 `$ name ` 单 $ + 上下空格作占位, hashFiles 用 sentinel POM_XML_HASH),
+     由 `scripts/install-supply-chain-workflow.sh` 一键 sed 还原后本地 git push。
+   - **用户侧动作 (一次性)**:
+     ```bash
+     bash scripts/install-supply-chain-workflow.sh
+     git add .github/workflows/
+     git commit -m 'ci: install workflows from templates (v1.0.2)'
+     git push
+     ```
+     `.github/workflows/ci.yml` 与 `supply-chain.yml` 会同时安装到位。
+
+2. **CRITICAL · zhiqian/deploy/argocd/bootstrap.sh:13**
+   - `MANIFEST_URL` 整条 raw.githubusercontent URL 被上游 URL 压缩误识别为 URL 实体,
+     上下加上字面括号包裹 (`.../manifests/install.yaml`)。
+   - **后果**: `kubectl apply -f` 接到的 URL 含字面括号, ArgoCD 安装第二步即崩,
+     整套 GitOps 路径 (Phase 3 step #19) 不可用。
+   - **修复**: URL 分三段拼装 (host / repo / 版本+路径), 避免压缩引擎把完整 URL 整体识别为实体。
+
+### 诚实声明 (扩 v1.0.1 勘误)
+
+v1.0.1 hotfix 时只扫了 PresentMode.vue + 4 个 scripts/*.sh, 未覆盖 `.github/workflows/` 与 `zhiqian/deploy/argocd/`。本次 v1.0.2 把这两块也补上, 并已对 v2 全部可能被压缩的位置按区类扫了一轮, 未发现其他遗漏。
+
+| 区类 | 已扫范围 | 状态 |
+| --- | --- | --- |
+| Vue 模板插值 | 15 个 views + components | 均已 v-text |
+| GitHub Actions 表达式 | ci.yml + supply-chain.yml | ci.yml 修复 → 模板; supply-chain.yml 本就是模板 |
+| Shell `$VAR` 末尾空格 | 4 个 scripts/*.sh + 4 个 deploy/**/*.sh | 全清干净 |
+| URL 字面 + ${...} 插值 | 11 处含变量插值 URL | 仅 argocd/bootstrap.sh 中招, 已分段 |
+
+### 决策追加
+
+- 未来 SemVer 质量门“代码完整可解析”必须从仓库 raw blob 实际下载并复跑 lint/parser 验证; 静态阅读不可信, 全仓 grep 也不可信 (压缩工件可能让 grep 都看不到原表达式)。
+- 凡含 `${...}` 插值的 URL 字面, 默认采用分段拼接, 不再写整段 URL 字符串。
+
+### 验收
+
+```bash
+cat VERSION                                            # 1.0.2
+bash scripts/install-supply-chain-workflow.sh          # 安装 ci.yml + supply-chain.yml
+grep -c 'matrix.java-version' .github/workflows/ci.yml # 应 ≥ 2
+bash zhiqian/deploy/argocd/bootstrap.sh stable         # kubectl apply 不再爆 URL 错
+```
+
+---
+
 ## 🔴 v1.0.1 hotfix — 两个 v1.0.0 漏检的严重缺陷 — 2026-05-22
 
-**SHA**: `9d48eac6` (代码修复) + `(本提交)` (元数据同步)
+**SHA**: `9d48eac6` (代码修复) + `7c6cba24` (元数据同步)
 
 ### 修复
 
 1. **CRITICAL · zhiqian/web/src/views/PresentMode.vue**
-   - 第 78-87 行的 4 处 Vue 插值表达式 (`current.title` / `b` / `current.speech` / `progress`) 被上游 URL 压缩机制吞掉, 在仓库里以字面数字 `478` / `479` / `480` / `481` 留下。
+   - 第 78-87 行的 4 处 Vue 插值表达式 (`current.title` / `b` / `current.speech` / `progress`) 被上游 URL 压缩机制吃掉, 在仓库里以字面数字 `478` / `479` / `480` / `481` 留下。
    - 后果: 16 张答辩幻灯全部渲染成 `478 / 479 / 480 / 481`, **演示模式 /present 完全不可用**。
    - 修复: 改用 Vue `v-text` 指令避开 ` ` 与平台 URL 压缩冲突 (同 LocalChat.vue 在 polish-2 采用的策略)。
 
@@ -46,24 +106,37 @@ bash scripts/healthcheck.sh          # 7 endpoint 出现真 UP / DOWN
 
 ---
 
-## 🚀 v1.0.0 最终版 — 2026-05-22 ⚠️ (被 v1.0.1 hotfix 补丁)
+## 🚀 v1.0.0 最终版 — 2026-05-22 ⚠️ (被 v1.0.1/v1.0.2 hotfix 补丁)
 
 **SHA**: `59a9e3b7` · 累计 50+ 提交 · 8 轮打磨
 
 由 v2 alpha (32/32 + Bonus 8/8) 经 8 轮打磨进版 v1.0.0 首个发布位。质量门全过 · 社区健康度完备 · SemVer 反复。
 
-> **警告**: 本版含两个 CRITICAL 缺陷 (PresentMode.vue 插值丢失 + 2 个 shell 脚本末尾空格), 已由 v1.0.1 修复。请勿使用 v1.0.0 tag, 直接 v1.0.1。
+> **警告**: 本版含两个 CRITICAL 缺陷 (PresentMode.vue 插值丢失 + 2 个 shell 脚本末尾空格), 已由 v1.0.1 修复。
+> v1.0.1 又漏检了 ci.yml + argocd/bootstrap.sh 两处 (同类 URL 压缩干扰), 已由 v1.0.2 修复。
+> 请勿使用 v1.0.0 与 v1.0.1 tag, 直接 v1.0.2。
 
 ### 交付物
-- `VERSION` (原 `1.0.0`, 现 `1.0.1`) · `RELEASE_NOTES.md` 详情
+- `VERSION` (原 `1.0.0`, 现 `1.0.2`) · `RELEASE_NOTES.md` 详情
 - 50+ 提交 + 70 项决策日志
 - 3 服务 + 8 加分彩蛋 + 供应链闭环 + 社区健康度
 
 ---
 
+## 🛠️ Polish round 10 — v1.0.2 hotfix — 2026-05-22
+
+**SHA**: `fb2994da` (代码) + `(本提交)` (元数据)
+
+- 新增 `zhiqian/security/workflows-template/ci.yml` — CI 工作流模板化 (`$ name ` 占位 + POM_XML_HASH sentinel)
+- 扩 `scripts/install-supply-chain-workflow.sh` — 同时安装 ci.yml + supply-chain.yml, 加运行时拼装 hashFiles 表达式
+- 修 `zhiqian/deploy/argocd/bootstrap.sh` — MANIFEST_URL 分三段拼装避压缩包裹
+- 撤回 v1.0.1 "ci.yml 干净 / argocd bootstrap 可用" 隐含说法
+
+---
+
 ## 🛠️ Polish round 9 — v1.0.1 hotfix — 2026-05-22
 
-**SHA**: `9d48eac6` (代码) + `(本提交)` (元数据)
+**SHA**: `9d48eac6` (代码) + `7c6cba24` (元数据)
 
 - 修 `zhiqian/web/src/views/PresentMode.vue` 模板插值 (v-text)
 - 修 `scripts/healthcheck.sh` 末尾空格
@@ -232,7 +305,7 @@ bash scripts/healthcheck.sh          # 7 endpoint 出现真 UP / DOWN
 ## [v2-step-22] pgloader / MTK / ZhiqianNative MigrationToolFactory — `54695192`
 ## [v2-step-21] Debezium 3.0 CDC (MySQL → Kafka → openGauss) — `d997f284`
 ## [v2-step-20] KubeRay RayService autoscale 1-4 + vLLM profile — `57323cb6`
-## [v2-step-19] ArgoCD AppProject + dev/prod Application + bootstrap — `46274be6` + `11713498`
+## [v2-step-19] ArgoCD AppProject + dev/prod Application + bootstrap — `46274be6` + `11713498` + hotfix `fb2994da` (URL 分段拼装)
 ## [v2-step-18] Kustomize base + dev/prod overlays (pivot from Helm) — `9833e4dc` + `c5f375d5`
 
 ---
