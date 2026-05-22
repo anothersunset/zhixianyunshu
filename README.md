@@ -4,7 +4,7 @@
 >
 > MySQL/Oracle/SQLServer → openGauss/PostgreSQL, 一键智迁, AI 可解释, 生态互联。
 
-[![ci](https://img.shields.io/badge/CI-passing-brightgreen)]() [![cov](https://img.shields.io/badge/coverage-%E2%89%A570%25-brightgreen)]() [![mcp](https://img.shields.io/badge/MCP-server-blue)]() [![a2a](https://img.shields.io/badge/A2A-peer-blue)]() [![license](https://img.shields.io/badge/license-Apache--2.0-blue)]()
+[![version](https://img.shields.io/badge/version-1.0.3-blue)]() [![ci](https://img.shields.io/badge/CI-passing-brightgreen)]() [![cov](https://img.shields.io/badge/coverage-%E2%89%A570%25-brightgreen)]() [![mcp](https://img.shields.io/badge/MCP-server-blue)]() [![a2a](https://img.shields.io/badge/A2A-peer-blue)]() [![license](https://img.shields.io/badge/license-Apache--2.0-blue)]()
 
 ## 仓库定位
 
