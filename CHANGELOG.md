@@ -20,6 +20,19 @@
      TS2739 类型不匹配
    - 移除泛型参数, 加 `as UserInfo` 类型断言
 
+3. **zhiqian/deploy/datasets/docker-compose.yml**
+   - `enmotech/opengauss-lite:5.0.0` 已从 Docker Hub 下架, 替换为 `:latest`
+   - README 同步新增版本 badge `v1.0.3`
+
+### 已知限制
+
+- **Docker Desktop Windows 上 openGauss 数据集容器无法启动**:
+  `enmotech/opengauss-lite:latest` 在 Docker Desktop (Windows + WSL2) 环境下
+  因 cgroup v1 缺失 (`gscgroup_omm.cfg` 创建失败) 和 `libssl.so.1.1` 共享库不兼容
+  导致 gaussdb 进程启动失败。原始 `5.0.0` tag 专为此环境适配, 但已从 Docker Hub 撤下。
+  不影响核心 demo 链路 (RAG + Backend + Web), 仅影响 MySQL→openGauss 迁移靶端验证。
+  临时方案: 在 Linux 宿主机或 CI (Ubuntu runner) 上运行数据集容器。
+
 ---
 
 ## 🔴 v1.0.2 hotfix — 两个 v1.0.1 漏检的 CRITICAL 缺陷 — 2026-05-22
