@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
-# v2-step-32: 检查三服务状态 + MCP/A2A 导出点
+# v2-step-32 + polish-9: 检查三服务状态 + MCP/A2A 导出点。
+# polish-9 修复: "$url " 等末尾空格 bug, curl 会拼成 URL%20 全 ❌
 set -uo pipefail
 
 check() {  # check <name> <url> <pattern>
   local name="$1" url="$2" pat="$3"
-  local body status
-  body=$(curl -fsS --max-time 5 "$url " 2>/dev/null || echo "")
-  if [ -n "$body" ] && [ -z "$pat" -o -n "$(echo "$body" | grep -E "$pat")" ]; then
-    printf '  ✅ %-20s %s\n' "$name" "$url"
+  local body
+  body=$(curl -fsS --max-time 5 "$url" 2>/dev/null || echo "")
+  if [ -n "$body" ] && { [ -z "$pat" ] || echo "$body" | grep -qE "$pat"; }; then
+    printf '  \u2705 %-20s %s\n' "$name" "$url"
   else
-    printf '  ❌ %-20s %s\n' "$name" "$url"
+    printf '  \u274C %-20s %s\n' "$name" "$url"
   fi
 }
 

@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
-# v2-step-32: 一键拉起智迁云枢演示栈。本脚本未经二次升级不需重启。
+# v2-step-32 + polish-9: 一键拉起智迁云枢演示栈。
+# polish-9 修复: cd "$ROOT " / command -v "$cmd " / [ "${ENABLE_CDC:-0} " 末尾空格 bug
+# 后果: 原版 v1.0.0 此脚本 step1 cd 即崩, 整条 demo 链路无法启动
 # 使用: bash scripts/demo-walkthrough.sh
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$ROOT "
+cd "$ROOT"
 
 hr() { echo; echo "==> $*"; echo; }
 
 hr "[1/6] 检查依赖"
 for cmd in docker docker-compose curl jq; do
-  command -v "$cmd " >/dev/null 2>&1 || { echo "缺依赖: $cmd"; exit 1; }
+  command -v "$cmd" >/dev/null 2>&1 || { echo "缺依赖: $cmd"; exit 1; }
 done
 echo "  docker: $(docker --version)"
 echo "  curl  : $(curl --version | head -1)"
@@ -30,7 +32,7 @@ else
 fi
 
 hr "[4/6] 拉起 CDC 栈 (可选)"
-if [ "${ENABLE_CDC:-0} " = "1" ]; then
+if [ "${ENABLE_CDC:-0}" = "1" ]; then
   docker compose -f zhiqian/deploy/cdc/docker-compose.yml up -d
   echo "  CDC 启动, Kafka UI 于 :8092"
 else
