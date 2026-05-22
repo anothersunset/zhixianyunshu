@@ -10,7 +10,7 @@ export const useUserStore = defineStore("user", {
       this.info = (await http.get("/users/me")) as UserInfo
     },
     logout() {
-      localStorage.removeItem("zhiqian_jwt")
+      localStorage.removeItem("zq_token")
       this.info = null
     },
   },

@@ -7,7 +7,7 @@ export const http = axios.create({
 })
 
 http.interceptors.request.use((cfg) => {
-  const token = localStorage.getItem("zhiqian_jwt")
+  const token = localStorage.getItem("zq_token")
   if (token && cfg.headers) cfg.headers.Authorization = `Bearer ${token}`
   return cfg
 })
@@ -26,7 +26,7 @@ http.interceptors.response.use(
   },
   (err) => {
     if (err.response?.status === 401) {
-      localStorage.removeItem("zhiqian_jwt")
+      localStorage.removeItem("zq_token")
       window.location.href = "/login"
     }
     ElMessage.error(err.message ?? "网络错误")
