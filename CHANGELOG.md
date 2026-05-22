@@ -4,6 +4,24 @@
 
 ---
 
+## 🟡 v1.0.3 hotfix — Web 前端 TS 类型错误修复 — 2026-05-22
+
+**SHA**: `(本提交)`
+· **触发**: v1.0.2 本地验证阶段 5/6 发现 vue-tsc 类型检查失败
+
+### 修复
+
+1. **src/types/cytoscape-fcose.d.ts (新建)**
+   - `cytoscape-fcose` 缺少类型声明导致 `CkgGraph.vue:42` TS7016 错误
+   - 新增模块声明文件, 声明 `cytoscape-fcose` 为 `cytoscape.Ext` 类型
+
+2. **src/stores/user.ts:10**
+   - `http.get<UserInfo>()` 返回类型为 `AxiosResponse<UserInfo>`, 但拦截器已解包,
+     TS2739 类型不匹配
+   - 移除泛型参数, 加 `as UserInfo` 类型断言
+
+---
+
 ## 🔴 v1.0.2 hotfix — 两个 v1.0.1 漏检的 CRITICAL 缺陷 — 2026-05-22
 
 **SHA**: `fb2994da` (代码修复) + `(本提交)` (元数据同步)

@@ -7,7 +7,7 @@ export const useUserStore = defineStore("user", {
   state: () => ({ info: null as UserInfo | null }),
   actions: {
     async loadMe() {
-      this.info = await http.get<UserInfo>("/users/me")
+      this.info = (await http.get("/users/me")) as UserInfo
     },
     logout() {
       localStorage.removeItem("zhiqian_jwt")

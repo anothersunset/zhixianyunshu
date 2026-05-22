@@ -1,6 +1,6 @@
 # 智迁云枢 v2 升级路线图
 
-## 总进度 (32/32 + Bonus 8/8 + Polish round 1-10 ✅) — v1.0.2 hotfix ✅
+## 总进度 (32/32 + Bonus 8/8 + Polish round 1-10 ✅) — v1.0.3 hotfix ✅
 
 > 警告:
 > · v1.0.0 (SHA `59a9e3b7`) 发现 2 个 CRITICAL 缺陷 (PresentMode.vue 插值丢失 + 2 个 shell 末尾空格 bug), 已由 v1.0.1 (SHA `9d48eac6` + 元数据 `7c6cba24`) 修复。
@@ -108,7 +108,7 @@ LangGraph CRAG + GraphRAG + Temporal + Outlines + Cytoscape + JaCoCo。
 UX 体验 + 论文级交付 + 供应链安全。
 
 ## Polish round 1-10 — 2026-05-21 to 2026-05-22 ✅
-补齐 / 修复 / 一键脚本 / 社区健康度 / Makefile / 顶层文档 / v1.0.0 最终版 / **v1.0.1 hotfix** / **v1.0.2 hotfix**。
+补齐 / 修复 / 一键脚本 / 社区健康度 / Makefile / 顶层文档 / v1.0.0 最终版 / **v1.0.1 hotfix** / **v1.0.2 hotfix** / **v1.0.3 hotfix**。
 
 ---
 
