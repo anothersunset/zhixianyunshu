@@ -4,23 +4,120 @@
 
 ---
 
-## 🏆 v2.0 收官 (32/32 + Bonus 8/8) — 2026-05-21 ✅
+## 🚀 v1.0.0 最终版 — 2026-05-22 ✅
 
-**3 phase + 8 加分彩蛋 全部交付, 共 49 提交 (v1 archive 10 + v2 主线 39 + bonus 8 + polish 2)**。
+**SHA**: `(本提交)` · 累计 50+ 提交 · 8 轮打磨
+
+由 v2 alpha (32/32 + Bonus 8/8) 经 8 轮打磨进版 v1.0.0 首个发布版。质量门全过 · 社区健康度完备 · SemVer 反复。
+
+### 交付物
+- `VERSION` · `RELEASE_NOTES.md` 详情
+- 50+ 提交 + 70 项决策日志
+- 3 服务 + 8 加分彩蛋 + 供应链闭环 + 社区健康度
+
+### 验交
+```bash
+cat VERSION                          # 1.0.0
+make smoke                            # 三路静态检过
+make demo                             # 端到端跑通
+```
 
 ---
 
-## 🛠️ Polish round — 2026-05-21
+## 🛠️ Polish round 8 — v1.0.0 release — 2026-05-22
 
-### 提交 (1) — #26 调整 + #28 修复 + workflow 一键
+**SHA**: `(本提交)`
 
-**SHA**: `9b938300` · `(本提交)`
+- `VERSION` 根文件 — `1.0.0`
+- `RELEASE_NOTES.md` 根 — 发布说明 + 8 轮打磨表 + SemVer 反复 + 升级路径
+- 同步 `CHANGELOG.md` 顶部 + `UPGRADE_PLAN.md` polish 表
 
-- **#26 补齐**: 补 `web/src/views/PresentationView.vue` + `components/SlideDeck.vue` + `services/tts.ts` + `router /present /edge` — 10 张幻灯片 + 键盘导航 + `R` 读稿, 未装 edge-tts 自动 fallback 浏览器 SpeechSynthesis。
-- **#26 backend**: 补 `tts/TtsController` + `TtsProperties` + `application-tts.yml`, ProcessBuilder 外调 edge-tts CLI, 503 透明返。
-- **#28 LocalChat.vue**: 修 Vue template 二重大括号被上游 URL 压缩吞掉 — 全部改 `v-text` / `v-bind` 形式。
-- **#25 deps**: package.json 加 `vue-i18n@^9` + optionalDeps `@xenova/transformers@^2.17`。
-- **#31 workflow**: 加 `scripts/install-supply-chain-workflow.sh` 一键 sed 转换占位符并 cp 到 `.github/workflows/`, README 补详细说明。
+---
+
+## 🛠️ Polish round 7 — 顶层文档补齐 — 2026-05-22
+
+**SHA**: `1c34667d`
+
+补齐 polish 6 (`c330328d`) 里 `docs/INDEX.md` 引用但还未建的 6 份顶层文档:
+
+- `docs/QUICKSTART.md` — 5 分钟上手
+- `docs/architecture/00-overall.md` — 总架构概览与 6 层 mermaid
+- `docs/architecture/01-agent-pipeline.md` — 6-Agent DAG 与 CRAG
+- `docs/architecture/02-rag-retrieval.md` — 三路检索 + Late Chunking + GraphRAG
+- `docs/comparison.md` — 同类 5 产品×6 维对比 + 不适用场景
+- `docs/innovations.md` — 8 大创新点
+
+---
+
+## 🛠️ Polish round 6 — Makefile + dockerignore + INDEX — 2026-05-21
+
+**SHA**: `c330328d`
+
+- `Makefile` 根 — `help/smoke/demo/health/seed/sbom/backend/rag/web/clean/install-tools`
+- `.dockerignore` 根 — 减 docker build 上下文
+- `docs/INDEX.md` — 一页式全文档导航 (5 入口 + 5 区块 + make help 镜像)
+
+---
+
+## 🛠️ Polish round 5 — 社区健康度 — 2026-05-21
+
+**SHA**: `1e761a03`
+
+- `.github/ISSUE_TEMPLATE/{bug,feature,question,config}.{md,yml}` — 4 个模板 + Discussions 入口
+- `.github/PULL_REQUEST_TEMPLATE.md` — 检查单 + DCO
+- `SECURITY.md` — 漏洞披露 + cosign verify-blob 脚本 + 不在范围内
+- `CODE_OF_CONDUCT.md` — Contributor Covenant 2.1
+- `.editorconfig` — Java=4 / Python=4 / 其他=2 / Makefile=tab
+- `docs/README.md` — docs 目录入口
+
+---
+
+## 🛠️ Polish round 4 — 贡献与排错文档 — 2026-05-21
+
+**SHA**: `f9053573`
+
+- `CONTRIBUTING.md` — Conventional Commits + branch model + PR 流 + smoke gate + DCO
+- `docs/TROUBLESHOOTING.md` — 12 条常见问题 + 定位/修复 (supply-chain / edge-tts / typst / WebGPU / port / Temporal / Langfuse / ML deps)
+- `docs/TOOLS.md` — CLI 版本矩阵 (Java/Maven/pnpm/Python/Docker/kubectl/argocd/syft/trivy/cosign/typst/edge-tts)
+
+---
+
+## 🛠️ Polish round 3 — UPGRADE_PLAN 同步 + smoke-test — 2026-05-21
+
+**SHA**: `3145629c`
+
+- `scripts/smoke-test.sh` — 三路静态检 (web vue-tsc / rag compileall / backend mvn compile), ENV `SMOKE_SKIP_{WEB,RAG,BACKEND}`
+- `scripts/README.md` — 4 脚本表 + ENV 与推荐组合
+- `UPGRADE_PLAN.md` — 加 Polish round 表 + 5 决策日志 + #25/#26/#28/#31 SHA 同步
+
+---
+
+## 🛠️ Polish round 2 — LocalChat 修模板 + workflow 一键装 — 2026-05-21
+
+**SHA**: `2c797979`
+
+- `web/src/views/LocalChat.vue` — 重写，全采 `v-text="..."` 防 URL 压缩抑制二重括号
+- `scripts/install-supply-chain-workflow.sh` — sed 将 `workflows-template/*.tmpl` 转为真 workflow
+- `zhiqian/security/README.md` — 补 "为什么走 template + 一键脚本"
+- `CHANGELOG.md` — #26 状态翻实 + Bonus 8/8 诚实声明
+
+---
+
+## 🛠️ Polish round 1 — #26 补齐 + #28 路由 + backend edge-tts — 2026-05-21
+
+**SHA**: `9b938300`
+
+- `web/src/views/PresentationView.vue` (10 幻灯) + `components/SlideDeck.vue`
+- `web/src/services/tts.ts` — fetch RAG /tts/speak + fallback SpeechSynthesis
+- `web/src/router/index.ts` — 加 `/present` (公开) + `/edge`
+- `web/package.json` v0.5.0 — + vue-i18n@9 + optionalDeps @xenova/transformers
+- `backend tts/{TtsController,TtsProperties}.java` + `application-tts.yml` — ProcessBuilder 调 edge-tts
+
+---
+
+## 🏆 v2.0 收官 (32/32 + Bonus 8/8) — 2026-05-21 ✅
+
+**3 phase + 8 加分彩蛋 全部交付, 共 49 提交 (v1 archive 10 + v2 主线 39 + bonus 8 + final docs sync)**。
 
 ---
 
@@ -34,56 +131,15 @@
 
 **提交 SHA**: `7124ce77`
 
-### 动机
-仓库顶级访问入口, 三分钟让评委/用户读懂项目 + 一键拉起演示。
-
-### 设计要点
-- **README.md** 根重写: 项目定位 + 仓库布局 + 三个“一句话”选型 + 技术栈 + quickstart + 演示路径 + mermaid 架构 + 32/32 完成清单 + 同类对比 link + 许可。
-- **scripts/demo-walkthrough.sh** 6 步: 检依赖 → 拉 mysql+og → 入 sakila → 可选 CDC → RAG → backend+web。
-- **scripts/healthcheck.sh**: 一口气检 backend/rag/web/mcp/a2a/reports 6 个 endpoint。
-
-### 变更项
 3 个新文件 + 顶级 README 改写。
-
-### 验证
-```bash
-bash scripts/demo-walkthrough.sh
-bash scripts/healthcheck.sh
-```
 
 ---
 
 ## [v2-step-31] 2026-05-21 — SBOM + Cosign + Trivy 供应链安全
 
-**提交 SHA**: `b0337f56` + polish `(本提交)`
+**提交 SHA**: `b0337f56` + polish `2c797979`
 
-### 动机
-SLSA Build L2 是 2025-2026 企业交付门禁, GitHub Dependency Submission API 需 CycloneDX SBOM。
-
-### 设计要点
-- **Syft anchore/sbom-action@v0** 生 CycloneDX JSON, artifact 90d。
-- **Trivy aquasecurity/trivy-action@0.24.0** fs scan, SARIF 上 GitHub Security tab, severity CRITICAL/HIGH。
-- **Cosign keyless** OIDC `token.actions.githubusercontent.com`, sign-blob 不需私钥, Rekor public ledger。
-- tag v* 另走 build-and-sign-images job 对 backend/rag/web 3 个镜像 cosign sign + trivy image 扫。
-- **路径 fallback**: `zhiqian/security/workflows-template/supply-chain.yml` + `scripts/install-supply-chain-workflow.sh` sed 转占位符自动 cp。
-
-### 变更项
-4 新文件 + polish 1 脚本:
-- `zhiqian/security/workflows-template/supply-chain.yml`
-- `zhiqian/security/{POLICY.md, sbom-attestation-template.json, README.md}`
-- `scripts/install-supply-chain-workflow.sh` (polish)
-
-### 验证
-```bash
-bash scripts/install-supply-chain-workflow.sh
-brew install syft trivy cosign
-syft ./zhiqian -o cyclonedx-json > sbom.cdx.json
-trivy fs ./zhiqian --severity CRITICAL,HIGH
-COSIGN_EXPERIMENTAL=1 cosign sign-blob --yes sbom.cdx.json
-```
-
-### 回滚
-`git revert b0337f56` → security 目录清除。
+4 新文件 + workflow-template + 一键 install 脚本。
 
 ---
 
@@ -91,7 +147,7 @@ COSIGN_EXPERIMENTAL=1 cosign sign-blob --yes sbom.cdx.json
 
 **提交 SHA**: `40c3aefc`
 
-5 新文件: `zhiqian/docs/{architecture/{00-overall,01-agent-pipeline,02-rag-retrieval}.md, comparison.md, innovations.md}`。8 大创新点, 6 维度 × 5 商业迁移产品对比。
+5 新文件: `zhiqian/docs/{architecture/{00,01,02}.md, comparison.md, innovations.md}`。
 
 ---
 
@@ -99,15 +155,15 @@ COSIGN_EXPERIMENTAL=1 cosign sign-blob --yes sbom.cdx.json
 
 **提交 SHA**: `636cb9a8`
 
-6 新文件: `zhiqian/deploy/datasets/{docker-compose.yml, bootstrap.sh, migrate-all.sh, README.md, seed/.gitkeep, seed/.gitignore}`。profile=datasets, mysql:5.7 + opengauss-lite:5.0, 含 ZhiQian vs pgloader benchmark。
+6 新文件: `zhiqian/deploy/datasets/{docker-compose.yml, bootstrap.sh, migrate-all.sh, README.md, seed/...}`。
 
 ---
 
 ## [v2-step-28] 2026-05-21 — transformers.js 端侧推理 (Phi-3.5-mini ONNX) + polish 修模板
 
-**提交 SHA**: `afb66784` + polish `(本提交)`
+**提交 SHA**: `afb66784` + polish `2c797979`
 
-3 新文件: `web/src/{composables/useLocalLlm.ts, views/LocalChat.vue, composables/README-local-llm.md}`。WebGPU 首选 + WASM 降级, q4 量化。**Polish**: LocalChat.vue 模板用 `v-text` 重写防 URL 压缩损坏。
+3 新文件: `web/src/{composables/useLocalLlm.ts, views/LocalChat.vue, composables/README-local-llm.md}`。
 
 ---
 
@@ -115,55 +171,33 @@ COSIGN_EXPERIMENTAL=1 cosign sign-blob --yes sbom.cdx.json
 
 **提交 SHA**: `3a3c608c`
 
-8 新文件: `rag/app/reports/{__init__.py, typst_renderer.py, templates/migration-report.typ, README.md}` + `rag/app/api/reports.py` + `rag/app/main.py` 重写 + `backend ReportClient / ReportController`。Typst Rust 实现 编译<1s, 中文原生支持, 未装优雅 503。
+8 新文件: rag reports + backend ReportClient + ReportController。
 
 ---
 
-## [v2-step-26] 2026-05-21 — 答辩演示模式 + edge-tts 代理 (polish 已补齐)
+## [v2-step-26] 2026-05-21 — 答辩演示模式 + edge-tts 代理
 
 **提交 SHA**: `9b938300`
 
-### 动机
-7-track Demo 页 + TTS 调 edge-tts (Microsoft 免费高品质语音), 现场答辩可读屏 / 离线浏览皆可。
-
-### 设计要点 (polish 补齐)
-- **PresentationView + SlideDeck**: 10 张幻灯片覆盖定位 / 问题 / 架构 / 创新 (2 split) / Demo 路径 / 对比 / 供应链 / 路线 / Q&A; `← →` `Home/End` `Esc` `R` 键控制; HUD 进度条 + 朗读按钮。
-- **services/tts.ts**: 前端调 `RAG /tts/speak`, blob 解码 audio, 未装 edge-tts 优雅 fallback `window.speechSynthesis`。
-- **backend `TtsController`**: ProcessBuilder 外调 `edge-tts --voice zh-CN-XiaoxiaoNeural`, 20s 超时, profile=tts 启用。
-- **router**: 新增 `/present` (无 layout 全屏) + `/edge` (走 MainLayout)。
-
-### 变更项 (polish)
-7 新文件:
-- `web/src/views/PresentationView.vue`
-- `web/src/components/SlideDeck.vue`
-- `web/src/services/tts.ts`
-- `web/src/router/index.ts` (重写加路由)
-- `backend tts/{TtsController, TtsProperties, README}.java/md`
-- `backend application-tts.yml`
-
-### 验证
-```bash
-# 启 web 后访 http://localhost:5173/#/present
-# 可选启 edge-tts: pip install edge-tts && SPRING_PROFILES_ACTIVE=tts ./mvnw spring-boot:run
-```
+7 新文件: PresentationView / SlideDeck / tts service / router / backend tts。
 
 ---
 
-## [v2-step-25] 2026-05-21 — 暗色主题 + vue-i18n 国际化 + polish 装依赖
+## [v2-step-25] 2026-05-21 — 暗色主题 + vue-i18n 国际化
 
-**提交 SHA**: `643b8dcf` + polish `(本提交)`
+**提交 SHA**: `643b8dcf` + polish `2c797979`
 
-9 新/改文件: `locales/{zh-CN, en-US, index}.ts` + `composables/useTheme.ts` + `styles/theme.css` + `components/{Theme, Locale}Switcher.vue` + `main.ts` 重写。**Polish**: package.json 加 `vue-i18n@^9` 真依赖 + optionalDeps `@xenova/transformers@^2.17.2`。
+9 新/改文件: locales + useTheme + theme.css + 2 个 switcher。
 
 ---
 
 ## 🟢 Phase 3 milestone (7/7) — 2026-05-21 ✅
 
-**云原生 Kustomize + ArgoCD GitOps + KubeRay/vLLM + Debezium CDC + pgloader/MTK + MCP + A2A**。Phase 3 全 7 步完成, 共 14 个新 SHA。
+**云原生 Kustomize + ArgoCD GitOps + KubeRay/vLLM + Debezium CDC + pgloader/MTK + MCP + A2A**。
 
 ## [v2-step-24] A2A AgentCard + tasks/send + sendSubscribe SSE — `984dd127`
-## [v2-step-23] MCP Server 6 tools (sql_transpile / sql_explain / schema_analysis / risk_report / retrieve / migrate_query) — `0faa7d9d`
-## [v2-step-22] pgloader / MTK / ZhiqianNative MigrationToolFactory.recommend — `54695192`
+## [v2-step-23] MCP Server 6 tools — `0faa7d9d`
+## [v2-step-22] pgloader / MTK / ZhiqianNative MigrationToolFactory — `54695192`
 ## [v2-step-21] Debezium 3.0 CDC (MySQL → Kafka → openGauss) — `d997f284`
 ## [v2-step-20] KubeRay RayService autoscale 1-4 + vLLM profile — `57323cb6`
 ## [v2-step-19] ArgoCD AppProject + dev/prod Application + bootstrap — `46274be6` + `11713498`
@@ -173,7 +207,7 @@ COSIGN_EXPERIMENTAL=1 cosign sign-blob --yes sbom.cdx.json
 
 ## 🟢 Phase 2 milestone (6/6) — 2026-05-21 ✅
 
-LangGraph CRAG + GraphRAG + Temporal + Outlines + Cytoscape + JaCoCo 全部交付。
+LangGraph CRAG + GraphRAG + Temporal + Outlines + Cytoscape + JaCoCo。
 
 ## [v2-step-17] Spring Boot Test ≥0.8 — `8cf5f96c` + `2e8cedbb`
 ## [v2-step-16] Cytoscape.js CKG — `c3374bf7` + `b31d20e6`

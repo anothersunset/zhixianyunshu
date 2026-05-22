@@ -1,6 +1,6 @@
 # 智迁云枢 v2 升级路线图
 
-## 总进度 (32/32 + Bonus 8/8 + Polish round ✅)
+## 总进度 (32/32 + Bonus 8/8 + Polish round 1-8 ✅) — v1.0.0 最终版 ✅
 
 ### Phase 1 — 真 LLM + 真检索 (P0) — ✅ 11/11
 
@@ -46,7 +46,7 @@
 | # | 提交 | 状态 | SHA |
 | --- | --- | --- | --- |
 | 25 | feat(web): 暗色 + i18n | ✅ | `643b8dcf` + polish `2c797979` |
-| 26 | feat(web): 答辩演示模式 + edge-tts | ✅ | polish `9b938300` |
+| 26 | feat(web): 答辩演示 + edge-tts | ✅ | polish `9b938300` |
 | 27 | feat(reports): Typst PDF | ✅ | `3a3c608c` |
 | 28 | feat(web): transformers.js 端侧 | ✅ | `afb66784` + polish `2c797979` |
 | 29 | feat(deploy): 公开数据集一键导入 | ✅ | `636cb9a8` |
@@ -54,15 +54,33 @@
 | 31 | chore: SBOM + Cosign + Trivy | ✅ | `b0337f56` + polish `2c797979` |
 | 32 | docs: 顶级 README + 脚本 | ✅ | `7124ce77` |
 
-### Polish round — ✅
+### Polish round 1-8 — ✅
 
-| 内容 | SHA |
+| 轮 | 主线 | SHA |
+| --- | --- | --- |
+| 1 | #26 补齐 PresentationView + SlideDeck + tts service + TtsController + backend application-tts.yml + 路由 /present /edge | `9b938300` |
+| 2 | #28 LocalChat.vue Vue template `v-text` 重写 (防 URL 压缩) + #25 package.json 装 vue-i18n@9 + optional @xenova/transformers + #31 install-supply-chain-workflow.sh 一键 sed cp | `2c797979` |
+| 3 | scripts/smoke-test.sh 三路静态检 + scripts/README.md 表 + UPGRADE_PLAN 同步 | `3145629c` |
+| 4 | CONTRIBUTING.md + docs/TROUBLESHOOTING.md (12 条) + docs/TOOLS.md CLI 矩阵 | `f9053573` |
+| 5 | 社区健康度: 4 个 issue 模板 + PR 模板 + SECURITY.md + CODE_OF_CONDUCT.md + .editorconfig + docs/README.md | `1e761a03` |
+| 6 | Makefile (`make help/smoke/demo/health/seed/sbom/backend/rag/web/clean/install-tools`) + .dockerignore + docs/INDEX.md | `c330328d` |
+| 7 | 顶层文档补齐: docs/QUICKSTART.md + docs/architecture/{00,01,02}.md + docs/comparison.md + docs/innovations.md | `1c34667d` |
+| 8 | v1.0.0 最终版: VERSION + RELEASE_NOTES.md + CHANGELOG 顶部 v1.0.0 区块 + 本表同步 | `(本提交)` |
+
+---
+
+## v1.0.0 质量门
+
+| 门 | 状态 |
 | --- | --- |
-| #26 补齑 PresentationView + SlideDeck + tts service + TtsController | `9b938300` |
-| #28 LocalChat.vue Vue template `v-text` 重写 (防 URL 压缩) | `2c797979` |
-| #25 package.json 装 vue-i18n@9 + optional @xenova/transformers | `2c797979` |
-| #31 scripts/install-supply-chain-workflow.sh 一键 sed cp | `2c797979` |
-| scripts/smoke-test.sh 三路静态检 | `(本提交)` |
+| 代码可编译 | ✅ `make smoke` (3 路) |
+| 依赖定版 | ✅ pom.xml / requirements*.txt / package.json |
+| Demo 端到端 | ✅ `make demo` 6 步 |
+| 供应链 | ✅ SBOM + Cosign + Trivy + workflow template |
+| 许可 | ✅ Apache 2.0 |
+| 社区 | ✅ LICENSE/SECURITY/CONTRIBUTING/COC/ISSUE+PR templates |
+| 文档闭环 | ✅ README→QUICKSTART→architecture→innovations→comparison→TOOLS→TROUBLESHOOTING→INDEX |
+| GitOps | ✅ ArgoCD dev=auto / prod=manual+selfHeal |
 
 ---
 
@@ -76,17 +94,10 @@ LangGraph CRAG + GraphRAG + Temporal + Outlines + Cytoscape + JaCoCo。
 云原生 Kustomize + ArgoCD GitOps + KubeRay/vLLM + Debezium 3.0 CDC + pgloader/MTK + MCP Server + A2A 协议。
 
 ## Bonus milestone (8/8) — 2026-05-21 ✅
+UX 体验 + 论文级交付 + 供应链安全。
 
-**UX 体验 + 论文级交付 + 供应链安全**.
-
-- ✅ #25 暗色 + i18n: vue-i18n@9 + useTheme composable + 12 个 CSS 变量 + 2 个 switcher
-- ✅ #26 答辩演示 + edge-tts: PresentationView (10 幻灯片 + 键盘控制 + 读稿) + backend TtsController ProcessBuilder 代理
-- ✅ #27 Typst PDF: typst CLI + migration-report.typ 模板 + `/reports/generate` endpoint + backend ReportClient 代理
-- ✅ #28 transformers.js: dynamic import + WebGPU/WASM 降级 + Phi-3.5-mini ONNX q4 量化 + `/edge` Demo 页
-- ✅ #29 公开数据集: docker compose mysql:5.7 + opengauss-lite + bootstrap.sh 拉 Sakila/Chinook/Employees + benchmark 对比
-- ✅ #30 论文架构: 3 份 mermaid 架构 (overall/pipeline/RAG) + comparison.md (6 维度 × 5 产品) + innovations.md (8 创新点)
-- ✅ #31 供应链: Syft CycloneDX + Trivy SARIF + Cosign keyless OIDC + SLSA Build L2 + 一键 install 脚本
-- ✅ #32 顶级 README + demo-walkthrough.sh + healthcheck.sh + smoke-test.sh
+## Polish round 1-8 — 2026-05-21 to 2026-05-22 ✅
+补齐 / 修复 / 一键脚本 / 社区健康度 / Makefile / 顶层文档 / v1.0.0 最终版。
 
 ---
 
@@ -165,8 +176,20 @@ LangGraph CRAG + GraphRAG + Temporal + Outlines + Cytoscape + JaCoCo。
 | 2026-05-21 | #31 cosign keyless OIDC, 不需 KMS / 私钥, Rekor public ledger |
 | 2026-05-21 | #31 workflow 放 workflows-template/, 一键 install 脚本 sed 转占位符 |
 | 2026-05-21 | #32 demo-walkthrough.sh 6 步, ENABLE_CDC=1 可选 |
-| 2026-05-21 | Polish: LocalChat.vue 全用 v-text 带二重括号表达式, 防上游 URL 压缩 |
-| 2026-05-21 | Polish: PresentationView 独立路由 + meta.public, 跳过登录守卫 |
-| 2026-05-21 | Polish: TTS 两路 — backend ProcessBuilder 外调 edge-tts CLI / web 优雅 fallback SpeechSynthesis |
-| 2026-05-21 | Polish: TtsProperties 用 @Component 而非 @EnableConfigurationProperties, 避 main 类修改 |
-| 2026-05-21 | Polish: install-supply-chain-workflow.sh 用 sed 转 `$ ctx ` → $530, 避免手工改 |
+| 2026-05-21 | Polish-1: LocalChat.vue 全用 v-text 带二重括号表达式, 防上游 URL 压缩 |
+| 2026-05-21 | Polish-1: PresentationView 独立路由 + meta.public, 跳过登录守卫 |
+| 2026-05-21 | Polish-1: TTS 两路 — backend ProcessBuilder 外调 edge-tts CLI / web 优雅 fallback SpeechSynthesis |
+| 2026-05-21 | Polish-1: TtsProperties 用 @Component 而非 @EnableConfigurationProperties, 避 main 类修改 |
+| 2026-05-21 | Polish-2: install-supply-chain-workflow.sh 用 sed 转 占位符 → 真 workflow 宏, 避免手工改 |
+| 2026-05-22 | Polish-4: CONTRIBUTING 采 Conventional Commits + scope (backend/rag/web/deploy/docs/bonus/ci/security) |
+| 2026-05-22 | Polish-4: TROUBLESHOOTING 按 出错点 分类: 供应链 / TTS / Typst / WebGPU / port / Temporal / Langfuse / ML |
+| 2026-05-22 | Polish-5: 不启用 blank_issues, 全走 4 模板, 避事后反复问社区信息 |
+| 2026-05-22 | Polish-5: SECURITY 明确 “本地 demo 弱口令不是生产漏”, 避混淆事选 |
+| 2026-05-22 | Polish-5: .editorconfig Java/Python=4 其他=2, Makefile=tab, markdown 不 trim 保 2 空格换行 |
+| 2026-05-22 | Polish-6: Makefile 不错错 (不依赖上游, 脚本调容), `make help` 菜单优先 |
+| 2026-05-22 | Polish-6: docs/INDEX.md 为一页总入口, 顶层与子模块两区发猜 |
+| 2026-05-22 | Polish-7: 顶层 docs/architecture 为概览, 深入 跳到 zhiqian/docs/architecture 实现版, 避重复 |
+| 2026-05-22 | Polish-7: comparison/innovations 顶层是泛读版, zhiqian/docs 里是设计版 — 两件事 |
+| 2026-05-22 | Polish-8: 使用 SemVer, v1.0.0 = 首个质量门全过发布位, API 表面 = backend+RAG+MCP+A2A 4 套 |
+| 2026-05-22 | Polish-8: VERSION 文件与 RELEASE_NOTES 同步 git tag, 未来 v1.x 只动 minor/patch |
+| 2026-05-22 | Polish-8: OAuth scope 限制是平台聊, 不是仓 settings, 手工走 install-supply-chain-workflow.sh 一次后永久解 |
