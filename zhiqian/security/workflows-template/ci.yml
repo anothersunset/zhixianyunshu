@@ -1,0 +1,63 @@
+# v1.0.2 hotfix: CI workflow 模板。原 .github/workflows/ci.yml 中
+# GitHub Actions 二重括号表达式被上游 URL 压缩吃成数字占位符, 4 处全坏。
+# 本模板用 "$ name " (单 $ + 上下空格) 作占位, 由 scripts/install-supply-chain-workflow.sh
+# 一键 sed 还原回真表达式后写入 .github/workflows/ci.yml。
+# hashFiles 含特殊字符, 用 sentinel POM_XML_HASH 单独替换。
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: zhiqian/backend
+    strategy:
+      matrix:
+        java-version: ["17"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK $ matrix.java-version 
+        uses: actions/setup-java@v4
+        with:
+          java-version: $ matrix.java-version 
+          distribution: temurin
+
+      - name: Cache Maven
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: maven-$ runner.os -POM_XML_HASH
+          restore-keys: |
+            maven-$ runner.os -
+
+      - name: Build
+        run: mvn compile -q
+
+      - name: Run tests
+        run: mvn test -q
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: zhiqian/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build

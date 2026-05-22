@@ -11,7 +11,10 @@ echo "→ [1/5] 创建 argocd 命名空间"
 kubectl apply -f "${HERE}/argocd-namespace.yaml"
 
 echo "→ [2/5] 安装 ArgoCD ${ARGOCD_VERSION}"
-MANIFEST_URL="https://raw.githubusercontent.com/argoproj/argo-cd/${ARGOCD_VERSION}/manifests/install.yaml"
+# v1.0.2 hotfix: URL 分三段拼装, 避上游 URL 压缩把整段 https 链路包成 二重括号 字面
+MANIFEST_HOST="https://raw.githubusercontent.com"
+MANIFEST_REPO="argoproj/argo-cd"
+MANIFEST_URL="${MANIFEST_HOST}/${MANIFEST_REPO}/${ARGOCD_VERSION}/manifests/install.yaml"
 kubectl apply -n "${NS}" -f "${MANIFEST_URL}"
 
 echo "→ [3/5] 等待 ArgoCD server ready (最多 5 min)"
