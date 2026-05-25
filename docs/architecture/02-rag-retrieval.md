@@ -20,7 +20,7 @@ flowchart LR
 ```
 
 ## 为什么 BGE-M3
-
+- 一个能同时做语义理解，关键词搜索，长文本搜索，多语言搜索的全能embedding模型
 - 单模型 3 种表示 (dense / sparse / colbert) — 不需另启三个模型
 - 多语言 (100+) — sakila 中文读 / 代码 英文接口 都走一个
 - 8K 上下文 — 套 Late Chunking 不破语义
