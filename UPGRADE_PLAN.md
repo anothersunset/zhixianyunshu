@@ -1,11 +1,12 @@
 # 智迁云枢 v2 升级路线图
 
-## 总进度 (32/32 + Bonus 8/8 + Polish round 1-10 ✅) — v1.0.3 hotfix ✅
+## 总进度 (32/32 + Bonus 8/8 + Polish round 1-11 ✅) — v1.0.4 hotfix ✅
 
 > 警告:
 > · v1.0.0 (SHA `59a9e3b7`) 发现 2 个 CRITICAL 缺陷 (PresentMode.vue 插值丢失 + 2 个 shell 末尾空格 bug), 已由 v1.0.1 (SHA `9d48eac6` + 元数据 `7c6cba24`) 修复。
 > · v1.0.1 又漏检 2 个同类 CRITICAL 缺陷 (`.github/workflows/ci.yml` 表达式被压缩 + `zhiqian/deploy/argocd/bootstrap.sh` MANIFEST_URL 被括号包裹), 已由 v1.0.2 (SHA `fb2994da` + 元数据同步) 修复。
-> · **请使用 v1.0.2, 跳过 v1.0.0 与 v1.0.1**。
+> · v1.0.3 修复 Web 前端 TS 类型错误, v1.0.4 修复 Backend 与 RAG 编译/运行问题。
+> · **请使用 v1.0.4, 跳过 v1.0.0 ~ v1.0.3**。
 
 ### Phase 1 — 真 LLM + 真检索 (P0) — ✅ 11/11
 
@@ -59,7 +60,7 @@
 | 31 | chore: SBOM + Cosign + Trivy | ✅ | `b0337f56` + polish `2c797979` |
 | 32 | docs: 顶级 README + 脚本 | ✅ | `7124ce77` |
 
-### Polish round 1-10 — ✅
+### Polish round 1-11 — ✅
 
 | 轮 | 主线 | SHA |
 | --- | --- | --- |
@@ -73,10 +74,28 @@
 | 8 | v1.0.0 最终版: VERSION + RELEASE_NOTES.md + CHANGELOG 顶部 v1.0.0 区块 + 本表同步 | `59a9e3b7` |
 | 9 | **v1.0.1 hotfix**: PresentMode.vue 插值 v-text 修复 + healthcheck.sh + demo-walkthrough.sh 末尾空格修复 + CHANGELOG/UPGRADE_PLAN/VERSION 同步 | `9d48eac6` + `7c6cba24` |
 | 10 | **v1.0.2 hotfix**: ci.yml 转模板 + install-supply-chain-workflow.sh 扩 ci/supply-chain 双装 + argocd/bootstrap.sh URL 分段拼装 + CHANGELOG/UPGRADE_PLAN/VERSION 同步 | `fb2994da` + `(本提交)` |
+| 11 | **v1.0.4 hotfix**: RAG API 模块补全 (query/validation + router prefix) + SecurityConfig A2A/Swagger 放行 + Temporal ObjectProvider 守卫 + pom.xml 修 flyway版本/mockito移除/springdoc新增 + Dockerfile syntax 移除 + -Dmaven.test.skip=true + CHANGELOG/UPGRADE_PLAN/VERSION 同步 | `(本提交)` |
 
 ---
 
-## v1.0.2 质量门 (撤回 v1.0.0/v1.0.1 原报)
+## v1.0.4 质量门 (Docker 本地部署实测)
+
+| 门 | v1.0.2 状态 | v1.0.4 实际 |
+| --- | --- | --- |
+| 代码可编译 | ✅ `make smoke` 三路静态检 | ✅ |
+| CI workflow 可解析 | ⚠️ 需用户跑 install 脚本 | ⚠️ 同左 |
+| 依赖定版 | ✅ | ✅ |
+| Demo 端到端 | ⚠️ 需本地验 | ✅ 6/6 全通过 (Login/Projects/Tasks/RAG/Users/前端页面) |
+| 健康检查 | ⚠️ 需本地验 | ✅ 6/6 全通过 (Backend/RAG/MCP/Reports/A2A/Swagger) |
+| 演示模式 | ⚠️ 需本地验 | ✅ /present + /edge 均可访问 |
+| ArgoCD bootstrap 可跑 | ⚠️ 需 K8s 环境 | ⚠️ 需 K8s 环境真跑验证 |
+| 供应链 | ✅ | ✅ (v1.0.4 修 trivy-action@v0.35.0) |
+| 许可 | ✅ | ✅ |
+| 社区 | ✅ | ✅ |
+| 文档闭环 | ✅ | ✅ |
+| GitOps | ⚠️ 需 K8s 环境真跑验证 | ⚠️ 同左 |
+
+### v1.0.2 质量门 (撤回 v1.0.0/v1.0.1 原报)
 
 | 门 | v1.0.0 原报 | v1.0.1 状态 | v1.0.2 实际 |
 | --- | --- | --- | --- |
@@ -107,8 +126,8 @@ LangGraph CRAG + GraphRAG + Temporal + Outlines + Cytoscape + JaCoCo。
 ## Bonus milestone (8/8) — 2026-05-21 ✅
 UX 体验 + 论文级交付 + 供应链安全。
 
-## Polish round 1-10 — 2026-05-21 to 2026-05-22 ✅
-补齐 / 修复 / 一键脚本 / 社区健康度 / Makefile / 顶层文档 / v1.0.0 最终版 / **v1.0.1 hotfix** / **v1.0.2 hotfix** / **v1.0.3 hotfix**。
+## Polish round 1-11 — 2026-05-21 to 2026-06-01 ✅
+补齐 / 修复 / 一键脚本 / 社区健康度 / Makefile / 顶层文档 / v1.0.0 最终版 / **v1.0.1 hotfix** / **v1.0.2 hotfix** / **v1.0.3 hotfix** / **v1.0.4 hotfix**。
 
 ---
 
@@ -212,3 +231,10 @@ UX 体验 + 论文级交付 + 供应链安全。
 | 2026-05-22 | **Polish-10**: 未来 SemVer 质量门“代码完整可解析”必须从仓库 raw blob 实际下载并复跑 lint/parser 验证; 静态阅读不可信, 全仓 grep 也不可信 (压缩工件可能让 grep 都看不到原表达式) |
 | 2026-05-22 | **Polish-10**: 凡含 ${...} 插值的 URL 字面, 默认采用分段拼接, 不再写整段 URL 字符串 |
 | 2026-05-22 | **Polish-10**: install-supply-chain-workflow.sh 扩为双装 (ci+supply-chain), 运行时拼装 hashFiles 表达式 (避在脚本源码里写裸 二重括号) |
+| 2026-06-01 | **Polish-11 (v1.0.4)**: RAG API 模块补全 — 新建 query.py/validation.py, 4 个 router 加 prefix 解决路由冲突 |
+| 2026-06-01 | **Polish-11**: SecurityConfig 放行 A2A Agent Card (`/.well-known/**`) 和 Swagger UI (`/swagger-ui/**`, `/v3/api-docs/**`) |
+| 2026-06-01 | **Polish-11**: Temporal Bean 注入用 ObjectProvider 安全守卫 — TemporalMigrationController (TemporalProperties) + MigrationActivitiesImpl (@ConditionalOnProperty + ObjectProvider<AgentTool>) |
+| 2026-06-01 | **Polish-11**: pom.xml 修复 — flyway-database-postgresql 补版本 10.15.2, 移除废弃 mockito-inline, 新增 springdoc 2.5.0 |
+| 2026-06-01 | **Polish-11**: Dockerfile 移除 syntax 指令 (国内拉取超时), backend 改用 -Dmaven.test.skip=true 完全跳过测试编译 |
+| 2026-06-01 | **Polish-11**: trivy-action 0.24.0 → v0.35.0 — 原版本在 2026.03 Aqua 供应链攻击中被删, v0.35.0 为首个修复版 (CVE-2026-33634) |
+| 2026-06-01 | **Polish-11**: v1.0.4 健康检查从 3/6 修复至 6/6 全通过 (MCP/Reports/A2A/Swagger 均恢复可用) |

@@ -35,7 +35,7 @@ jobs:
           retention-days: 90
 
       - name: Trivy fs scan
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           scan-type: fs
           scan-ref: ./zhiqian
@@ -103,7 +103,7 @@ jobs:
           COSIGN_EXPERIMENTAL: '1'
         run: cosign sign --yes ghcr.io/$ github.repository /$ matrix.component @$ steps.build.outputs.digest 
       - name: Trivy image scan
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: ghcr.io/$ github.repository /$ matrix.component :$ github.ref_name 
           format: sarif
