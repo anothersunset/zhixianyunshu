@@ -76,6 +76,7 @@
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-database-postgresql</artifactId>
+            <version>10.15.2</version>
         </dependency>
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
@@ -164,12 +165,7 @@
             <artifactId>postgresql</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- v2-step-17: Mockito inline for final classes mocking -->
-        <dependency>
-            <groupId>org.mockito</groupId>
-            <artifactId>mockito-inline</artifactId>
-            <scope>test</scope>
-        </dependency>
+        <!-- v2-step-17: Mockito inline mock (5.x+ 已内建于 mockito-core, 不再需要单独依赖) -->
     </dependencies>
 
     <build>

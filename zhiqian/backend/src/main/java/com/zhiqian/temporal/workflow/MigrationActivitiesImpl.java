@@ -1,49 +1,56 @@
 package com.zhiqian.temporal.workflow;
 
 import com.zhiqian.agent.AgentContext;
-import com.zhiqian.agent.AgentRunner;
 import com.zhiqian.agent.AgentTool;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import java.util.Map;
 
 /**
- * v2-step-14: Activity 实现。Spring bean, 依赖现有 AgentRunner。
- *
- * <p>不重复逻辑: 每个 activity 只是“查找同名 AgentTool bean + 调 runner.run”。
- * 这样 Temporal/AgentRunner 两路径走同一套 Agent 代码, 避免双护。
+ * v2-step-14: Activity 实现。仅在 Temporal 启用时装载。
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
+@ConditionalOnProperty(name = "app.temporal.enabled", havingValue = "true")
 public class MigrationActivitiesImpl implements MigrationActivities {
 
-    private final AgentRunner runner;
-    @Qualifier("schemaAnalyzerAgent")    private final AgentTool schemaAnalyzer;
-    @Qualifier("contextRetrieverAgent")  private final AgentTool contextRetriever;
-    @Qualifier("sqlReasonerAgent")       private final AgentTool sqlReasoner;
-    @Qualifier("sqlPatcherAgent")        private final AgentTool sqlPatcher;
-    @Qualifier("sqlCriticAgent")         private final AgentTool sqlCritic;
-    @Qualifier("reportSummarizerAgent")  private final AgentTool reportSummarizer;
+    private final ObjectProvider<AgentTool> schemaAnalyzer;
+    private final ObjectProvider<AgentTool> contextRetriever;
+    private final ObjectProvider<AgentTool> sqlReasoner;
+    private final ObjectProvider<AgentTool> sqlPatcher;
+    private final ObjectProvider<AgentTool> sqlCritic;
+    private final ObjectProvider<AgentTool> reportSummarizer;
 
-    @Override public Map<String, Object> runSchemaAnalyzer(Map<String, Object> ctx)    { return run("SCHEMA",   schemaAnalyzer,    ctx); }
-    @Override public Map<String, Object> runContextRetriever(Map<String, Object> ctx)  { return run("RETRIEVE", contextRetriever,  ctx); }
-    @Override public Map<String, Object> runSqlReasoner(Map<String, Object> ctx)       { return run("REASON",   sqlReasoner,       ctx); }
-    @Override public Map<String, Object> runSqlPatcher(Map<String, Object> ctx)        { return run("PATCH",    sqlPatcher,        ctx); }
-    @Override public Map<String, Object> runSqlCritic(Map<String, Object> ctx)         { return run("CRITIC",   sqlCritic,         ctx); }
-    @Override public Map<String, Object> runReportSummarizer(Map<String, Object> ctx)  { return run("REPORT",   reportSummarizer,  ctx); }
+    public MigrationActivitiesImpl(
+            @Qualifier("schemaAnalyzerAgent")    ObjectProvider<AgentTool> schemaAnalyzer,
+            @Qualifier("contextRetrieverAgent")  ObjectProvider<AgentTool> contextRetriever,
+            @Qualifier("sqlReasonerAgent")       ObjectProvider<AgentTool> sqlReasoner,
+            @Qualifier("sqlPatcherAgent")        ObjectProvider<AgentTool> sqlPatcher,
+            @Qualifier("sqlCriticAgent")         ObjectProvider<AgentTool> sqlCritic,
+            @Qualifier("reportSummarizerAgent")  ObjectProvider<AgentTool> reportSummarizer) {
+        this.schemaAnalyzer = schemaAnalyzer;
+        this.contextRetriever = contextRetriever;
+        this.sqlReasoner = sqlReasoner;
+        this.sqlPatcher = sqlPatcher;
+        this.sqlCritic = sqlCritic;
+        this.reportSummarizer = reportSummarizer;
+    }
+
+    @Override public Map<String, Object> runSchemaAnalyzer(Map<String, Object> ctx)    { return run("SCHEMA",   schemaAnalyzer.getObject(),    ctx); }
+    @Override public Map<String, Object> runContextRetriever(Map<String, Object> ctx)  { return run("RETRIEVE", contextRetriever.getObject(),  ctx); }
+    @Override public Map<String, Object> runSqlReasoner(Map<String, Object> ctx)       { return run("REASON",   sqlReasoner.getObject(),       ctx); }
+    @Override public Map<String, Object> runSqlPatcher(Map<String, Object> ctx)        { return run("PATCH",    sqlPatcher.getObject(),        ctx); }
+    @Override public Map<String, Object> runSqlCritic(Map<String, Object> ctx)         { return run("CRITIC",   sqlCritic.getObject(),         ctx); }
+    @Override public Map<String, Object> runReportSummarizer(Map<String, Object> ctx)  { return run("REPORT",   reportSummarizer.getObject(),  ctx); }
 
     private Map<String, Object> run(String stage, AgentTool tool, Map<String, Object> ctx) {
         long t0 = System.currentTimeMillis();
-        AgentContext agentCtx = AgentContext.builder()
-                .taskId(asLong(ctx.get("taskId")))
-                .projectId(asLong(ctx.get("projectId")))
-                .stage(stage)
-                .build();
+        AgentContext agentCtx = new AgentContext(asLong(ctx.get("taskId")), asLong(ctx.get("projectId")));
         try {
-            Map<String, Object> out = runner.run(tool, agentCtx, ctx);
+            Map<String, Object> out = tool.run(agentCtx, ctx);
             out.putIfAbsent("_ok", true);
             out.putIfAbsent("_elapsedMs", System.currentTimeMillis() - t0);
             log.info("[temporal-activity] {} ok in {}ms", stage, System.currentTimeMillis() - t0);

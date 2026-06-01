@@ -69,6 +69,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/actuator/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/tasks/*/stream").permitAll()
+                .requestMatchers("/.well-known/**").permitAll()  // A2A Agent Card
+                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()  // Swagger UI
                 .requestMatchers("/error").permitAll()
                 .anyRequest().authenticated()
             )

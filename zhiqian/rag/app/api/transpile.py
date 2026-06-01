@@ -21,7 +21,7 @@ from app.core.sql_transpiler import (
 )
 
 log = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(prefix="/transpile", tags=["transpile"])
 
 
 class TranspileReq(BaseModel):

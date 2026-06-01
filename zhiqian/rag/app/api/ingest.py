@@ -9,7 +9,7 @@ from app.core.bge_m3 import BgeM3Embedder
 from app.core.observability import get_langfuse
 
 log = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(prefix="/ingest", tags=["ingest"])
 
 # v2-step-06: /ingest 接收原始文档,按 strategy (semantic / late / none) 切块后入库。
 # v2-step-07: 全链 Langfuse 埋点 — pick_chunker / chunk.run / retriever.add 三段 span。

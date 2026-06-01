@@ -23,11 +23,15 @@ import java.util.Map;
 @Slf4j
 @RestController
 @RequestMapping("/api/temporal")
-@RequiredArgsConstructor
 public class TemporalMigrationController {
 
     private final ObjectProvider<WorkflowClient> clientProvider;
     private final TemporalProperties props;
+
+    public TemporalMigrationController(ObjectProvider<WorkflowClient> clientProvider, ObjectProvider<TemporalProperties> propsProvider) {
+        this.clientProvider = clientProvider;
+        this.props = propsProvider.getIfAvailable();
+    }
 
     public record StartReq(
             long taskId,
@@ -53,9 +57,9 @@ public class TemporalMigrationController {
         MigrationWorkflow stub = client.newWorkflowStub(
                 MigrationWorkflow.class,
                 WorkflowOptions.newBuilder()
-                        .setTaskQueue(props.getTaskQueue())
+                        .setTaskQueue(props != null ? props.getTaskQueue() : "zhiqian-migration")
                         .setWorkflowId(wid)
-                        .setWorkflowExecutionTimeout(Duration.ofMinutes(props.getWorkflowExecutionTimeoutMinutes()))
+                        .setWorkflowExecutionTimeout(Duration.ofMinutes(props != null ? props.getWorkflowExecutionTimeoutMinutes() : 60))
                         .build());
         WorkflowClient.start(stub::migrate,
                 new MigrationRequest(

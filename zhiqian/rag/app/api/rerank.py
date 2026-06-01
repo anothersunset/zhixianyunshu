@@ -7,7 +7,7 @@ from app.config import settings
 from app.core.reranker import CrossEncoderReranker
 
 log = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(prefix="/rerank", tags=["rerank"])
 
 # v2-step-04：独立的 reranker 端点。多个调用者可复用同一个加载过的模型。
 _RERANKER: Optional[CrossEncoderReranker] = None
@@ -42,6 +42,7 @@ class RerankResp(BaseModel):
 
 
 @router.post("", response_model=RerankResp)
+
 async def rerank(req: RerankReq) -> RerankResp:
     rr = _get_reranker()
     if not req.candidates:

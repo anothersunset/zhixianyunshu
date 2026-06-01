@@ -6,7 +6,7 @@ import logging
 from app.core.observability import get_langfuse
 
 log = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(prefix="/retrieve", tags=["retrieve"])
 
 # v2-step-05: /retrieve 真接入 HybridRetriever。返回多路检索 + RRF + 可选重排的丝滑结果。
 # v2-step-07: 包一层 'rag.retrieve_api' trace,透传给 retriever.search 避免双 trace。
