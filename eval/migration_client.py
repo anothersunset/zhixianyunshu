@@ -30,7 +30,12 @@ class MigrationResult:
 class MigrationClient:
     def __init__(self, base_url: str | None = None):
         # 分段拼接，避免把插值直接写进字符串模板。
-        self.base_url = base_url or os.environ.get("ZHIQIAN_RAG_URL", "http://localhost:8001")
+        self.base_url = (
+            base_url
+            or os.environ.get("ZHIQIAN_MIGRATE_URL")
+            or os.environ.get("ZHIQIAN_RAG_URL")
+            or "http://localhost:8080"
+        )
 
     def run_migration(self, *, source_sql: str, pair: str, retrieval: str) -> MigrationResult:
         endpoint = self.base_url.rstrip("/") + "/migrate"
