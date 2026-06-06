@@ -4,7 +4,9 @@
 
 ## 一句话
 
-智迁云枢 = **6-Agent DAG** 驱动的 **MySQL/Oracle/SQLServer → openGauss/PostgreSQL** 跨方言数据库迁移平台，背靠 **BGE-M3 三路检索 + GraphRAG + CRAG** 提高迁移建议准确率，并通过云原生部署与供应链安全形成工程闭环。
+智迁云枢 = **6-Agent DAG** 驱动的 **MySQL/Oracle/SQLServer → openGauss/PostgreSQL** 跨方言数据库迁移平台，背靠 **BGE-M3 三路检索 + GraphRAG + CRAG** 支撑可解释迁移建议，并通过云原生部署与供应链安全形成工程闭环。
+
+> **评测口径**：CRAG / GraphRAG 已实现工程控制流与启发式 baseline；真实语义增益仍需通过迁移样本、人工标注和对照实验验证。
 
 ## 6 层架构（top-down）
 
@@ -34,8 +36,8 @@ flowchart TB
     MYSQL["MySQL 5.7/8.0"]
     OG["openGauss / PostgreSQL"]
     QD["Qdrant"]
-    KAFKA["Kafka + Debezium 3.0 CDC"]
     TEMP["Temporal"]
+    KAFKA["Kafka + Debezium 3.0 CDC"]
   end
   subgraph L6["云原生"]
     K8S["Kustomize base + dev/prod overlays"]
