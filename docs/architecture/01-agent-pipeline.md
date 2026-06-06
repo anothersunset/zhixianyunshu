@@ -6,31 +6,30 @@
 
 ```mermaid
 flowchart LR
-  IN["输入: 源表 + 目标方言"] --> PLAN
-  PLAN["PlanAgent<br/>设计迁移路径"] --> SCHEMA
-  SCHEMA["SchemaAgent<br/>转表结构诨类型"] --> SQL
-  SQL["SqlAgent<br/>sqlglot 转译<br/>+ Outlines JSON 约束"] --> RISK
-  RISK["RiskAgent<br/>诨 5 类风险"] --> PATCH
-  PATCH["PatchAgent<br/>生补丁 / 临时 view"] --> REPORT
-  REPORT["ReportAgent<br/>Typst 赛纸 PDF"]
-  RISK -."高风险".-> PLAN
-  SQL -."译败".-> PLAN
+  IN["输入: DDL / SQL 批量 + 目标方言"] --> SA
+  SA["SchemaAnalyzer<br/>提取表 / 列 / 索引 / 约束"] --> CR
+  CR["ContextRetriever<br/>检索迁移规则 / 历史案例 / 兼容性知识"] --> SR
+  SR["SqlReasoner<br/>推理 SQL 方言差异"] --> SP
+  SP["SqlPatcher<br/>生成 SQL / DDL 修复补丁"] --> SC
+  SC["SqlCritic<br/>风险检查与质量门禁"] --> RS
+  RS["ReportSummarizer<br/>生成迁移报告"] --> OUT["输出: Patch + Risk + Report + Trace"]
+  SC -."不达标".-> SR
 ```
 
 ## 关键点
 
-- **全部走 LangGraph CRAG** — 每个 Agent 调 RAG 后 self-critique × N, 低信任重检
-- **受约束解码** — 结构化输出走 Outlines + pydantic, 不会给多话文
-- **GraphRAG 补 RAG** — 问表下游依赖 · 跳表推理 · 社区检索
-- **可话 duration** — Temporal worker 底, 走 24h+ 长项不丢状态
-- **可观测** — 每调一次 Agent 上 Langfuse trace, 费用/期件都看到
+- **以代码为准** — 当前真实执行链路来自 `TaskExecutionService.buildGraph()`，固定为 SchemaAnalyzer / ContextRetriever / SqlReasoner / SqlPatcher / SqlCritic / ReportSummarizer 6 个节点。
+- **ContextRetriever 内接 CRAG / GraphRAG** — RAG 能力作为检索与纠错子流程嵌入 6 Agent DAG，而不是额外算作第 7 个业务 Agent。
+- **SqlCritic 推上游** — 质量门禁不达标时推回 SqlReasoner 重试，避免错误 patch 直接进入报告。
+- **工具可插拔，Agent 主体不变** — transpile_sql / lookup_doc / score_sql 等 tool 可以增减，但业务 Agent 数量仍以 6 个节点为准。
+- **可观测** — 每个 Agent stage 都可记录 Langfuse trace、token、duration 和结构化输出。
 
 ## 为什么不是单 Agent
 
 | 问题 | 单 Agent 状况 | 6 Agent DAG |
 | --- | --- | --- |
-| Context 长 | 股聊、逻辑乱 | 每 Agent 聊一件事, prompt 短 |
-| 错误传播 | SQL 错陆到 schema | Risk gate 隔离, 退 Plan |
-| 可重试 | 全重走 | 只重走出错 Agent |
-| 可观测 | 一条 trace | 6 段 trace, 揭变 hot spot |
-| 代价 | LLM 调用少 | 调多, 但重试少, 总 cost 词汇 |
+| Context 长 | 容易混杂 schema / SQL / 风险 / 报告任务 | 每个 Agent 只处理一个阶段 |
+| 错误传播 | SQL 改写错误可能直接进入报告 | SqlCritic 风险门禁隔离 |
+| 可重试 | 失败后往往要全链路重跑 | 只重跑出错阶段或推回 reasoner |
+| 可观测 | 一条混合 trace，难定位瓶颈 | 6 段 trace，能定位 hot spot |
+| 工程交付 | 输出常是自然语言建议 | 输出 Patch + Risk + Report + Trace |

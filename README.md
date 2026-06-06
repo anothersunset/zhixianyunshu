@@ -27,16 +27,18 @@ zhixianyunshu/
 
 ## 三个“一句话”选型
 
-- **不只是迁移工具**: 6 Agent + CRAG + GraphRAG 读懂跨方言复杂语句。
+- **不只是迁移工具**: 6 Agent + CRAG + GraphRAG 支撑跨方言复杂语句的可解释迁移分析。
 - **不锁定一个生态**: pgloader / Ora2Pg / Debezium / ZhiQian Native 同位调度。
 - **双协议互联**: MCP server + A2A peer, 能被 Claude Desktop / Cursor 调, 也能与其他 Agent 交互。
+
+> **口径说明**: 当前实现口径以 `zhiqian/` 为准。向量检索使用 **Qdrant + BGE-M3 + RRF**；图检索使用 **CKG / GraphRAG 轻量图实现**。旧文档里出现过的 ChromaDB / Neo4j / 7 Agent 属于早期规划口径，不作为当前实现证明。Demo seed 中的 confidence / 综合分仅用于 UI 和报告流程演示，真实效果以后续独立评测集与人工复核为准。
 
 ## 技术栈
 
 | 层 | 选型 |
 | --- | --- |
 | 后端 | Spring Boot 3.3 · Spring Security · OpenAPI · Temporal Java SDK (opt) · JaCoCo 0.8.12 |
-| RAG | Python 3.11 · FastAPI · BGE-M3 · Qdrant · sqlglot · Outlines · LangGraph mini |
+| RAG | Python 3.11 · FastAPI · BGE-M3 · Qdrant · sqlglot · Outlines · CRAG mini StateGraph |
 | 前端 | Vue 3.4 · Vite 5 · Element Plus 2.7 · Pinia · vue-i18n 9 · ECharts · transformers.js v3 |
 | 部署 | Kustomize · ArgoCD · KubeRay · Debezium 3.0 · Kafka Connect · Docker Compose |
 | 安全 | Syft SBOM · Trivy · Cosign keyless · SLSA Build L2 |
@@ -75,7 +77,7 @@ cd zhiqian/web && pnpm i && pnpm dev
 4. **下载 Typst PDF 报告** —— 含风险表 + SQL 示例
 5. **切换主题为暗色** + 语言切为英文
 6. **入口 `/edge`** 跳 端侧小模型 Demo (需下 600MB)
-7. **入口 `/present`** 跳到幻灯片演示模式 (PPT 备诺)
+7. **入口 `/present`** 跳到幻灯片演示模式
 8. **用 Claude Desktop 调 MCP**: `claude_desktop_config.json` 里填上 `http://localhost:8001/mcp/rpc`
 
 ## 架构一眼看
@@ -86,6 +88,7 @@ flowchart LR
   Backend --> RAG[Python FastAPI RAG]
   Backend --> Agents[6-Agent Pipeline]
   RAG --> Qdrant[(Qdrant)]
+  RAG --> CKG[(CKG / GraphRAG)]
   RAG --> LLM[DeepSeek / vLLM]
   Backend --> CDC[Debezium 3.0]
   CDC --> Kafka[(Kafka)]
@@ -104,6 +107,10 @@ flowchart LR
 - [x] 加分 (#25-#32): 暗色+i18n, 演示模式+TTS, Typst PDF, 端侧推理, 公开数据集, 论文架构图, 供应链安全, 顶级 README
 
 全部提交详情 → [CHANGELOG.md](./CHANGELOG.md)
+
+## 评测口径
+
+当前 CRAG / GraphRAG 已实现工程控制流：retrieve → evaluate → correct / fallback → generate，以及 local / global 图检索思路。但默认语义判断仍包含启发式成分，真实语义增益需要通过真实迁移样本和对照实验验证。后续评测将优先补充 BM25 only、Vector only、Vector + Rerank、CRAG、GraphRAG / CKG 五组对照。
 
 ## 同类产品对比
 
