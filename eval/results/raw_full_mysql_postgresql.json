@@ -1,0 +1,65 @@
+{
+  "summary": {
+    "n": 5,
+    "sql_repair_rate": 0.6,
+    "report_accuracy": 1.0,
+    "recall@5": null
+  },
+  "rows": [
+    {
+      "id": "parrot-mysql-postgresql-25145",
+      "pair": "mysql->postgresql",
+      "difficulty": "unknown",
+      "sql_ok": false,
+      "report_acc": 1.0,
+      "recall@5": null,
+      "risk_level": "low",
+      "pred_sql": "DO $$ DECLARE current_time timestamp := TIMESTAMP '2022-12-01 12:40:00'; END $$;",
+      "error": null
+    },
+    {
+      "id": "parrot-mysql-postgresql-25109",
+      "pair": "mysql->postgresql",
+      "difficulty": "unknown",
+      "sql_ok": true,
+      "report_acc": 1.0,
+      "recall@5": null,
+      "risk_level": "medium",
+      "pred_sql": "ALTER TABLE users ALTER COLUMN Reputation TYPE INTEGER, ADD CONSTRAINT users_reputation_check CHECK (Reputation >= 0);",
+      "error": null
+    },
+    {
+      "id": "parrot-mysql-postgresql-22998",
+      "pair": "mysql->postgresql",
+      "difficulty": "unknown",
+      "sql_ok": false,
+      "report_acc": 1.0,
+      "recall@5": null,
+      "risk_level": "low",
+      "pred_sql": "SELECT TO_CHAR(CreationDate, 'FMHH24:MI:SS') FROM comments",
+      "error": null
+    },
+    {
+      "id": "parrot-mysql-postgresql-24864",
+      "pair": "mysql->postgresql",
+      "difficulty": "unknown",
+      "sql_ok": true,
+      "report_acc": 1.0,
+      "recall@5": null,
+      "risk_level": "low",
+      "pred_sql": "SELECT bond_id FROM bond WHERE bond_id ~ '^TR[1-3].*[45]$'",
+      "error": null
+    },
+    {
+      "id": "parrot-mysql-postgresql-20352",
+      "pair": "mysql->postgresql",
+      "difficulty": "unknown",
+      "sql_ok": true,
+      "report_acc": 1.0,
+      "recall@5": null,
+      "risk_level": "low",
+      "pred_sql": "ALTER TABLE account ALTER COLUMN date TYPE TIMESTAMP;",
+      "error": null
+    }
+  ]
+}

@@ -43,6 +43,8 @@ app:
     temperature: ${LLM_TEMPERATURE:0.2}
     max-tokens: ${LLM_MAX_TOKENS:2048}
     timeout-seconds: ${LLM_TIMEOUT_SECONDS:60}
+    thinking-enabled: ${LLM_THINKING_ENABLED:true}
+    reasoning-effort: ${LLM_REASONING_EFFORT:high}
   # ===== v2-step-08: Langfuse 后端全链观测 =====
   langfuse:
     enabled: ${LANGFUSE_ENABLED:true}

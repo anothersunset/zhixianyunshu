@@ -2,11 +2,10 @@ package com.zhiqian.agent;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import java.util.Map;
 
-/**
- * v2-step-17: AgentStep record 语义烟测。
- */
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 class AgentStepTest {
 
     @Test
@@ -14,9 +13,9 @@ class AgentStepTest {
         AgentStep s = new AgentStep(
             "SCHEMA",
             "schemaAnalyzerAgent",
-            "input text",
-            "output text",
-            "deepseek-chat",
+            Map.of("sql", "input text"),
+            Map.of("summary", "output text"),
+            "deepseek-v4-pro",
             0.85,
             120L,
             500,
@@ -25,9 +24,9 @@ class AgentStepTest {
         );
         assertEquals("SCHEMA", s.stage());
         assertEquals("schemaAnalyzerAgent", s.agentName());
-        assertEquals("input text", s.input());
-        assertEquals("output text", s.output());
-        assertEquals("deepseek-chat", s.model());
+        assertEquals(Map.of("sql", "input text"), s.input());
+        assertEquals(Map.of("summary", "output text"), s.output());
+        assertEquals("deepseek-v4-pro", s.model());
         assertEquals(0.85, s.confidence());
         assertEquals(120L, s.elapsedMs());
         assertEquals(500, s.tokenIn());
@@ -37,8 +36,8 @@ class AgentStepTest {
 
     @Test
     void recordsAreEqualByValue() {
-        AgentStep a = new AgentStep("X", "x", "i", "o", "m", 0.5, 1L, 1, 1, "ok");
-        AgentStep b = new AgentStep("X", "x", "i", "o", "m", 0.5, 1L, 1, 1, "ok");
+        AgentStep a = new AgentStep("X", "x", Map.of("i", "i"), Map.of("o", "o"), "m", 0.5, 1L, 1, 1, "ok");
+        AgentStep b = new AgentStep("X", "x", Map.of("i", "i"), Map.of("o", "o"), "m", 0.5, 1L, 1, 1, "ok");
         assertEquals(a, b);
         assertEquals(a.hashCode(), b.hashCode());
     }

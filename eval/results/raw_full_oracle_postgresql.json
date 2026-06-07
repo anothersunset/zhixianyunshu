@@ -1,0 +1,65 @@
+{
+  "summary": {
+    "n": 5,
+    "sql_repair_rate": 1.0,
+    "report_accuracy": 1.0,
+    "recall@5": null
+  },
+  "rows": [
+    {
+      "id": "parrot-oracle-postgresql-21750",
+      "pair": "oracle->postgresql",
+      "difficulty": "unknown",
+      "sql_ok": true,
+      "report_acc": 1.0,
+      "recall@5": null,
+      "risk_level": "low",
+      "pred_sql": "SELECT * FROM table AS temp_superhero UNION ALL SELECT insert_and_return(10);",
+      "error": null
+    },
+    {
+      "id": "parrot-oracle-postgresql-21318",
+      "pair": "oracle->postgresql",
+      "difficulty": "unknown",
+      "sql_ok": true,
+      "report_acc": 1.0,
+      "recall@5": null,
+      "risk_level": "low",
+      "pred_sql": "SELECT *, MAX(amount) OVER (PARTITION BY account_id) AS \"max\" FROM loan",
+      "error": null
+    },
+    {
+      "id": "parrot-oracle-postgresql-20353",
+      "pair": "oracle->postgresql",
+      "difficulty": "unknown",
+      "sql_ok": true,
+      "report_acc": 1.0,
+      "recall@5": null,
+      "risk_level": "low",
+      "pred_sql": "ALTER TABLE account ALTER COLUMN \"date\" TYPE TIMESTAMP USING CAST(\"date\" AS TIMESTAMP);",
+      "error": null
+    },
+    {
+      "id": "parrot-oracle-postgresql-22651",
+      "pair": "oracle->postgresql",
+      "difficulty": "unknown",
+      "sql_ok": true,
+      "report_acc": 1.0,
+      "recall@5": null,
+      "risk_level": "low",
+      "pred_sql": "SELECT resultid FROM results WHERE driverid IN (3, 4) ORDER BY resultid DESC FETCH FIRST 10 ROWS ONLY",
+      "error": null
+    },
+    {
+      "id": "parrot-oracle-postgresql-23571",
+      "pair": "oracle->postgresql",
+      "difficulty": "unknown",
+      "sql_ok": true,
+      "report_acc": 1.0,
+      "recall@5": null,
+      "risk_level": "low",
+      "pred_sql": "SELECT id, name, JSONB_PATH_QUERY_ARRAY(CAST(skills AS JSONB), '$[*].description') AS skill FROM player_skills",
+      "error": null
+    }
+  ]
+}

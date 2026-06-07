@@ -35,6 +35,10 @@ public class LlmProperties {
     /** HTTP 全链路超时（秒）。 */
     private int timeoutSeconds = 60;
 
+    private boolean thinkingEnabled = true;
+
+    private String reasoningEffort = "high";
+
     public String getProvider() { return provider; }
     public void setProvider(String provider) { this.provider = provider; }
     public String getApiKey() { return apiKey; }
@@ -51,4 +55,8 @@ public class LlmProperties {
     public void setMaxTokens(int maxTokens) { this.maxTokens = maxTokens; }
     public int getTimeoutSeconds() { return timeoutSeconds; }
     public void setTimeoutSeconds(int timeoutSeconds) { this.timeoutSeconds = timeoutSeconds; }
+    public boolean isThinkingEnabled() { return thinkingEnabled; }
+    public void setThinkingEnabled(boolean thinkingEnabled) { this.thinkingEnabled = thinkingEnabled; }
+    public String getReasoningEffort() { return reasoningEffort; }
+    public void setReasoningEffort(String reasoningEffort) { this.reasoningEffort = reasoningEffort; }
 }

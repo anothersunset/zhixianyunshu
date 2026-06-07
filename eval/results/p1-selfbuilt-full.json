@@ -1,0 +1,47 @@
+{
+  "dataset": "selfbuilt",
+  "retrieval": "full",
+  "judge_model": "deepseek-v4-pro",
+  "judge_thinking_enabled": true,
+  "judge_reasoning_effort": "high",
+  "n": 18,
+  "sql_repair_rate": 1.0,
+  "report_accuracy": 0.9167,
+  "recall@5": 1.0,
+  "by_pair": {
+    "mysql_opengauss": {
+      "n": 6,
+      "sql_repair_rate": 1.0,
+      "report_accuracy": 0.75,
+      "recall@5": 1.0
+    },
+    "mysql_postgres": {
+      "n": 6,
+      "sql_repair_rate": 1.0,
+      "report_accuracy": 1.0,
+      "recall@5": 1.0
+    },
+    "oracle_pg": {
+      "n": 6,
+      "sql_repair_rate": 1.0,
+      "report_accuracy": 1.0,
+      "recall@5": 1.0
+    }
+  },
+  "failed_sql_cases": [],
+  "low_report_cases": [
+    {
+      "id": "mysql-og-001",
+      "pair": "mysql->opengauss",
+      "report_acc": 0.0,
+      "pred_sql": "SELECT IFNULL(name,'匿名') FROM users WHERE deleted=0"
+    },
+    {
+      "id": "mysql-og-004",
+      "pair": "mysql->opengauss",
+      "report_acc": 0.5,
+      "pred_sql": "CREATE TABLE t(id SERIAL PRIMARY KEY, amt DECIMAL(20,4))"
+    }
+  ],
+  "note": "Recall@5 is now computed against service returned kb-* ids after aligning retriever IDs with gold_context_ids."
+}

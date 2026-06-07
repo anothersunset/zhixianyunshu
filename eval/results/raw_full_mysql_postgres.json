@@ -1,0 +1,70 @@
+{
+  "summary": {
+    "n": 6,
+    "sql_repair_rate": 1.0,
+    "report_accuracy": 1.0,
+    "recall@5": 1.0
+  },
+  "rows": [
+    {
+      "id": "mysql-pg-001",
+      "pair": "mysql->postgresql",
+      "difficulty": "easy",
+      "sql_ok": true,
+      "report_acc": 1.0,
+      "recall@5": 1.0,
+      "risk_level": "low",
+      "pred_sql": "SELECT \"order\".id FROM \"order\""
+    },
+    {
+      "id": "mysql-pg-002",
+      "pair": "mysql->postgresql",
+      "difficulty": "easy",
+      "sql_ok": true,
+      "report_acc": 1.0,
+      "recall@5": 1.0,
+      "risk_level": "low",
+      "pred_sql": "SELECT COALESCE(price, 0) FROM goods"
+    },
+    {
+      "id": "mysql-pg-003",
+      "pair": "mysql->postgresql",
+      "difficulty": "medium",
+      "sql_ok": true,
+      "report_acc": 1.0,
+      "recall@5": 1.0,
+      "risk_level": "low",
+      "pred_sql": "CREATE TYPE u_status AS ENUM ('on', 'off');\nCREATE TABLE u (\n    id BIGSERIAL PRIMARY KEY,\n    status u_status\n);"
+    },
+    {
+      "id": "mysql-pg-004",
+      "pair": "mysql->postgresql",
+      "difficulty": "medium",
+      "sql_ok": true,
+      "report_acc": 1.0,
+      "recall@5": 1.0,
+      "risk_level": "low",
+      "pred_sql": "SELECT TO_CHAR(t, 'YYYY-MM-DD') FROM e"
+    },
+    {
+      "id": "mysql-pg-005",
+      "pair": "mysql->postgresql",
+      "difficulty": "hard",
+      "sql_ok": true,
+      "report_acc": 1.0,
+      "recall@5": 1.0,
+      "risk_level": "medium",
+      "pred_sql": "INSERT INTO stat (d, c) VALUES ('2026-01-01', 1) ON CONFLICT (d) DO UPDATE SET c = stat.c + EXCLUDED.c"
+    },
+    {
+      "id": "mysql-pg-006",
+      "pair": "mysql->postgresql",
+      "difficulty": "hard",
+      "sql_ok": true,
+      "report_acc": 1.0,
+      "recall@5": 1.0,
+      "risk_level": "low",
+      "pred_sql": "SELECT id FROM t WHERE name ~ '^a'"
+    }
+  ]
+}

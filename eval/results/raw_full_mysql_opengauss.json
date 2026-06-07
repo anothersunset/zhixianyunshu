@@ -1,0 +1,70 @@
+{
+  "summary": {
+    "n": 6,
+    "sql_repair_rate": 1.0,
+    "report_accuracy": 0.75,
+    "recall@5": 1.0
+  },
+  "rows": [
+    {
+      "id": "mysql-og-001",
+      "pair": "mysql->opengauss",
+      "difficulty": "easy",
+      "sql_ok": true,
+      "report_acc": 0.0,
+      "recall@5": 1.0,
+      "risk_level": "low",
+      "pred_sql": "SELECT IFNULL(name,'匿名') FROM users WHERE deleted=0"
+    },
+    {
+      "id": "mysql-og-002",
+      "pair": "mysql->opengauss",
+      "difficulty": "easy",
+      "sql_ok": true,
+      "report_acc": 1.0,
+      "recall@5": 1.0,
+      "risk_level": "low",
+      "pred_sql": "SELECT TO_CHAR(created_at, 'YYYY-MM') AS m FROM orders"
+    },
+    {
+      "id": "mysql-og-003",
+      "pair": "mysql->opengauss",
+      "difficulty": "medium",
+      "sql_ok": true,
+      "report_acc": 1.0,
+      "recall@5": 1.0,
+      "risk_level": "low",
+      "pred_sql": "SELECT id FROM logs ORDER BY id LIMIT 10 OFFSET 20"
+    },
+    {
+      "id": "mysql-og-004",
+      "pair": "mysql->opengauss",
+      "difficulty": "medium",
+      "sql_ok": true,
+      "report_acc": 0.5,
+      "recall@5": 1.0,
+      "risk_level": "low",
+      "pred_sql": "CREATE TABLE t(id SERIAL PRIMARY KEY, amt DECIMAL(20,4))"
+    },
+    {
+      "id": "mysql-og-005",
+      "pair": "mysql->opengauss",
+      "difficulty": "hard",
+      "sql_ok": true,
+      "report_acc": 1.0,
+      "recall@5": 1.0,
+      "risk_level": "low",
+      "pred_sql": "SELECT dept, string_agg(name, ',') FROM emp GROUP BY dept"
+    },
+    {
+      "id": "mysql-og-006",
+      "pair": "mysql->opengauss",
+      "difficulty": "hard",
+      "sql_ok": true,
+      "report_acc": 1.0,
+      "recall@5": 1.0,
+      "risk_level": "low",
+      "pred_sql": "INSERT INTO kv (k, v) VALUES ('a', 1) ON CONFLICT (k) DO UPDATE SET v = kv.v + 1;"
+    }
+  ]
+}
