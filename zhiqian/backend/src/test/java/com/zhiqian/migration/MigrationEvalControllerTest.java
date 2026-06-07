@@ -1,4 +1,4 @@
-﻿package com.zhiqian.migration;
+package com.zhiqian.migration;
 
 import com.zhiqian.llm.LlmClient;
 import org.junit.jupiter.api.Test;
