@@ -1,9 +1,9 @@
 {
   "summary": {
     "n": 6,
-    "sql_repair_rate": 0.8333,
-    "report_accuracy": 0.8333,
-    "recall@5": 0.0
+    "sql_repair_rate": 1.0,
+    "report_accuracy": 1.0,
+    "recall@5": 1.0
   },
   "rows": [
     {
@@ -12,19 +12,19 @@
       "difficulty": "easy",
       "sql_ok": true,
       "report_acc": 1.0,
-      "recall@5": 0.0,
+      "recall@5": 1.0,
       "risk_level": "low",
-      "pred_sql": "SELECT COALESCE(name, 'NA') FROM emp;"
+      "pred_sql": "SELECT COALESCE(name, 'NA') FROM emp"
     },
     {
       "id": "oracle-pg-002",
       "pair": "oracle->postgresql",
       "difficulty": "easy",
-      "sql_ok": false,
+      "sql_ok": true,
       "report_acc": 1.0,
-      "recall@5": 0.0,
+      "recall@5": 1.0,
       "risk_level": "low",
-      "pred_sql": "SELECT LOCALTIMESTAMP;"
+      "pred_sql": "SELECT CURRENT_TIMESTAMP;"
     },
     {
       "id": "oracle-pg-003",
@@ -32,7 +32,7 @@
       "difficulty": "medium",
       "sql_ok": true,
       "report_acc": 1.0,
-      "recall@5": 0.0,
+      "recall@5": 1.0,
       "risk_level": "low",
       "pred_sql": "SELECT * FROM emp LIMIT 10"
     },
@@ -42,7 +42,7 @@
       "difficulty": "medium",
       "sql_ok": true,
       "report_acc": 1.0,
-      "recall@5": 0.0,
+      "recall@5": 1.0,
       "risk_level": "low",
       "pred_sql": "SELECT CASE g WHEN 1 THEN '男' WHEN 2 THEN '女' ELSE '未知' END FROM person"
     },
@@ -51,8 +51,8 @@
       "pair": "oracle->postgresql",
       "difficulty": "hard",
       "sql_ok": true,
-      "report_acc": 0.5,
-      "recall@5": 0.0,
+      "report_acc": 1.0,
+      "recall@5": 1.0,
       "risk_level": "low",
       "pred_sql": "SELECT e.name, d.dname FROM emp e LEFT JOIN dept d ON e.dept_id = d.id"
     },
@@ -61,10 +61,10 @@
       "pair": "oracle->postgresql",
       "difficulty": "hard",
       "sql_ok": true,
-      "report_acc": 0.5,
-      "recall@5": 0.0,
+      "report_acc": 1.0,
+      "recall@5": 1.0,
       "risk_level": "low",
-      "pred_sql": "SELECT SUBSTR(code,1,3) || '-' || SUBSTR(code,4) FROM acct"
+      "pred_sql": "SELECT SUBSTRING(code FROM 1 FOR 3) || '-' || SUBSTRING(code FROM 4) FROM acct"
     }
   ]
 }

@@ -43,7 +43,7 @@ class MigrationEvalControllerTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.target_sql").value("SELECT COALESCE(name,'anonymous') FROM users WHERE deleted=0"))
             .andExpect(jsonPath("$.report_points[0]").value("IFNULL is equivalent to COALESCE"))
-            .andExpect(jsonPath("$.retrieved_ids.length()").value(5))
+            .andExpect(jsonPath("$.retrieved_ids[0]").value("kb-func-ifnull"))
             .andExpect(jsonPath("$.raw.real").value(true))
             .andExpect(jsonPath("$.raw.stages.length()").value(6));
     }

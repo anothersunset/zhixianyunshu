@@ -5,64 +5,43 @@
   "judge_thinking_enabled": true,
   "judge_reasoning_effort": "high",
   "n": 18,
-  "sql_repair_rate": 0.8889,
-  "report_accuracy": 0.8889,
-  "recall@5": 0.0,
+  "sql_repair_rate": 1.0,
+  "report_accuracy": 0.9167,
+  "recall@5": 1.0,
   "by_pair": {
     "mysql_opengauss": {
       "n": 6,
       "sql_repair_rate": 1.0,
-      "report_accuracy": 0.9167,
-      "recall@5": 0.0
+      "report_accuracy": 0.75,
+      "recall@5": 1.0
     },
     "mysql_postgres": {
       "n": 6,
-      "sql_repair_rate": 0.8333,
-      "report_accuracy": 0.9167,
-      "recall@5": 0.0
+      "sql_repair_rate": 1.0,
+      "report_accuracy": 1.0,
+      "recall@5": 1.0
     },
     "oracle_pg": {
       "n": 6,
-      "sql_repair_rate": 0.8333,
-      "report_accuracy": 0.8333,
-      "recall@5": 0.0
+      "sql_repair_rate": 1.0,
+      "report_accuracy": 1.0,
+      "recall@5": 1.0
     }
   },
-  "failed_sql_cases": [
-    {
-      "id": "mysql-pg-003",
-      "pair": "mysql->postgresql",
-      "difficulty": "medium",
-      "pred_sql": "CREATE TABLE u (id BIGSERIAL PRIMARY KEY, status TEXT CHECK (status IN ('on', 'off')));"
-    },
-    {
-      "id": "oracle-pg-002",
-      "pair": "oracle->postgresql",
-      "difficulty": "easy",
-      "pred_sql": "SELECT LOCALTIMESTAMP;"
-    }
-  ],
+  "failed_sql_cases": [],
   "low_report_cases": [
+    {
+      "id": "mysql-og-001",
+      "pair": "mysql->opengauss",
+      "report_acc": 0.0,
+      "pred_sql": "SELECT IFNULL(name,'匿名') FROM users WHERE deleted=0"
+    },
     {
       "id": "mysql-og-004",
       "pair": "mysql->opengauss",
-      "report_acc": 0.5
-    },
-    {
-      "id": "mysql-pg-003",
-      "pair": "mysql->postgresql",
-      "report_acc": 0.5
-    },
-    {
-      "id": "oracle-pg-005",
-      "pair": "oracle->postgresql",
-      "report_acc": 0.5
-    },
-    {
-      "id": "oracle-pg-006",
-      "pair": "oracle->postgresql",
-      "report_acc": 0.5
+      "report_acc": 0.5,
+      "pred_sql": "CREATE TABLE t(id SERIAL PRIMARY KEY, amt DECIMAL(20,4))"
     }
   ],
-  "note": "recall@5 is 0.0 because service retrieved_ids currently use static og-spec ids that do not align with gold_context_ids; interpret as an ID alignment issue pending retrieval audit, not as SQL generation failure."
+  "note": "Recall@5 is now computed against service returned kb-* ids after aligning retriever IDs with gold_context_ids."
 }

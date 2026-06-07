@@ -1,9 +1,9 @@
 {
   "summary": {
     "n": 6,
-    "sql_repair_rate": 0.8333,
-    "report_accuracy": 0.9167,
-    "recall@5": 0.0
+    "sql_repair_rate": 1.0,
+    "report_accuracy": 1.0,
+    "recall@5": 1.0
   },
   "rows": [
     {
@@ -12,9 +12,9 @@
       "difficulty": "easy",
       "sql_ok": true,
       "report_acc": 1.0,
-      "recall@5": 0.0,
+      "recall@5": 1.0,
       "risk_level": "low",
-      "pred_sql": "SELECT \"order\".\"id\" FROM \"order\""
+      "pred_sql": "SELECT \"order\".id FROM \"order\""
     },
     {
       "id": "mysql-pg-002",
@@ -22,7 +22,7 @@
       "difficulty": "easy",
       "sql_ok": true,
       "report_acc": 1.0,
-      "recall@5": 0.0,
+      "recall@5": 1.0,
       "risk_level": "low",
       "pred_sql": "SELECT COALESCE(price, 0) FROM goods"
     },
@@ -30,11 +30,11 @@
       "id": "mysql-pg-003",
       "pair": "mysql->postgresql",
       "difficulty": "medium",
-      "sql_ok": false,
-      "report_acc": 0.5,
-      "recall@5": 0.0,
+      "sql_ok": true,
+      "report_acc": 1.0,
+      "recall@5": 1.0,
       "risk_level": "low",
-      "pred_sql": "CREATE TABLE u (id BIGSERIAL PRIMARY KEY, status TEXT CHECK (status IN ('on', 'off')));"
+      "pred_sql": "CREATE TYPE u_status AS ENUM ('on', 'off');\nCREATE TABLE u (\n    id BIGSERIAL PRIMARY KEY,\n    status u_status\n);"
     },
     {
       "id": "mysql-pg-004",
@@ -42,7 +42,7 @@
       "difficulty": "medium",
       "sql_ok": true,
       "report_acc": 1.0,
-      "recall@5": 0.0,
+      "recall@5": 1.0,
       "risk_level": "low",
       "pred_sql": "SELECT TO_CHAR(t, 'YYYY-MM-DD') FROM e"
     },
@@ -52,9 +52,9 @@
       "difficulty": "hard",
       "sql_ok": true,
       "report_acc": 1.0,
-      "recall@5": 0.0,
-      "risk_level": "low",
-      "pred_sql": "INSERT INTO stat(d,c) VALUES('2026-01-01',1) ON CONFLICT (d) DO UPDATE SET c = stat.c + excluded.c"
+      "recall@5": 1.0,
+      "risk_level": "medium",
+      "pred_sql": "INSERT INTO stat (d, c) VALUES ('2026-01-01', 1) ON CONFLICT (d) DO UPDATE SET c = stat.c + EXCLUDED.c"
     },
     {
       "id": "mysql-pg-006",
@@ -62,7 +62,7 @@
       "difficulty": "hard",
       "sql_ok": true,
       "report_acc": 1.0,
-      "recall@5": 0.0,
+      "recall@5": 1.0,
       "risk_level": "low",
       "pred_sql": "SELECT id FROM t WHERE name ~ '^a'"
     }
