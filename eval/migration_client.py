@@ -36,6 +36,7 @@ class MigrationClient:
             or os.environ.get("ZHIQIAN_RAG_URL")
             or "http://localhost:8080"
         )
+        self.allow_mock = os.environ.get("ZHIQIAN_ALLOW_MOCK_EVAL", "").lower() in {"1", "true", "yes"}
 
     def run_migration(self, *, source_sql: str, pair: str, retrieval: str) -> MigrationResult:
         endpoint = self.base_url.rstrip("/") + "/migrate"
@@ -43,6 +44,12 @@ class MigrationClient:
         resp = requests.post(endpoint, json=payload, timeout=120)
         resp.raise_for_status()
         data = resp.json()
+        if data.get("raw", {}).get("real") is False and not self.allow_mock:
+            raise RuntimeError(
+                "Migration service is running with mock LLM output. "
+                "Set LLM_API_KEY in zhiqian/deploy/.env and restart backend before real eval. "
+                "For smoke tests only, set ZHIQIAN_ALLOW_MOCK_EVAL=1."
+            )
         return MigrationResult(
             target_sql=data.get("target_sql", ""),
             report_points=data.get("report_points", []),
