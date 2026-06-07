@@ -36,12 +36,13 @@ class MigrationClient:
             or os.environ.get("ZHIQIAN_RAG_URL")
             or "http://localhost:8080"
         )
+        self.timeout_seconds = float(os.environ.get("ZHIQIAN_MIGRATE_TIMEOUT", "300"))
         self.allow_mock = os.environ.get("ZHIQIAN_ALLOW_MOCK_EVAL", "").lower() in {"1", "true", "yes"}
 
     def run_migration(self, *, source_sql: str, pair: str, retrieval: str) -> MigrationResult:
         endpoint = self.base_url.rstrip("/") + "/migrate"
         payload = {"source_sql": source_sql, "pair": pair, "retrieval": retrieval}
-        resp = requests.post(endpoint, json=payload, timeout=120)
+        resp = requests.post(endpoint, json=payload, timeout=self.timeout_seconds)
         resp.raise_for_status()
         data = resp.json()
         if data.get("raw", {}).get("real") is False and not self.allow_mock:

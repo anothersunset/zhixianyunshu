@@ -1,0 +1,68 @@
+{
+  "dataset": "selfbuilt",
+  "retrieval": "full",
+  "judge_model": "deepseek-v4-pro",
+  "judge_thinking_enabled": true,
+  "judge_reasoning_effort": "high",
+  "n": 18,
+  "sql_repair_rate": 0.8889,
+  "report_accuracy": 0.8889,
+  "recall@5": 0.0,
+  "by_pair": {
+    "mysql_opengauss": {
+      "n": 6,
+      "sql_repair_rate": 1.0,
+      "report_accuracy": 0.9167,
+      "recall@5": 0.0
+    },
+    "mysql_postgres": {
+      "n": 6,
+      "sql_repair_rate": 0.8333,
+      "report_accuracy": 0.9167,
+      "recall@5": 0.0
+    },
+    "oracle_pg": {
+      "n": 6,
+      "sql_repair_rate": 0.8333,
+      "report_accuracy": 0.8333,
+      "recall@5": 0.0
+    }
+  },
+  "failed_sql_cases": [
+    {
+      "id": "mysql-pg-003",
+      "pair": "mysql->postgresql",
+      "difficulty": "medium",
+      "pred_sql": "CREATE TABLE u (id BIGSERIAL PRIMARY KEY, status TEXT CHECK (status IN ('on', 'off')));"
+    },
+    {
+      "id": "oracle-pg-002",
+      "pair": "oracle->postgresql",
+      "difficulty": "easy",
+      "pred_sql": "SELECT LOCALTIMESTAMP;"
+    }
+  ],
+  "low_report_cases": [
+    {
+      "id": "mysql-og-004",
+      "pair": "mysql->opengauss",
+      "report_acc": 0.5
+    },
+    {
+      "id": "mysql-pg-003",
+      "pair": "mysql->postgresql",
+      "report_acc": 0.5
+    },
+    {
+      "id": "oracle-pg-005",
+      "pair": "oracle->postgresql",
+      "report_acc": 0.5
+    },
+    {
+      "id": "oracle-pg-006",
+      "pair": "oracle->postgresql",
+      "report_acc": 0.5
+    }
+  ],
+  "note": "recall@5 is 0.0 because service retrieved_ids currently use static og-spec ids that do not align with gold_context_ids; interpret as an ID alignment issue pending retrieval audit, not as SQL generation failure."
+}
