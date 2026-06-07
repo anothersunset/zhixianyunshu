@@ -11,22 +11,29 @@ class LLMJudge:
     def __init__(self, model: str | None = None):
         from openai import OpenAI
 
-        self.model = model or os.environ.get("JUDGE_MODEL", "deepseek-chat")
+        self.model = model or os.environ.get("JUDGE_MODEL", "deepseek-v4-pro")
+        self.thinking_enabled = os.environ.get("JUDGE_THINKING_ENABLED", "true").lower() in {"1", "true", "yes"}
+        self.reasoning_effort = os.environ.get("JUDGE_REASONING_EFFORT", "high")
         self.client = OpenAI(
             api_key=os.environ["JUDGE_API_KEY"],
             base_url=os.environ.get("JUDGE_BASE_URL", "https://api.deepseek.com"),
         )
 
     def _ask_json(self, system: str, user: str) -> dict[str, Any]:
-        resp = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
+        params: dict[str, Any] = {
+            "model": self.model,
+            "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            temperature=0,
-            response_format={"type": "json_object"},
-        )
+            "response_format": {"type": "json_object"},
+        }
+        if self.model.lower().startswith("deepseek-v4") and self.thinking_enabled:
+            params["reasoning_effort"] = self.reasoning_effort
+            params["extra_body"] = {"thinking": {"type": "enabled"}}
+        else:
+            params["temperature"] = 0
+        resp = self.client.chat.completions.create(**params)
         return json.loads(resp.choices[0].message.content)
 
     def sql_semantically_equal(self, pred: str, gold: str, target: str) -> bool:

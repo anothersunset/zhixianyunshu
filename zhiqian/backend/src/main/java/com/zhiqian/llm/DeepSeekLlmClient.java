@@ -57,17 +57,25 @@ public class DeepSeekLlmClient implements LlmClient {
 
     @Override
     public String chat(List<ChatMessage> messages) {
-        return callModel(props.getChatModel(), messages, "llm.chat");
+        return callModel(props.getChatModel(), messages, "llm.chat", false);
     }
 
     @Override
     public String reason(String userPrompt) {
-        return callModel(props.getReasonerModel(), List.of(new ChatMessage("user", userPrompt)), "llm.reason");
+        return callModel(props.getReasonerModel(), List.of(new ChatMessage("user", userPrompt)), "llm.reason", true);
     }
 
-    private String callModel(String model, List<ChatMessage> messages, String genName) {
+    private String callModel(String model, List<ChatMessage> messages, String genName, boolean reasoningCall) {
+        boolean deepSeekV4 = model != null && model.toLowerCase().startsWith("deepseek-v4");
+        boolean enableThinking = reasoningCall && deepSeekV4 && props.isThinkingEnabled();
         ChatRequestPayload payload = new ChatRequestPayload(
-                model, messages, props.getTemperature(), props.getMaxTokens(), false);
+                model,
+                messages,
+                enableThinking ? null : props.getTemperature(),
+                props.getMaxTokens(),
+                false,
+                enableThinking ? Map.of("type", "enabled") : null,
+                enableThinking ? blankToNull(props.getReasoningEffort()) : null);
         Instant start = Instant.now();
         try {
             ChatCompletionResponse resp = client.post()
@@ -91,6 +99,11 @@ public class DeepSeekLlmClient implements LlmClient {
                     "[ERROR] " + e.getMessage(), null, null);
             throw new IllegalStateException("LLM 调用失败:" + e.getMessage(), e);
         }
+    }
+
+    private String blankToNull(String value) {
+        if (value == null || value.isBlank()) return null;
+        return value;
     }
 
     private void attachToCurrentTrace(String name, String model, Instant start, Instant end,

@@ -26,20 +26,23 @@ class MigrationEvalControllerTest {
     void migrateRunsAgentGraphAndReturnsEvaluationShapeWhenRealLlm() throws Exception {
         when(llm.isReal()).thenReturn(true);
         when(llm.providerName()).thenReturn("deepseek");
-        when(llm.reason(anyString())).thenReturn("rewrite IFNULL to COALESCE");
-        when(llm.chat(anyString())).thenReturn("""
-            {"target_sql":"SELECT COALESCE(name,'匿名') FROM users WHERE deleted=0",
-             "report_points":["IFNULL 等价于 COALESCE"],
+        when(llm.reason(anyString()))
+            .thenReturn("rewrite IFNULL to COALESCE")
+            .thenReturn("critic passed")
+            .thenReturn("""
+            {"target_sql":"SELECT COALESCE(name,'anonymous') FROM users WHERE deleted=0",
+             "report_points":["IFNULL is equivalent to COALESCE"],
              "risk_level":"low",
              "confidence":0.72}
             """);
+        when(llm.chat(anyString())).thenReturn("stage summary");
 
         mvc.perform(post("/migrate")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"source_sql\":\"SELECT IFNULL(name,'匿名') FROM users WHERE deleted=0\",\"pair\":\"mysql->opengauss\",\"retrieval\":\"full\"}"))
+                .content("{\"source_sql\":\"SELECT IFNULL(name,'anonymous') FROM users WHERE deleted=0\",\"pair\":\"mysql->opengauss\",\"retrieval\":\"full\"}"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.target_sql").value("SELECT COALESCE(name,'匿名') FROM users WHERE deleted=0"))
-            .andExpect(jsonPath("$.report_points[0]").value("IFNULL 等价于 COALESCE"))
+            .andExpect(jsonPath("$.target_sql").value("SELECT COALESCE(name,'anonymous') FROM users WHERE deleted=0"))
+            .andExpect(jsonPath("$.report_points[0]").value("IFNULL is equivalent to COALESCE"))
             .andExpect(jsonPath("$.retrieved_ids.length()").value(5))
             .andExpect(jsonPath("$.raw.real").value(true))
             .andExpect(jsonPath("$.raw.stages.length()").value(6));

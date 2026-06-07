@@ -1,13 +1,12 @@
 package com.zhiqian.llm;
 
+import com.zhiqian.observability.LangfuseClient;
+import com.zhiqian.observability.LangfuseProperties;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/**
- * v2-step-17: LlmClientFactory 按 api-key 选 real/mock 的分支逻辑。
- * 补充说明: 生产环境无 DEEPSEEK_API_KEY 时, /api/llm/chat 需能走 mock 不报错。
- */
 class LlmClientFactoryTest {
 
     @Test
@@ -15,11 +14,9 @@ class LlmClientFactoryTest {
         LlmProperties p = new LlmProperties();
         p.setProvider("deepseek");
         p.setApiKey("");
-        LlmClientFactory factory = new LlmClientFactory(p);
-        LlmClient client = factory.build();
+        LlmClient client = build(p);
         assertNotNull(client);
-        assertTrue(client instanceof MockLlmClient,
-            "empty api-key 应走 MockLlmClient, actual: " + client.getClass().getSimpleName());
+        assertTrue(client instanceof MockLlmClient);
     }
 
     @Test
@@ -27,8 +24,7 @@ class LlmClientFactoryTest {
         LlmProperties p = new LlmProperties();
         p.setProvider("deepseek");
         p.setApiKey(null);
-        LlmClientFactory factory = new LlmClientFactory(p);
-        LlmClient client = factory.build();
+        LlmClient client = build(p);
         assertNotNull(client);
         assertTrue(client instanceof MockLlmClient);
     }
@@ -39,15 +35,17 @@ class LlmClientFactoryTest {
         p.setProvider("deepseek");
         p.setApiKey("sk-fake-key-for-test");
         p.setBaseUrl("https://api.deepseek.com");
-        p.setChatModel("deepseek-chat");
-        p.setReasonerModel("deepseek-reasoner");
+        p.setChatModel("deepseek-v4-pro");
+        p.setReasonerModel("deepseek-v4-pro");
         p.setTemperature(0.2);
         p.setMaxTokens(1024);
         p.setTimeoutSeconds(30);
-        LlmClientFactory factory = new LlmClientFactory(p);
-        LlmClient client = factory.build();
+        LlmClient client = build(p);
         assertNotNull(client);
-        assertTrue(client instanceof DeepSeekLlmClient,
-            "实 key 应走 DeepSeekLlmClient, actual: " + client.getClass().getSimpleName());
+        assertTrue(client instanceof DeepSeekLlmClient);
+    }
+
+    private LlmClient build(LlmProperties p) {
+        return new LlmClientFactory().llmClient(p, new LangfuseClient(new LangfuseProperties()));
     }
 }

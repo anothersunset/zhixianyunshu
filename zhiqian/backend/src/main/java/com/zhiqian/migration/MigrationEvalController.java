@@ -134,7 +134,7 @@ public class MigrationEvalController {
             AgentGraph stage summaries:
             %s
             """.formatted(pair, retrieval, sourceSql, retrievedIds, toJson(stages));
-        String reply = llm.chat(prompt);
+        String reply = llm.reason(prompt);
         return parseJsonObject(reply);
     }
 
