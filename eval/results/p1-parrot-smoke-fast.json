@@ -1,0 +1,43 @@
+{
+  "dataset": "PARROT smoke-fast",
+  "source_dataset": "weizhoudb/PARROT parrot_diverse.json",
+  "retrieval": "full",
+  "sample_policy": "deterministic shortest 5 mysql->postgresql and 5 oracle->postgresql from converted PARROT rows",
+  "migration_model": "deepseek-v4-flash",
+  "migration_thinking_enabled": false,
+  "judge_model": "deepseek-v4-flash",
+  "judge_thinking_enabled": false,
+  "n": 10,
+  "sql_repair_rate": 0.8,
+  "report_accuracy": 1.0,
+  "recall@5": null,
+  "by_pair": {
+    "mysql_postgresql": {
+      "n": 5,
+      "sql_repair_rate": 0.6,
+      "report_accuracy": 1.0,
+      "recall@5": null
+    },
+    "oracle_postgresql": {
+      "n": 5,
+      "sql_repair_rate": 1.0,
+      "report_accuracy": 1.0,
+      "recall@5": null
+    }
+  },
+  "failed_sql_cases": [
+    {
+      "id": "parrot-mysql-postgresql-25145",
+      "pair": "mysql->postgresql",
+      "pred_sql": "DO $$ DECLARE current_time timestamp := TIMESTAMP '2022-12-01 12:40:00'; END $$;",
+      "error": null
+    },
+    {
+      "id": "parrot-mysql-postgresql-22998",
+      "pair": "mysql->postgresql",
+      "pred_sql": "SELECT TO_CHAR(CreationDate, 'FMHH24:MI:SS') FROM comments",
+      "error": null
+    }
+  ],
+  "note": "Smoke-fast validates PARROT adapter and external-set execution path. It is not a full PARROT benchmark and should not be compared to public AccEX/AccRES baselines."
+}

@@ -141,17 +141,24 @@ public class MigrationEvalController {
     private Map<String, Object> parseJsonObject(String reply) {
         try {
             JsonNode node = mapper.readTree(extractJson(reply));
+            if (node == null || !node.isObject()) {
+                return parseFallback("LLM returned JSON that is not an object.", reply, null);
+            }
             return mapper.convertValue(node, new TypeReference<>() {});
         } catch (Exception e) {
-            Map<String, Object> fallback = new LinkedHashMap<>();
-            fallback.put("target_sql", "");
-            fallback.put("report_points", List.of("LLM returned non-JSON output; result requires manual review."));
-            fallback.put("risk_level", "high");
-            fallback.put("confidence", null);
-            fallback.put("parse_error", e.getMessage());
-            fallback.put("raw_reply", reply);
-            return fallback;
+            return parseFallback("LLM returned non-JSON output; result requires manual review.", reply, e.getMessage());
         }
+    }
+
+    private Map<String, Object> parseFallback(String message, String reply, String parseError) {
+        Map<String, Object> fallback = new LinkedHashMap<>();
+        fallback.put("target_sql", "");
+        fallback.put("report_points", List.of(message));
+        fallback.put("risk_level", "high");
+        fallback.put("confidence", null);
+        if (parseError != null) fallback.put("parse_error", parseError);
+        fallback.put("raw_reply", reply);
+        return fallback;
     }
 
     private String extractJson(String reply) {

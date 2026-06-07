@@ -43,20 +43,36 @@ def load_dataset(path: str, pair: str) -> list[dict]:
 def evaluate(cases, retrieval, client, judge=None):
     rows = []
     for c in cases:
-        res = client.run_migration(source_sql=c["source_sql"], pair=c["pair"], retrieval=retrieval)
         target = _target_db(c["pair"])
-        ok = sql_equivalent(res.target_sql, c["gold_target_sql"], target)
-        if not ok and judge is not None:
-            ok = judge.sql_semantically_equal(res.target_sql, c["gold_target_sql"], target)
+        try:
+            res = client.run_migration(source_sql=c["source_sql"], pair=c["pair"], retrieval=retrieval)
+            ok = sql_equivalent(res.target_sql, c["gold_target_sql"], target)
+            if not ok and judge is not None:
+                ok = judge.sql_semantically_equal(res.target_sql, c["gold_target_sql"], target)
+            report_acc = report_point_hit_rate(res.report_points, c.get("gold_report_points", []), judge)
+            recall = recall_at_k(res.retrieved_ids, c.get("gold_context_ids", []), k=5)
+            if recall != recall:
+                recall = None
+            risk_level = res.risk_level
+            pred_sql = res.target_sql
+            error = None
+        except Exception as exc:
+            ok = False
+            report_acc = 0.0 if c.get("gold_report_points") else 1.0
+            recall = None
+            risk_level = "error"
+            pred_sql = ""
+            error = str(exc)
         rows.append({
             "id": c["id"],
             "pair": c["pair"],
             "difficulty": c.get("difficulty"),
             "sql_ok": bool(ok),
-            "report_acc": report_point_hit_rate(res.report_points, c.get("gold_report_points", []), judge),
-            "recall@5": recall_at_k(res.retrieved_ids, c.get("gold_context_ids", []), k=5),
-            "risk_level": res.risk_level,
-            "pred_sql": res.target_sql,
+            "report_acc": report_acc,
+            "recall@5": recall,
+            "risk_level": risk_level,
+            "pred_sql": pred_sql,
+            "error": error,
         })
     return rows
 
@@ -67,7 +83,7 @@ def summarize(rows):
         return {"n": 0}
     sql_rate = sum(1 for r in rows if r["sql_ok"]) / n
     report_acc = sum(r["report_acc"] for r in rows) / n
-    recs = [r["recall@5"] for r in rows if r["recall@5"] == r["recall@5"]]  # 去 nan
+    recs = [r["recall@5"] for r in rows if r["recall@5"] is not None]
     recall = sum(recs) / len(recs) if recs else None
     return {
         "n": n,
