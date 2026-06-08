@@ -68,7 +68,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(a -> a
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/actuator/**").permitAll()
-                .requestMatchers(HttpMethod.POST, "/migrate", "/api/migrate").permitAll()
+                .requestMatchers(HttpMethod.POST, "/migrate", "/api/migrate", "/judge", "/api/judge").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/tasks/*/stream").permitAll()
                 .requestMatchers("/.well-known/**").permitAll()  // A2A Agent Card
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()  // Swagger UI

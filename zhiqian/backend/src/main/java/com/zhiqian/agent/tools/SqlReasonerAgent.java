@@ -18,11 +18,16 @@ public class SqlReasonerAgent implements AgentTool {
     @Override public String description() { return "结合检索上下文推理 SQL 改写思路"; }
     @Override public Map<String, Object> run(AgentContext ctx, Map<String, Object> input) {
         Object summary = input.getOrDefault("summary", "");
-        String prompt = "你是高级 DBA。基于以下迁移风险总结，生成 3 条具体可执行的修改思路（中文，一句一条）：\n\n" + summary;
+        String sourceSql = String.valueOf(ctx.state().getOrDefault("source_sql", ""));
+        String pair = String.valueOf(ctx.state().getOrDefault("pair", "mysql->opengauss"));
+        String prompt = "你是 " + pair + " 高级 DBA。\n"
+            + "原始 SQL：\n" + sourceSql + "\n\n"
+            + "分析结果：\n" + summary + "\n\n"
+            + "结合原始 SQL 和分析结果，生成具体可执行的修改思路（中文，一条一个改动）：";
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("risk_units", 14);
         if (llm.isReal()) {
-            String reply = llm.reason(prompt);
+            String reply = llm.chat(prompt);
             out.put("reasoning", reply);
             out.put("_confidence", 0.84);
             out.put("_real", true);

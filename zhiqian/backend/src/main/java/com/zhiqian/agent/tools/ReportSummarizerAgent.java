@@ -18,7 +18,12 @@ public class ReportSummarizerAgent implements AgentTool {
     @Override public Map<String, Object> run(AgentContext ctx, Map<String, Object> input) {
         Object summary = input.getOrDefault("summary", "");
         Object critique = input.getOrDefault("critique", "");
-        String prompt = "生成一份迁移报告（markdown，中文，含概述/风险/修改/验证建议四节）：\n\n风险总结：" + summary + "\n\n评审意见：" + critique;
+        String sourceSql = String.valueOf(ctx.state().getOrDefault("source_sql", ""));
+        String pair = String.valueOf(ctx.state().getOrDefault("pair", "mysql->opengauss"));
+        String prompt = "生成一份 " + pair + " 迁移报告（markdown，中文，含概述/风险/修改/验证建议四节）：\n\n"
+            + "原始 SQL：" + sourceSql + "\n\n"
+            + "分析结果：" + summary + "\n\n"
+            + "评审意见：" + critique;
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("report_url", "/api/reports/task-" + ctx.taskId() + ".md");
         if (llm.isReal()) {

@@ -76,29 +76,44 @@ public class DeepSeekLlmClient implements LlmClient {
                 false,
                 enableThinking ? Map.of("type", "enabled") : null,
                 enableThinking ? blankToNull(props.getReasoningEffort()) : null);
-        Instant start = Instant.now();
-        try {
-            ChatCompletionResponse resp = client.post()
-                    .uri("/chat/completions")
-                    .body(payload)
-                    .retrieve()
-                    .body(ChatCompletionResponse.class);
-            Instant end = Instant.now();
-            if (resp == null || resp.choices() == null || resp.choices().isEmpty()) {
-                throw new IllegalStateException("LLM 返回为空");
+
+        int maxRetries = 3;
+        long baseBackoffMs = 2000;
+        RestClientException lastException = null;
+        for (int attempt = 0; attempt <= maxRetries; attempt++) {
+            Instant start = Instant.now();
+            try {
+                ChatCompletionResponse resp = client.post()
+                        .uri("/chat/completions")
+                        .body(payload)
+                        .retrieve()
+                        .body(ChatCompletionResponse.class);
+                Instant end = Instant.now();
+                if (resp == null || resp.choices() == null || resp.choices().isEmpty()) {
+                    throw new IllegalStateException("LLM 返回为空");
+                }
+                String content = resp.choices().get(0).message().content();
+                Integer pt = (resp.usage() == null) ? null : resp.usage().prompt_tokens();
+                Integer ct = (resp.usage() == null) ? null : resp.usage().completion_tokens();
+                log.debug("[LLM] model={}, prompt-tokens={}, completion-tokens={}", model, pt, ct);
+                attachToCurrentTrace(genName, model, start, end, messages, content, pt, ct);
+                return content;
+            } catch (RestClientException e) {
+                lastException = e;
+                if (attempt < maxRetries) {
+                    long waitMs = baseBackoffMs * (1L << attempt);
+                    log.warn("[LLM] 调用失败 (attempt={}/{}), {}ms 后重试: {}", attempt + 1, maxRetries + 1, waitMs, e.getMessage());
+                    try { Thread.sleep(waitMs); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+                }
             }
-            String content = resp.choices().get(0).message().content();
-            Integer pt = (resp.usage() == null) ? null : resp.usage().prompt_tokens();
-            Integer ct = (resp.usage() == null) ? null : resp.usage().completion_tokens();
-            log.debug("[LLM] model={}, prompt-tokens={}, completion-tokens={}", model, pt, ct);
-            attachToCurrentTrace(genName, model, start, end, messages, content, pt, ct);
-            return content;
-        } catch (RestClientException e) {
-            log.error("[LLM] 调用失败 model={}, base-url={}, error={}", model, props.getBaseUrl(), e.getMessage());
-            attachToCurrentTrace(genName + ".error", model, start, Instant.now(), messages,
-                    "[ERROR] " + e.getMessage(), null, null);
-            throw new IllegalStateException("LLM 调用失败:" + e.getMessage(), e);
         }
+        log.error("[LLM] 调用最终失败 model={}, base-url={}, error={}", model, props.getBaseUrl(),
+                lastException != null ? lastException.getMessage() : "unknown");
+        Instant startFallback = Instant.now();
+        attachToCurrentTrace(genName + ".error", model, startFallback, Instant.now(), messages,
+                "[ERROR] " + (lastException != null ? lastException.getMessage() : "unknown"), null, null);
+        throw new IllegalStateException("LLM 调用失败:" + (lastException != null ? lastException.getMessage() : "unknown"),
+                lastException);
     }
 
     private String blankToNull(String value) {

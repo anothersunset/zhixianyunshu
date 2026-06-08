@@ -39,20 +39,33 @@ public class SchemaAnalyzerAgent implements AgentTool {
     @Override public String name() { return "Schema Analyzer"; }
     @Override public String description() { return "扫描 MySQL 表结构、配置文件，识别与 openGauss 不兼容的元素"; }
     @Override public Map<String, Object> run(AgentContext ctx, Map<String, Object> input) {
-        String prompt = "你是 MySQL → openGauss 迁移专家。阅读以下 DDL，以 100 字以内总结 3 个最重要的迁移风险点（中文）。\n\n" + SAMPLE_SCHEMA;
+        Object sourceSql = input.getOrDefault("source_sql", "");
+        Object pair = input.getOrDefault("pair", "mysql->opengauss");
+        boolean hasRealSql = sourceSql instanceof String s && !s.isBlank();
+        String schemaToAnalyze = hasRealSql ? (String) sourceSql : SAMPLE_SCHEMA;
+        String prompt = "你是 " + pair + " 迁移专家。阅读以下 SQL/DDL，逐项列出其中所有需要迁移的函数、语法、类型（如 IFNULL、DATE_FORMAT、AUTO_INCREMENT、ENUM、DECIMAL、REGEXP、`backtick`、" +
+            "LIMIT offset,count、ON DUPLICATE KEY、SUBSTR、(+) 等），每条一行，不要遗漏。\n\n" + schemaToAnalyze;
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put("files", 312);
-        out.put("sqls", 78);
-        out.put("configs", 19);
+        out.put("files", hasRealSql ? 1 : 312);
+        out.put("sqls", hasRealSql ? 1 : 78);
+        out.put("configs", hasRealSql ? 1 : 19);
         if (llm.isReal()) {
             String reply = llm.chat(prompt);
             out.put("summary", reply);
-            out.put("risks", List.of("AUTO_INCREMENT 需转 SEQUENCE", "DATETIME 默认值语法不同", "JSON 类型需验证 jsonb 存储"));
+            if (hasRealSql) {
+                out.put("risks", List.of(reply));
+            } else {
+                out.put("risks", List.of("AUTO_INCREMENT 需转 SEQUENCE", "DATETIME 默认值语法不同", "JSON 类型需验证 jsonb 存储"));
+            }
             out.put("_confidence", 0.86);
             out.put("_real", true);
         } else {
-            out.put("summary", "识别到 312 个文件、共 78 条 SQL、19 份配置。主要风险：AUTO_INCREMENT / DATETIME 默认值 / JSON 存储。");
-            out.put("risks", List.of("AUTO_INCREMENT", "DATETIME default", "JSON column"));
+            out.put("summary", hasRealSql
+                ? "单条 SQL 分析：" + sourceSql
+                : "识别到 312 个文件、共 78 条 SQL、19 份配置。主要风险：AUTO_INCREMENT / DATETIME 默认值 / JSON 存储。");
+            out.put("risks", hasRealSql
+                ? List.of("需分析具体函数兼容性")
+                : List.of("AUTO_INCREMENT", "DATETIME default", "JSON column"));
             out.put("_confidence", 0.82);
             out.put("_real", false);
         }

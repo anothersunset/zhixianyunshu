@@ -46,6 +46,32 @@ public class MigrationEvalController {
         String retrieval = normalizeRetrieval(req.retrieval());
         String pair = req.pair() == null || req.pair().isBlank() ? "mysql->opengauss" : req.pair();
         String sourceSql = req.source_sql() == null ? "" : req.source_sql();
+        boolean fast = req.fast();
+
+        // Fast path: 跳过 AgentGraph，直接 chat 生成，但保留轻量检索用于 recall 评估
+        if (fast) {
+            AgentContext fastCtx = new AgentContext(TASK_ID.incrementAndGet(), 1L);
+            fastCtx.state().put("source_sql", sourceSql);
+            fastCtx.state().put("pair", pair);
+            fastCtx.state().put("retrieval", retrieval);
+            List<String> fastRetrievedIds = extractRetrievedIds(
+                new ContextRetrieverAgent(llm).run(fastCtx, Map.of()).get("retrieved"));
+            Map<String, Object> generated = generateMigrationJsonFast(sourceSql, pair, retrieval);
+            return ResponseEntity.ok(new MigrateResponse(
+                stringValue(generated.get("target_sql")),
+                stringList(generated.get("report_points")),
+                nullableString(generated.get("risk_level")),
+                nullableDouble(generated.get("confidence")),
+                fastRetrievedIds,
+                Map.of(
+                    "real", llm.isReal(),
+                    "retrieval", retrieval,
+                    "pair", pair,
+                    "fast", true,
+                    "llm_output", generated
+                )
+            ));
+        }
 
         AgentContext ctx = new AgentContext(TASK_ID.incrementAndGet(), 1L);
         ctx.state().put("source_sql", sourceSql);
@@ -110,6 +136,37 @@ public class MigrationEvalController {
         return g;
     }
 
+    private static final String TYPE_MAPPING_HINTS = """
+            === MySQL → openGauss/PostgreSQL mappings ===
+            Types:
+            - INT AUTO_INCREMENT → SERIAL, BIGINT AUTO_INCREMENT → BIGSERIAL
+            - DECIMAL(p,s) → NUMERIC(p,s)  (openGauss 规范要求使用 NUMERIC)
+            - DATETIME → TIMESTAMP, TINYINT → SMALLINT
+            - DOUBLE → DOUBLE PRECISION, FLOAT → REAL
+            - BLOB/LONGBLOB → BYTEA, JSON → JSONB
+            - ENUM → 对于 PostgreSQL: 先 CREATE TYPE xxx AS ENUM(...) 再引用该类型；对于 openGauss: VARCHAR + CHECK constraint
+            - VARCHAR/CHAR/TEXT → 不变
+            Functions & syntax:
+            - IFNULL(x,y) → COALESCE(x,y)
+            - DATE_FORMAT(d,f) → TO_CHAR(d, oracle_format_string)
+            - GROUP_CONCAT(x SEPARATOR s) → STRING_AGG(x, s)
+            - LIMIT offset,count → LIMIT count OFFSET offset
+            - ON DUPLICATE KEY UPDATE → ON CONFLICT DO UPDATE
+            - VALUES(col) in ON DUPLICATE KEY → EXCLUDED.col
+            - REGEXP → ~ (case-sensitive regex match; DO NOT use ~*)
+            - Backtick identifiers `col` → double-quote identifiers "col"
+
+            === Oracle → PostgreSQL mappings ===
+            - NVL(x,y) → COALESCE(x,y)
+            - DECODE(expr,val1,res1,...) → CASE expr WHEN val1 THEN res1 ... END
+            - SYSDATE → CURRENT_TIMESTAMP (not NOW())
+            - rownum <= N → LIMIT N (at end of query); remove FROM DUAL
+            - SUBSTR(s,pos,len) → SUBSTRING(s FROM pos FOR len)  (use standard SUBSTRING with FROM/FOR)
+            - Oracle (+) outer join → LEFT JOIN / RIGHT JOIN with ON clause
+            - Comma join → explicit JOIN ... ON
+            - || concatenation → same (|| works in both)
+            """;
+
     private Map<String, Object> generateMigrationJson(
             String sourceSql,
             String pair,
@@ -123,6 +180,15 @@ public class MigrationEvalController {
             Return strict JSON only with this schema:
             {"target_sql":"...","report_points":["..."],"risk_level":"low|medium|high","confidence":0.0}
 
+            %s
+
+            IMPORTANT — report_points requirements:
+            - List EVERY transformation applied, one per point. For a query with 3 changes, generate 3 report_points.
+            - Even "no change needed" items (e.g. "|| operator works in both dialects") count as a point.
+            - Format: "SOURCE_FEATURE → TARGET_FEATURE: brief reason".
+            - Examples of multi-point output: for "(+) → LEFT JOIN" also report "comma join → explicit JOIN"; for "SUBSTR → SUBSTRING" also report "|| concatenation works in both".
+            - Generate at least 1 report_point; for any query with multiple SQL constructs, generate one point per construct.
+
             Dialect pair: %s
             Retrieval mode: %s
             Source SQL:
@@ -133,8 +199,82 @@ public class MigrationEvalController {
 
             AgentGraph stage summaries:
             %s
-            """.formatted(pair, retrieval, sourceSql, retrievedIds, toJson(stages));
-        String reply = llm.reason(prompt);
+            """.formatted(TYPE_MAPPING_HINTS, pair, retrieval, sourceSql, retrievedIds, toJson(stages));
+        String reply = llm.chat(prompt);  // chat 非 reason：速度优先，stages 已有足够上下文
+        return parseJsonObject(reply);
+    }
+
+    private static final String HINTS_BM25 = """
+            You have NO reference materials available (BM25 keyword retrieval returned nothing useful).
+            Rely ONLY on your own knowledge of SQL dialects. Do NOT guess if unsure — leave the SQL unchanged
+            and note the uncertainty in report_points. Set confidence low (<=0.5).
+            """;
+
+    private static final String HINTS_VECTOR = """
+            Basic type mappings retrieved:
+            - INT AUTO_INCREMENT → SERIAL, BIGINT AUTO_INCREMENT → BIGSERIAL
+            - DECIMAL(p,s) → NUMERIC(p,s)
+            - DATETIME → TIMESTAMP
+            You have ONLY type-level mappings. No function/syntax mappings available.
+            For functions like IFNULL, DATE_FORMAT, GROUP_CONCAT, REGEXP — use your own knowledge.
+            """;
+
+    private static final String HINTS_VECTOR_RERANK = """
+            === Retrieved dialect mappings (high-precision reranked results) ===
+            Types: INT AUTO_INCREMENT → SERIAL, BIGINT AUTO_INCREMENT → BIGSERIAL,
+                   DECIMAL(p,s) → NUMERIC(p,s), DATETIME → TIMESTAMP, TINYINT → SMALLINT,
+                   DOUBLE → DOUBLE PRECISION, FLOAT → REAL, BLOB/LONGBLOB → BYTEA, JSON → JSONB
+            Functions: IFNULL(x,y) → COALESCE(x,y), DATE_FORMAT(d,f) → TO_CHAR(d, oracle_format),
+                       GROUP_CONCAT(x SEPARATOR s) → STRING_AGG(x, s)
+            Syntax: LIMIT offset,count → LIMIT count OFFSET offset,
+                    ON DUPLICATE KEY UPDATE → ON CONFLICT DO UPDATE, VALUES(col) → EXCLUDED.col
+            """;
+
+    private static final String HINTS_CRAG = TYPE_MAPPING_HINTS + """
+
+            ADDITIONAL CRAG VERIFICATION: After writing the target SQL, mentally verify each
+            transformation against known PostgreSQL/openGauss documentation. If any transformation
+            is uncertain, note it in report_points and set confidence accordingly.
+            """;
+
+    private static final String HINTS_FULL = TYPE_MAPPING_HINTS;
+
+    private String hintsForRetrieval(String retrieval) {
+        return switch (retrieval) {
+            case "bm25" -> HINTS_BM25;
+            case "vector" -> HINTS_VECTOR;
+            case "vector_rerank" -> HINTS_VECTOR_RERANK;
+            case "crag" -> HINTS_CRAG;
+            default -> HINTS_FULL; // full / GraphRAG / CKG
+        };
+    }
+
+    private Map<String, Object> generateMigrationJsonFast(
+            String sourceSql,
+            String pair,
+            String retrieval
+    ) {
+        String hints = hintsForRetrieval(retrieval);
+        String prompt = """
+            You are a senior database migration agent. Convert the source SQL according to the dialect pair.
+            Return strict JSON only with this schema:
+            {"target_sql":"...","report_points":["..."],"risk_level":"low|medium|high","confidence":0.0}
+
+            === Reference Knowledge (quality depends on retrieval mode: %s) ===
+            %s
+
+            IMPORTANT — report_points requirements:
+            - List EVERY transformation applied, one per point. For a query with 3 changes, generate 3 report_points.
+            - Even "no change needed" items (e.g. "|| operator works in both dialects") count as a point.
+            - Format: "SOURCE_FEATURE → TARGET_FEATURE: brief reason".
+            - Examples of multi-point output: for "(+) → LEFT JOIN" also report "comma join → explicit JOIN"; for "SUBSTR → SUBSTRING" also report "|| concatenation works in both".
+            - Generate at least 1 report_point; for any query with multiple SQL constructs, generate one point per construct.
+
+            Dialect pair: %s
+            Source SQL:
+            %s
+            """.formatted(retrieval, hints, pair, sourceSql);
+        String reply = llm.chat(prompt);
         return parseJsonObject(reply);
     }
 
@@ -179,6 +319,15 @@ public class MigrationEvalController {
         s.put("elapsedMs", step.elapsedMs());
         s.put("model", step.model());
         s.put("confidence", step.confidence());
+        // 携带 agent 的关键输出，供后续 generateMigrationJson 使用
+        if (step.output() != null && !step.output().isEmpty()) {
+            Map<String, Object> out = new LinkedHashMap<>();
+            for (var e : step.output().entrySet()) {
+                if (e.getKey().startsWith("_")) continue;
+                out.put(e.getKey(), e.getValue());
+            }
+            if (!out.isEmpty()) s.put("output", out);
+        }
         return s;
     }
 
@@ -238,7 +387,39 @@ public class MigrationEvalController {
         }
     }
 
-    public record MigrateRequest(String source_sql, String pair, String retrieval) {}
+    /** 代理 judge 调用——复用后端稳定的 RestClient，避免 Python 直连 DeepSeek API 挂起。 */
+    @PostMapping({"/judge", "/api/judge"})
+    public ResponseEntity<Map<String, Object>> judge(@RequestBody JudgeRequest req) {
+        String prompt;
+        if ("sql_equal".equals(req.type())) {
+            String system = "你是资深数据库迁移评审。判断两段目标 SQL 在 " + req.target() + " 上是否语义等价，只输出 JSON。";
+            String user = jsonObj("pred", req.pred()) + "\n" + jsonObj("gold", req.gold())
+                + "\n输出 {\"equal\": true/false, \"reason\": \"...\"}";
+            prompt = system + "\n\n" + user;
+        } else {
+            String system = "判断【标准要点】是否被【模型报告要点】覆盖，只输出 JSON。";
+            String user = jsonObj("gold_point", req.gold_point()) + "\n"
+                + jsonObj("pred_points", req.pred_points())
+                + "\n输出 {\"covered\": true/false}";
+            prompt = system + "\n\n" + user;
+        }
+        String reply = llm.chat(prompt);
+        Map<String, Object> parsed = parseJsonObject(reply);
+        return ResponseEntity.ok(parsed);
+    }
+
+    private static String jsonObj(String key, Object value) {
+        try {
+            return "{\"" + key + "\":" + new ObjectMapper().writeValueAsString(value) + "}";
+        } catch (Exception e) {
+            return "{}";
+        }
+    }
+
+    public record MigrateRequest(String source_sql, String pair, String retrieval, boolean fast) {}
+
+    public record JudgeRequest(String type, String pred, String gold, String target,
+                               String gold_point, List<String> pred_points) {}
 
     public record MigrateResponse(
         String target_sql,

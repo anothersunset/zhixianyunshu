@@ -18,7 +18,12 @@ public class SqlPatcherAgent implements AgentTool {
     @Override public String description() { return "生成可应用的 SQL 补丁 diff"; }
     @Override public Map<String, Object> run(AgentContext ctx, Map<String, Object> input) {
         Object reasoning = input.getOrDefault("reasoning", "");
-        String prompt = "根据以下修改思路，输出 MySQL→openGauss 补丁的示例（仅输出代码块，不要解释）：\n\n" + reasoning;
+        String sourceSql = String.valueOf(ctx.state().getOrDefault("source_sql", ""));
+        String pair = String.valueOf(ctx.state().getOrDefault("pair", "mysql->opengauss"));
+        String prompt = "你是 " + pair + " 迁移工程师。\n"
+            + "原始 SQL：\n" + sourceSql + "\n\n"
+            + "修改思路：\n" + reasoning + "\n\n"
+            + "请输出完整的目标 SQL（仅输出 SQL 代码块，不要解释）：";
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("patches", 12);
         out.put("review_required", 2);

@@ -1,8 +1,9 @@
-﻿"""P1 评测主入口（单组）。
+"""P1 评测主入口（单组）。
 
 用法：
   python -m eval.run_eval --retrieval full --pair all --use-judge
   python -m eval.run_eval --retrieval bm25 --pair mysql_opengauss
+  python -m eval.run_eval --retrieval full --pair mysql_opengauss --use-judge --fast --parallel 3
 """
 from __future__ import annotations
 
@@ -10,6 +11,7 @@ import argparse
 import glob
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from eval.judge import LLMJudge
@@ -20,7 +22,6 @@ RETRIEVAL_CHOICES = ["bm25", "vector", "vector_rerank", "crag", "full"]
 
 
 def _target_db(pair: str) -> str:
-    # 'mysql->opengauss' / 'oracle->postgresql' -> 取箭头后的目标库。
     tail = pair.split("->")[-1] if "->" in pair else pair.split("_")[-1]
     return tail.strip()
 
@@ -40,40 +41,50 @@ def load_dataset(path: str, pair: str) -> list[dict]:
     return cases
 
 
-def evaluate(cases, retrieval, client, judge=None):
-    rows = []
-    for c in cases:
-        target = _target_db(c["pair"])
-        try:
-            res = client.run_migration(source_sql=c["source_sql"], pair=c["pair"], retrieval=retrieval)
-            ok = sql_equivalent(res.target_sql, c["gold_target_sql"], target)
-            if not ok and judge is not None:
-                ok = judge.sql_semantically_equal(res.target_sql, c["gold_target_sql"], target)
-            report_acc = report_point_hit_rate(res.report_points, c.get("gold_report_points", []), judge)
-            recall = recall_at_k(res.retrieved_ids, c.get("gold_context_ids", []), k=5)
-            if recall != recall:
-                recall = None
-            risk_level = res.risk_level
-            pred_sql = res.target_sql
-            error = None
-        except Exception as exc:
-            ok = False
-            report_acc = 0.0 if c.get("gold_report_points") else 1.0
+def _eval_one(c, retrieval, client, judge, fast):
+    """评估单个 case（供并行调用）。"""
+    target = _target_db(c["pair"])
+    try:
+        res = client.run_migration(source_sql=c["source_sql"], pair=c["pair"], retrieval=retrieval, fast=fast)
+        ok = sql_equivalent(res.target_sql, c["gold_target_sql"], target)
+        if not ok and judge is not None:
+            ok = judge.sql_semantically_equal(res.target_sql, c["gold_target_sql"], target)
+        report_acc = report_point_hit_rate(res.report_points, c.get("gold_report_points", []), judge)
+        recall = recall_at_k(res.retrieved_ids, c.get("gold_context_ids", []), k=5)
+        if recall != recall:
             recall = None
-            risk_level = "error"
-            pred_sql = ""
-            error = str(exc)
-        rows.append({
-            "id": c["id"],
-            "pair": c["pair"],
-            "difficulty": c.get("difficulty"),
-            "sql_ok": bool(ok),
-            "report_acc": report_acc,
-            "recall@5": recall,
-            "risk_level": risk_level,
-            "pred_sql": pred_sql,
-            "error": error,
-        })
+        risk_level = res.risk_level
+        pred_sql = res.target_sql
+        error = None
+    except Exception as exc:
+        ok = False
+        report_acc = 0.0 if c.get("gold_report_points") else 1.0
+        recall = None
+        risk_level = "error"
+        pred_sql = ""
+        error = str(exc)
+    return {
+        "id": c["id"],
+        "pair": c["pair"],
+        "difficulty": c.get("difficulty"),
+        "sql_ok": bool(ok),
+        "report_acc": report_acc,
+        "recall@5": recall,
+        "risk_level": risk_level,
+        "pred_sql": pred_sql,
+        "error": error,
+    }
+
+
+def evaluate(cases, retrieval, client, judge=None, fast=False, parallel=1):
+    if parallel <= 1:
+        rows = [_eval_one(c, retrieval, client, judge, fast) for c in cases]
+    else:
+        rows = [None] * len(cases)
+        with ThreadPoolExecutor(max_workers=parallel) as ex:
+            futures = {ex.submit(_eval_one, c, retrieval, client, judge, fast): i for i, c in enumerate(cases)}
+            for f in as_completed(futures):
+                rows[futures[f]] = f.result()
     return rows
 
 
@@ -99,17 +110,24 @@ def main():
     ap.add_argument("--pair", default="all")
     ap.add_argument("--dataset", default="eval/datasets")
     ap.add_argument("--use-judge", action="store_true")
+    ap.add_argument("--fast", action="store_true",
+                    help="跳过 AgentGraph，直接用 chat-model 单次生成（大幅加速 eval 迭代）")
+    ap.add_argument("--parallel", type=int, default=1,
+                    help="并行评估的并发数（默认 1 即串行）")
     ap.add_argument("--out", default="eval/results")
     args = ap.parse_args()
 
     cases = load_dataset(args.dataset, args.pair)
     client = MigrationClient()
     judge = LLMJudge() if args.use_judge else None
-    rows = evaluate(cases, args.retrieval, client, judge)
+    if args.fast:
+        print(f"Fast mode: {len(cases)} cases, parallel={args.parallel}")
+    rows = evaluate(cases, args.retrieval, client, judge, fast=args.fast, parallel=args.parallel)
     summary = summarize(rows)
 
     Path(args.out).mkdir(parents=True, exist_ok=True)
-    out_file = os.path.join(args.out, "raw_" + args.retrieval + "_" + args.pair + ".json")
+    suffix = "_fast" if args.fast else ""
+    out_file = os.path.join(args.out, "raw_" + args.retrieval + "_" + args.pair + suffix + ".json")
     with open(out_file, "w", encoding="utf-8") as fh:
         json.dump({"summary": summary, "rows": rows}, fh, ensure_ascii=False, indent=2)
     print(json.dumps(summary, ensure_ascii=False))

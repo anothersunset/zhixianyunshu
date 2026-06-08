@@ -17,11 +17,16 @@ public class SqlCriticAgent implements AgentTool {
     @Override public String description() { return "反思与评审补丁正确性"; }
     @Override public Map<String, Object> run(AgentContext ctx, Map<String, Object> input) {
         Object patch = input.getOrDefault("patch_preview", "");
-        String prompt = "评审以下 SQL 补丁，指出 1-2 个要人工复查的点（中文、简短）：\n\n" + patch;
+        String sourceSql = String.valueOf(ctx.state().getOrDefault("source_sql", ""));
+        String pair = String.valueOf(ctx.state().getOrDefault("pair", "mysql->opengauss"));
+        String prompt = "你是 " + pair + " 代码评审专家。\n"
+            + "原始 SQL：\n" + sourceSql + "\n\n"
+            + "目标补丁：\n" + patch + "\n\n"
+            + "对比原始和目标，指出 1-2 个需要人工复查的点（中文、简短）：";
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("scripts", 18);
         if (llm.isReal()) {
-            String reply = llm.reason(prompt);
+            String reply = llm.chat(prompt);
             out.put("critique", reply);
             out.put("_confidence", 0.92);
             out.put("_real", true);
