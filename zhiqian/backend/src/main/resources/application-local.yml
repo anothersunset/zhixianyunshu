@@ -1,0 +1,51 @@
+# 本地开发 profile：H2 内存数据库 + 真实 LLM
+spring:
+  datasource:
+    url: jdbc:h2:mem:zhiqian_local;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;DATABASE_TO_UPPER=false;CASE_INSENSITIVE_IDENTIFIERS=true
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+  flyway:
+    enabled: false
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema-h2.sql
+
+app:
+  jwt:
+    secret: local-dev-secret-key-must-be-long-enough-32+
+    ttl-minutes: 60
+  admin:
+    password: admin123
+  rag:
+    base-url: ${APP_RAG_BASE_URL:http://localhost:8001}
+  llm:
+    provider: ${LLM_PROVIDER:deepseek}
+    api-key: ${LLM_API_KEY:}
+    base-url: ${LLM_BASE_URL:https://api.deepseek.com/v1}
+    chat-model: ${LLM_CHAT_MODEL:deepseek-chat}
+    reasoner-model: ${LLM_REASONER_MODEL:deepseek-reasoner}
+    temperature: ${LLM_TEMPERATURE:0.2}
+    max-tokens: ${LLM_MAX_TOKENS:4096}
+    timeout-seconds: ${LLM_TIMEOUT_SECONDS:60}
+    thinking-enabled: ${LLM_THINKING_ENABLED:false}
+    reasoning-effort: ${LLM_REASONING_EFFORT:}
+  langfuse:
+    enabled: false
+    host: https://cloud.langfuse.com
+    public-key: ""
+    secret-key: ""
+  temporal:
+    enabled: false
+
+logging:
+  level:
+    root: INFO
+    com.zhiqian: DEBUG
+  file:
+    name: logs/zhiqian-backend.log
+  logback:
+    rollingpolicy:
+      max-file-size: 10MB
+      max-history: 5

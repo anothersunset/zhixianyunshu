@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import logging
+import traceback
 
 from app.core.observability import get_langfuse
 
@@ -17,6 +18,7 @@ class RetrieveReq(BaseModel):
     query: str
     top_k: int = 5
     filters: Optional[Dict[str, Any]] = None
+    mode: str = "full"  # bm25 / vector / vector_rerank / crag / full
 
 
 class RetrieveItem(BaseModel):
@@ -41,18 +43,24 @@ def _retriever():
 
 @router.post("", response_model=RetrieveResp)
 async def retrieve(req: RetrieveReq, r=Depends(_retriever)) -> RetrieveResp:
-    lf = get_langfuse()
-    with lf.trace(
-        "rag.retrieve_api",
-        input={"query": req.query, "top_k": req.top_k, "collection": req.collection},
-        tags=["retrieve"],
-    ) as tr:
-        chunks = r.search(
-            req.query,
-            top_k=req.top_k,
-            filters=req.filters,
-            parent_trace=tr,
-        )
-        tr.output({"items": len(chunks), "ids": [c.get("id") for c in chunks]})
-    items = [RetrieveItem(**{k: v for k, v in c.items() if k in RetrieveItem.model_fields}) for c in chunks]
-    return RetrieveResp(items=items, capabilities=r.capabilities())
+    try:
+        lf = get_langfuse()
+        with lf.trace(
+            "rag.retrieve_api",
+            input={"query": req.query, "top_k": req.top_k, "collection": req.collection, "mode": req.mode},
+            tags=["retrieve"],
+        ) as tr:
+            chunks = r.search(
+                req.query,
+                top_k=req.top_k,
+                filters=req.filters,
+                mode=req.mode,
+                parent_trace=tr,
+            )
+            tr.output({"items": len(chunks), "ids": [c.get("id") for c in chunks]})
+        items = [RetrieveItem(**{k: v for k, v in c.items() if k in RetrieveItem.model_fields}) for c in chunks]
+        return RetrieveResp(items=items, capabilities=r.capabilities())
+    except Exception as e:
+        log.error("[retrieve] 请求处理失败: %s\n%s", e, traceback.format_exc())
+        # 返回空结果而非崩溃，让调用方降级到 BM25
+        return RetrieveResp(items=[], capabilities=r.capabilities() if hasattr(r, "capabilities") else {})

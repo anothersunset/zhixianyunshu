@@ -19,7 +19,8 @@ class ContextRetrieverAgentTest {
         ctx.state().put("pair", "mysql->opengauss");
         ctx.state().put("retrieval", "full");
 
-        Map<String, Object> out = new ContextRetrieverAgent(new MockLlmClient()).run(ctx, Map.of());
+        // 传 null ragUrl 强制走 mock KB，避免测试依赖 RAG 服务状态
+        Map<String, Object> out = new ContextRetrieverAgent(new MockLlmClient(), null).run(ctx, Map.of());
         List<String> ids = ids(out);
 
         assertTrue(ids.contains("kb-func-ifnull"), ids.toString());
@@ -34,7 +35,7 @@ class ContextRetrieverAgentTest {
         ctx.state().put("pair", "mysql->postgresql");
         ctx.state().put("retrieval", "full");
 
-        Map<String, Object> out = new ContextRetrieverAgent(new MockLlmClient()).run(ctx, Map.of());
+        Map<String, Object> out = new ContextRetrieverAgent(new MockLlmClient(), null).run(ctx, Map.of());
         List<String> ids = ids(out);
 
         assertTrue(ids.contains("kb-type-autoincrement"), ids.toString());

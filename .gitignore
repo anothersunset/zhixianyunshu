@@ -36,4 +36,16 @@ Thumbs.db
 
 # Data
 zhiqian/rag/data/
+zhiqian/rag/storage/
 zhiqian/deploy/volumes/
+
+# Logs
+zhiqian/backend/logs/
+*.gz
+
+# Lock files
+*.lock
+!eval/results/.gitkeep
+
+# Qdrant init marker
+zhiqian/rag/.qdrant-initialized

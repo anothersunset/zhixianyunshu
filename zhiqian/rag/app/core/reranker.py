@@ -41,13 +41,18 @@ class CrossEncoderReranker:
     def _load(self):
         if self._model is not None:
             return self._model
-        from FlagEmbedding import FlagReranker
-        log.info("[Reranker] 加载模型 path=%s use_fp16=%s", self.model_path, self.use_fp16)
-        kwargs = {"use_fp16": self.use_fp16}
-        if self.device:
-            kwargs["devices"] = [self.device]
-        self._model = FlagReranker(self.model_path, **kwargs)
-        return self._model
+        try:
+            from FlagEmbedding import FlagReranker
+            log.info("[Reranker] 加载模型 path=%s use_fp16=%s", self.model_path, self.use_fp16)
+            kwargs = {"use_fp16": self.use_fp16}
+            if self.device:
+                kwargs["devices"] = [self.device]
+            self._model = FlagReranker(self.model_path, **kwargs)
+            return self._model
+        except Exception as e:
+            log.warning("[Reranker] 模型加载失败，退化为原顺序截断: %s", e)
+            self._available = False
+            return None
 
     def rerank(self, query: str, candidates: List[str], top_n: int = 5) -> List[Tuple[int, float]]:
         """返回 [(原始下标, score), …] 按 score 倒序、最多 top_n。"""
@@ -56,6 +61,8 @@ class CrossEncoderReranker:
         if not self.available:
             return [(i, 1.0 - i * 0.01) for i in range(min(top_n, len(candidates)))]
         m = self._load()
+        if m is None:
+            return [(i, 1.0 - i * 0.01) for i in range(min(top_n, len(candidates)))]
         pairs = [[query, c] for c in candidates]
         raw = m.compute_score(pairs, normalize=True)
         if not isinstance(raw, list):

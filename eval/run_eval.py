@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import glob
 import json
+import math
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -41,21 +42,33 @@ def load_dataset(path: str, pair: str) -> list[dict]:
     return cases
 
 
-def _eval_one(c, retrieval, client, judge, fast):
+def _eval_one(c, retrieval, client, judge, fast, skip_throttle=False):
     """评估单个 case（供并行调用）。"""
     target = _target_db(c["pair"])
     try:
-        res = client.run_migration(source_sql=c["source_sql"], pair=c["pair"], retrieval=retrieval, fast=fast)
-        ok = sql_equivalent(res.target_sql, c["gold_target_sql"], target)
-        if not ok and judge is not None:
-            ok = judge.sql_semantically_equal(res.target_sql, c["gold_target_sql"], target)
-        report_acc = report_point_hit_rate(res.report_points, c.get("gold_report_points", []), judge)
-        recall = recall_at_k(res.retrieved_ids, c.get("gold_context_ids", []), k=5)
-        if recall != recall:
-            recall = None
-        risk_level = res.risk_level
-        pred_sql = res.target_sql
-        error = None
+        res = client.run_migration(source_sql=c["source_sql"], pair=c["pair"], retrieval=retrieval, fast=fast, skip_throttle=skip_throttle)
+        # 检测 LLM 解析失败（后端 parseFallback 返回 target_sql=""）
+        parse_failed = not res.target_sql and res.risk_level == "high"
+        if parse_failed:
+            ok = False
+            report_acc = 0.0
+            recall = recall_at_k(res.retrieved_ids, c.get("gold_context_ids", []), k=5)
+            if recall is not None and math.isnan(recall):
+                recall = None
+            risk_level = "parse_failed"
+            pred_sql = ""
+            error = "LLM returned non-JSON output"
+        else:
+            ok = sql_equivalent(res.target_sql, c["gold_target_sql"], target)
+            if not ok and judge is not None:
+                ok = judge.sql_semantically_equal(res.target_sql, c["gold_target_sql"], target)
+            report_acc = report_point_hit_rate(res.report_points, c.get("gold_report_points", []), judge)
+            recall = recall_at_k(res.retrieved_ids, c.get("gold_context_ids", []), k=5)
+            if recall is not None and math.isnan(recall):
+                recall = None
+            risk_level = res.risk_level
+            pred_sql = res.target_sql
+            error = None
     except Exception as exc:
         ok = False
         report_acc = 0.0 if c.get("gold_report_points") else 1.0
@@ -76,15 +89,57 @@ def _eval_one(c, retrieval, client, judge, fast):
     }
 
 
-def evaluate(cases, retrieval, client, judge=None, fast=False, parallel=1):
+def evaluate(cases, retrieval, client, judge=None, fast=False, parallel=1,
+              on_progress=None, checkpoint_path=None, checkpoint_base_rows=None):
+    """on_progress(done_rows): 每完成一批 case 后回调，用于增量保存 checkpoint。
+    checkpoint_path: 直接写文件的路径（比 on_progress 回调更可靠）。
+    checkpoint_base_rows: 断点续跑时已有的 rows，合并后写入 checkpoint。
+    """
+    import sys as _sys
+    n = len(cases)
+    base_rows = checkpoint_base_rows or []
+    _ckpt_path = checkpoint_path  # local ref
+
+    def _flush_checkpoint(current_rows):
+        """直接写 checkpoint 文件（原子写入：先写 .tmp 再 rename，防崩溃丢文件）。"""
+        all_rows = base_rows + current_rows
+        if _ckpt_path:
+            try:
+                data = {"summary": summarize(all_rows), "rows": all_rows}
+                tmp_path = _ckpt_path + ".tmp"
+                with open(tmp_path, "w", encoding="utf-8") as fh:
+                    json.dump(data, fh, ensure_ascii=False, indent=2)
+                os.replace(tmp_path, _ckpt_path)  # 原子替换
+                print(f"  [ckpt] wrote {len(all_rows)} rows", flush=True)
+                _sys.stdout.flush()
+            except Exception as e:
+                print(f"  [ckpt] WRITE ERROR: {e}", flush=True)
+                _sys.stdout.flush()
+
     if parallel <= 1:
-        rows = [_eval_one(c, retrieval, client, judge, fast) for c in cases]
+        rows = []
+        for i, c in enumerate(cases):
+            r = _eval_one(c, retrieval, client, judge, fast)
+            rows.append(r)
+            tag = "OK" if r["sql_ok"] else "FAIL"
+            err_info = f" [{r['error'][:60]}]" if r.get("error") else ""
+            print(f"  [{i+1}/{n}] {tag} {r['id']} ({r['pair']}){err_info}", flush=True)
+            # 每个 case 完成后立即保存 checkpoint（防止崩溃丢数据）
+            _flush_checkpoint(rows)
     else:
-        rows = [None] * len(cases)
+        rows = [None] * n
+        done = 0
         with ThreadPoolExecutor(max_workers=parallel) as ex:
             futures = {ex.submit(_eval_one, c, retrieval, client, judge, fast): i for i, c in enumerate(cases)}
             for f in as_completed(futures):
-                rows[futures[f]] = f.result()
+                idx = futures[f]
+                r = f.result()
+                rows[idx] = r
+                done += 1
+                tag = "OK" if r["sql_ok"] else "FAIL"
+                err_info = f" [{r['error'][:60]}]" if r.get("error") else ""
+                print(f"  [{done}/{n}] {tag} {r['id']} ({r['pair']}){err_info}", flush=True)
+                _flush_checkpoint([x for x in rows if x is not None])
     return rows
 
 
@@ -114,11 +169,13 @@ def main():
                     help="跳过 AgentGraph，直接用 chat-model 单次生成（大幅加速 eval 迭代）")
     ap.add_argument("--parallel", type=int, default=1,
                     help="并行评估的并发数（默认 1 即串行）")
+    ap.add_argument("--cooldown", type=float, default=None,
+                    help="两次请求之间的最小间隔秒数（防后端过载，默认 3）")
     ap.add_argument("--out", default="eval/results")
     args = ap.parse_args()
 
     cases = load_dataset(args.dataset, args.pair)
-    client = MigrationClient()
+    client = MigrationClient(cooldown=args.cooldown)
     judge = LLMJudge() if args.use_judge else None
     if args.fast:
         print(f"Fast mode: {len(cases)} cases, parallel={args.parallel}")
@@ -130,7 +187,7 @@ def main():
     out_file = os.path.join(args.out, "raw_" + args.retrieval + "_" + args.pair + suffix + ".json")
     with open(out_file, "w", encoding="utf-8") as fh:
         json.dump({"summary": summary, "rows": rows}, fh, ensure_ascii=False, indent=2)
-    print(json.dumps(summary, ensure_ascii=False))
+    print(json.dumps(summary, ensure_ascii=False), flush=True)
 
 
 if __name__ == "__main__":

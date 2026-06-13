@@ -14,5 +14,6 @@ transformers==4.44.2
 sentencepiece==0.2.0
 FlagEmbedding==1.2.11
 accelerate==0.34.2
+peft>=0.7.0
 # 可选：Qdrant 客户端（step 5 会用到）
 qdrant-client==1.11.3

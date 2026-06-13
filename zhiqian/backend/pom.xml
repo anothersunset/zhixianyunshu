@@ -150,11 +150,11 @@
             <version>${temporal.version}</version>
             <scope>test</scope>
         </dependency>
-        <!-- v2-step-17: H2 in-memory DB for unit / WebMvc tests -->
+        <!-- H2 in-memory DB for local profile and tests -->
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
-            <scope>test</scope>
+            <scope>runtime</scope>
         </dependency>
         <!-- v2-step-17: Testcontainers for integration tests with real PostgreSQL -->
         <dependency>

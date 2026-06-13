@@ -27,6 +27,9 @@ sqlglot==25.16.1
 # 不装也能跑: CRAG 降级为仅本地 doc, web_search 节点返 []
 duckduckgo-search==6.2.10
 
+# 稳定性：进程内存监控
+psutil>=5.9.0
+
 # v2-step-15: JSON Schema 验证 (轻量 ~80KB 纯 Python)
 # StructuredOutputClient 下游可用 jsonschema 验证 LLM JSON 输出
 jsonschema==4.23.0

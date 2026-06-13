@@ -27,7 +27,8 @@ class Settings(BaseSettings):
     use_qdrant: bool = True
     qdrant_url: str = "http://qdrant:6333"
     qdrant_api_key: str = ""
-    rrf_k: int = 60
+    rrf_k: int = 15  # Reduced from 60 to 15 to reward top-ranked documents more
+    rrf_channel_weights: str = "1.0,1.0,0.5"  # BM25, Dense, Sparse 权重 (Sparse weight reduced)
 
     # v2-step-06: Chunking
     # 默认策略 semantic；/ingest 请求可在单次调用中覆盖

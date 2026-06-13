@@ -1,5 +1,10 @@
 server:
   port: 8080
+  tomcat:
+    connection-timeout: 300000   # 5min — 单次 migrate 请求可能包含 6 阶段 × 多次 LLM 调用
+    threads:
+      max: 32                    # Tomcat 线程减少，实际 LLM 工作在 migrateExecutor 线程池
+    accept-count: 200            # 排队队列加长，防止连接被拒
   servlet:
     encoding:
       charset: UTF-8

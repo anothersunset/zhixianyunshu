@@ -13,6 +13,10 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -30,6 +34,8 @@ import java.util.Map;
 public class DeepSeekLlmClient implements LlmClient {
 
     private static final Logger log = LoggerFactory.getLogger(DeepSeekLlmClient.class);
+    private static final ObjectMapper OM = new ObjectMapper()
+            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
     private final LlmProperties props;
     private final RestClient client;
@@ -77,17 +83,23 @@ public class DeepSeekLlmClient implements LlmClient {
                 enableThinking ? Map.of("type", "enabled") : null,
                 enableThinking ? blankToNull(props.getReasoningEffort()) : null);
 
-        int maxRetries = 3;
+        int maxRetries = 2;
         long baseBackoffMs = 2000;
         RestClientException lastException = null;
         for (int attempt = 0; attempt <= maxRetries; attempt++) {
             Instant start = Instant.now();
             try {
-                ChatCompletionResponse resp = client.post()
+                // 用 exchange() 手动读取原始响应体，彻底绕过 content-type 匹配
+                // （mimo API 间歇返回 application/octet-stream，导致所有 MessageConverter 都失败）
+                String raw = client.post()
                         .uri("/chat/completions")
                         .body(payload)
-                        .retrieve()
-                        .body(ChatCompletionResponse.class);
+                        .exchange((req, resp) -> {
+                            try (var is = resp.getBody()) {
+                                return new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                            }
+                        });
+                ChatCompletionResponse resp = OM.readValue(raw, ChatCompletionResponse.class);
                 Instant end = Instant.now();
                 if (resp == null || resp.choices() == null || resp.choices().isEmpty()) {
                     throw new IllegalStateException("LLM 返回为空");
@@ -98,8 +110,13 @@ public class DeepSeekLlmClient implements LlmClient {
                 log.debug("[LLM] model={}, prompt-tokens={}, completion-tokens={}", model, pt, ct);
                 attachToCurrentTrace(genName, model, start, end, messages, content, pt, ct);
                 return content;
-            } catch (RestClientException e) {
-                lastException = e;
+            } catch (RestClientException | JsonProcessingException e) {
+                lastException = e instanceof RestClientException rce ? rce : new RestClientException(e.getMessage(), e);
+                // 429 Too Many Requests 不重试（限流时重试只会更糟）
+                if (e.getMessage() != null && e.getMessage().contains("429")) {
+                    log.warn("[LLM] 429 限流，不重试: {}", e.getMessage());
+                    break;
+                }
                 if (attempt < maxRetries) {
                     long waitMs = baseBackoffMs * (1L << attempt);
                     log.warn("[LLM] 调用失败 (attempt={}/{}), {}ms 后重试: {}", attempt + 1, maxRetries + 1, waitMs, e.getMessage());

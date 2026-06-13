@@ -43,7 +43,7 @@ class GlobalQueryReq(BaseModel):
 
 
 def _index_dep():
-    raise NotImplementedError("GraphRagIndex 未注入")
+    return None  # 默认无 index，由 app.dependency_overrides 注入
 
 
 @router.post("/index")
@@ -57,18 +57,20 @@ def index(req: IndexReq, index = Depends(_index_dep)):
 
 @router.post("/query/local")
 def query_local(req: LocalQueryReq, index = Depends(_index_dep)):
-    if not index.nodes:
+    if index is None or not index.nodes:
         raise HTTPException(409, "请先 POST /graphrag/index 建索引")
     return {"ok": True, **index.query_local(req.question, max_entities=req.max_entities, hop=req.hop)}
 
 
 @router.post("/query/global")
 def query_global(req: GlobalQueryReq, index = Depends(_index_dep)):
-    if not index.communities:
+    if index is None or not index.communities:
         raise HTTPException(409, "请先 POST /graphrag/index 建索引")
     return {"ok": True, **index.query_global(req.question, max_reports=req.max_reports)}
 
 
 @router.get("/stats")
 def stats(index = Depends(_index_dep)):
+    if index is None:
+        return {"ok": False, "error": "GraphRAG index not initialized"}
     return {"ok": True, **index.stats()}

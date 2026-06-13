@@ -72,6 +72,7 @@ class GraphRagIndex:
         self.nodes: Dict[str, GraphNode] = {}
         self.edges: List[GraphEdge] = []
         self.adj: Dict[str, Set[str]] = defaultdict(set)
+        self._edge_weights: Dict[Tuple[str, str], float] = {}  # (src,dst) → weight
         self.community_map: Dict[str, str] = {}              # node_id -> c-N
         self.communities: Dict[str, CommunityReport] = {}    # c-N -> report
         self.detector = CommunityDetector(max_community_size=max_community_size)
@@ -89,6 +90,7 @@ class GraphRagIndex:
         # 2. 装载 edges
         self.edges = []
         self.adj = defaultdict(set)
+        self._edge_weights = {}
         for e in edges:
             src, dst = str(e["src"]), str(e["dst"])
             if src not in self.nodes or dst not in self.nodes or src == dst:
@@ -98,6 +100,9 @@ class GraphRagIndex:
             self.edges.append(ed)
             self.adj[src].add(dst)
             self.adj[dst].add(src)
+            w = float(e.get("weight", 1.0))
+            self._edge_weights[(src, dst)] = w
+            self._edge_weights[(dst, src)] = w
         # 3. 社区检测
         node_types = {nid: nd.type for nid, nd in self.nodes.items()}
         self.community_map = self.detector.detect(
@@ -154,7 +159,8 @@ class GraphRagIndex:
 
     # ============ 查询 ============
 
-    def query_local(self, question: str, max_entities: int = 3, hop: int = 1) -> Dict[str, Any]:
+    def query_local(self, question: str, max_entities: int = 3, hop: int = 1,
+                    weight_threshold: float = 0.0) -> Dict[str, Any]:
         q_tokens = set(_tokenize(question))
         if not q_tokens:
             return {"entities": [], "context": "", "hits": []}
@@ -177,7 +183,10 @@ class GraphRagIndex:
         for _ in range(hop):
             nxt: Set[str] = set()
             for nid in frontier:
-                nxt |= self.adj.get(nid, set())
+                for nb in self.adj.get(nid, ()):
+                    w = self._edge_weights.get((nid, nb), 1.0)
+                    if w >= weight_threshold:
+                        nxt.add(nb)
             frontier = nxt - visited
             visited |= frontier
         # 拼接 context: 命中以 [HIT], 邻居 以 [NB]

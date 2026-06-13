@@ -1,12 +1,11 @@
 package com.zhiqian.ckg;
 
+import com.zhiqian.security.JwtService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
-import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.hamcrest.Matchers.greaterThan;
@@ -18,13 +17,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 验证 GET /api/ckg/graph 返 demo 图的 13 节点 + 10 边。
  */
 @WebMvcTest(controllers = CkgGraphController.class)
-@Import(CkgGraphControllerWebMvcTest.SecurityBypassConfig.class)
+@AutoConfigureMockMvc(addFilters = false)
 class CkgGraphControllerWebMvcTest {
 
     @Autowired MockMvc mvc;
+    @MockBean JwtService jwtService;
 
     @Test
-    @WithMockUser
     void graphReturnsDemoNodesAndEdges() throws Exception {
         mvc.perform(get("/api/ckg/graph").param("projectId", "1"))
            .andExpect(status().isOk())
@@ -36,15 +35,9 @@ class CkgGraphControllerWebMvcTest {
     }
 
     @Test
-    @WithMockUser
     void graphWithDefaultProjectIdWorks() throws Exception {
         mvc.perform(get("/api/ckg/graph"))
            .andExpect(status().isOk())
            .andExpect(jsonPath("$.data.projectId").value(1));
-    }
-
-    @TestConfiguration
-    static class SecurityBypassConfig {
-        // 避免引入 SecurityFilterChain bean; 依赖 Spring Security 默认 + @WithMockUser 即可。
     }
 }

@@ -3,6 +3,8 @@ package com.zhiqian.migration;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.zhiqian.agent.AgentContext;
 import com.zhiqian.agent.AgentGraph;
 import com.zhiqian.agent.AgentRunner;
@@ -14,10 +16,13 @@ import com.zhiqian.agent.tools.SqlCriticAgent;
 import com.zhiqian.agent.tools.SqlPatcherAgent;
 import com.zhiqian.agent.tools.SqlReasonerAgent;
 import com.zhiqian.llm.LlmClient;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.context.request.async.DeferredResult;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -28,21 +33,103 @@ import java.util.concurrent.atomic.AtomicLong;
 @RestController
 public class MigrationEvalController {
 
+    private static final Logger log = LoggerFactory.getLogger(MigrationEvalController.class);
     private static final List<String> RETRIEVAL_CHOICES = List.of("bm25", "vector", "vector_rerank", "crag", "full");
     private static final AtomicLong TASK_ID = new AtomicLong(90_000L);
+
+    // ===== SQL 复杂度判断（轻量规则） =====
+
+    /** Oracle 特有语法关键词 */
+    private static final List<String> ORACLE_KEYWORDS = List.of(
+        "decode(", "rownum", "(+)", "from dual", "sysdate", "nvl(", "nvl2(", "connect by", "start with"
+    );
+
+    /** 复杂 SQL 特征关键词 */
+    private static final List<String> COMPLEX_KEYWORDS = List.of(
+        "with ", "recursive", "connect by", "start with", "model ", "pivot(", "unpivot("
+    );
+
+    /**
+     * 判断 SQL 是否为复杂场景，决定使用 chat() 还是 reason()。
+     * 评分维度：行数、JOIN 数、子查询、Oracle 特有语法、函数变换数量。
+     */
+    static boolean isComplexSql(String sql, String pair) {
+        if (sql == null || sql.isBlank()) return false;
+        String lower = sql.toLowerCase();
+        int score = 0;
+
+        // 1. 行数（多语句/长 SQL）
+        long lines = sql.lines().filter(l -> !l.isBlank()).count();
+        if (lines > 15) score += 2;
+        else if (lines > 8) score += 1;
+
+        // 2. JOIN 数量
+        long joinCount = lower.lines().filter(l -> l.matches(".*\\bjoin\\b.*")).count();
+        if (joinCount >= 3) score += 3;
+        else if (joinCount >= 2) score += 2;
+        else if (joinCount >= 1) score += 1;
+
+        // 3. 子查询（嵌套 SELECT）
+        long subQueryCount = lower.chars().filter(ch -> ch == '(').count(); // 粗略估计
+        long selectCount = lower.split("\\bselect\\b", -1).length - 1;
+        if (selectCount >= 4) score += 3;
+        else if (selectCount >= 2) score += 1;
+
+        // 4. CTE / 复杂语法
+        for (String kw : COMPLEX_KEYWORDS) {
+            if (lower.contains(kw)) score += 2;
+        }
+
+        // 5. Oracle 特有语法（pair 含 oracle 时加分更高）
+        boolean isOracle = pair != null && pair.contains("oracle");
+        for (String kw : ORACLE_KEYWORDS) {
+            if (lower.contains(kw)) {
+                score += isOracle ? 2 : 1;
+            }
+        }
+
+        // 6. 函数变换数量（需转译的函数）
+        String[] funcPatterns = {"ifnull(", "date_format(", "group_concat(", "regexp ", "substr(",
+                "nvl(", "decode(", "sysdate", "rownum"};
+        long funcCount = 0;
+        for (String f : funcPatterns) {
+            if (lower.contains(f)) funcCount++;
+        }
+        if (funcCount >= 3) score += 2;
+        else if (funcCount >= 2) score += 1;
+
+        return score >= 6;
+    }
 
     private final LlmClient llm;
     private final AgentRunner runner;
     private final ObjectMapper mapper;
+    private final ThreadPoolTaskExecutor migrateExecutor;
 
-    public MigrationEvalController(LlmClient llm, AgentRunner runner, ObjectMapper mapper) {
+    public MigrationEvalController(LlmClient llm, AgentRunner runner, ObjectMapper mapper,
+                                   @Qualifier("migrateExecutor") ThreadPoolTaskExecutor migrateExecutor) {
         this.llm = llm;
         this.runner = runner;
         this.mapper = mapper;
+        this.migrateExecutor = migrateExecutor;
     }
 
     @PostMapping({"/migrate", "/api/migrate"})
-    public ResponseEntity<MigrateResponse> migrate(@RequestBody MigrateRequest req) {
+    public DeferredResult<ResponseEntity<MigrateResponse>> migrate(@RequestBody MigrateRequest req) {
+        DeferredResult<ResponseEntity<MigrateResponse>> dr = new DeferredResult<>(300_000L);
+        migrateExecutor.execute(() -> {
+            try {
+                ResponseEntity<MigrateResponse> resp = doMigrate(req);
+                dr.setResult(resp);
+            } catch (Exception e) {
+                log.error("[migrate] 异步执行失败", e);
+                dr.setErrorResult(e);
+            }
+        });
+        return dr;
+    }
+
+    private ResponseEntity<MigrateResponse> doMigrate(MigrateRequest req) {
         String retrieval = normalizeRetrieval(req.retrieval());
         String pair = req.pair() == null || req.pair().isBlank() ? "mysql->opengauss" : req.pair();
         String sourceSql = req.source_sql() == null ? "" : req.source_sql();
@@ -142,9 +229,10 @@ public class MigrationEvalController {
             - INT AUTO_INCREMENT → SERIAL, BIGINT AUTO_INCREMENT → BIGSERIAL
             - DECIMAL(p,s) → NUMERIC(p,s)  (openGauss 规范要求使用 NUMERIC)
             - DATETIME → TIMESTAMP, TINYINT → SMALLINT
+            - BIT(1) → BOOLEAN  (MySQL 的 BIT(1) 本质是布尔值)
             - DOUBLE → DOUBLE PRECISION, FLOAT → REAL
             - BLOB/LONGBLOB → BYTEA, JSON → JSONB
-            - ENUM → 对于 PostgreSQL: 先 CREATE TYPE xxx AS ENUM(...) 再引用该类型；对于 openGauss: VARCHAR + CHECK constraint
+            - ENUM → 对于 PostgreSQL: 【必须】先 CREATE TYPE xxx AS ENUM('v1','v2',...)，再在 CREATE TABLE 中引用该类型。示例: source "status ENUM('a','b')" → target "CREATE TYPE status_type AS ENUM('a','b'); CREATE TABLE t(status status_type)"。禁止使用 CHECK 约束替代。对于 openGauss: VARCHAR + CHECK constraint
             - VARCHAR/CHAR/TEXT → 不变
             Functions & syntax:
             - IFNULL(x,y) → COALESCE(x,y)
@@ -162,9 +250,18 @@ public class MigrationEvalController {
             - SYSDATE → CURRENT_TIMESTAMP (not NOW())
             - rownum <= N → LIMIT N (at end of query); remove FROM DUAL
             - SUBSTR(s,pos,len) → SUBSTRING(s FROM pos FOR len)  (use standard SUBSTRING with FROM/FOR)
+            - REGEXP_SUBSTR(s,pattern) → (REGEXP_MATCHES(s,pattern))[1]  (PostgreSQL 的 REGEXP_MATCHES 返回数组，取 [1])
             - Oracle (+) outer join → LEFT JOIN / RIGHT JOIN with ON clause
             - Comma join → explicit JOIN ... ON
             - || concatenation → same (|| works in both)
+            - CONNECT BY + START WITH → WITH RECURSIVE CTE。关键规则:
+              * START WITH cond → CTE 的非递归部分 WHERE cond
+              * CONNECT BY PRIOR parent_id = child_id → CTE 递归部分 JOIN
+              * LEVEL → 递归层级计数器 (初始 0,每层 +1)
+              * CONNECT_BY_ISLEAF → NOT EXISTS(SELECT 1 FROM table WHERE parent_id = current.id)
+              * 必须保留原表的 id/parent_id 列用于 JOIN
+              示例: SELECT CONNECT_BY_ISLEAF, LEVEL, name FROM emp START WITH manager_id IS NULL CONNECT BY PRIOR id = manager_id
+              → WITH RECURSIVE emp_tree AS (SELECT id, name, manager_id, 0 AS lvl, false AS is_leaf FROM emp WHERE manager_id IS NULL UNION ALL SELECT e.id, e.name, e.manager_id, t.lvl+1, NOT EXISTS(SELECT 1 FROM emp WHERE manager_id=e.id) FROM emp e JOIN emp_tree t ON e.manager_id = t.id) SELECT is_leaf, lvl, name FROM emp_tree
             """;
 
     private Map<String, Object> generateMigrationJson(
@@ -200,7 +297,9 @@ public class MigrationEvalController {
             AgentGraph stage summaries:
             %s
             """.formatted(TYPE_MAPPING_HINTS, pair, retrieval, sourceSql, retrievedIds, toJson(stages));
-        String reply = llm.chat(prompt);  // chat 非 reason：速度优先，stages 已有足够上下文
+        boolean complex = isComplexSql(sourceSql, pair);
+        log.info("[AdaptiveLLM] complex={}, pair={}, sql={}", complex, pair, sourceSql.length() > 80 ? sourceSql.substring(0, 80) + "..." : sourceSql);
+        String reply = complex ? llm.reason(prompt) : llm.chat(prompt);
         return parseJsonObject(reply);
     }
 
@@ -223,9 +322,12 @@ public class MigrationEvalController {
             === Retrieved dialect mappings (high-precision reranked results) ===
             Types: INT AUTO_INCREMENT → SERIAL, BIGINT AUTO_INCREMENT → BIGSERIAL,
                    DECIMAL(p,s) → NUMERIC(p,s), DATETIME → TIMESTAMP, TINYINT → SMALLINT,
-                   DOUBLE → DOUBLE PRECISION, FLOAT → REAL, BLOB/LONGBLOB → BYTEA, JSON → JSONB
+                   BIT(1) → BOOLEAN, DOUBLE → DOUBLE PRECISION, FLOAT → REAL,
+                   BLOB/LONGBLOB → BYTEA, JSON → JSONB
+                   ENUM → 必须 CREATE TYPE xxx AS ENUM(...)，禁止 CHECK 替代
             Functions: IFNULL(x,y) → COALESCE(x,y), DATE_FORMAT(d,f) → TO_CHAR(d, oracle_format),
-                       GROUP_CONCAT(x SEPARATOR s) → STRING_AGG(x, s)
+                       GROUP_CONCAT(x SEPARATOR s) → STRING_AGG(x, s),
+                       REGEXP_SUBSTR(s,pattern) → (REGEXP_MATCHES(s,pattern))[1]
             Syntax: LIMIT offset,count → LIMIT count OFFSET offset,
                     ON DUPLICATE KEY UPDATE → ON CONFLICT DO UPDATE, VALUES(col) → EXCLUDED.col
             """;
@@ -274,7 +376,9 @@ public class MigrationEvalController {
             Source SQL:
             %s
             """.formatted(retrieval, hints, pair, sourceSql);
-        String reply = llm.chat(prompt);
+        boolean complex = isComplexSql(sourceSql, pair);
+        log.info("[AdaptiveLLM] complex={}, pair={}, sql={}", complex, pair, sourceSql.length() > 80 ? sourceSql.substring(0, 80) + "..." : sourceSql);
+        String reply = complex ? llm.reason(prompt) : llm.chat(prompt);
         return parseJsonObject(reply);
     }
 
@@ -303,12 +407,14 @@ public class MigrationEvalController {
 
     private String extractJson(String reply) {
         if (reply == null) return "{}";
-        int start = reply.indexOf('{');
-        int end = reply.lastIndexOf('}');
+        // Strip markdown code fences (```json ... ``` or ``` ... ```)
+        String cleaned = reply.replaceAll("(?s)```(?:json)?\\s*\\n?(.*?)\\n?```", "$1").trim();
+        int start = cleaned.indexOf('{');
+        int end = cleaned.lastIndexOf('}');
         if (start >= 0 && end > start) {
-            return reply.substring(start, end + 1);
+            return cleaned.substring(start, end + 1);
         }
-        return reply;
+        return cleaned;
     }
 
     private Map<String, Object> stageSnapshot(AgentStep step) {
@@ -319,12 +425,16 @@ public class MigrationEvalController {
         s.put("elapsedMs", step.elapsedMs());
         s.put("model", step.model());
         s.put("confidence", step.confidence());
-        // 携带 agent 的关键输出，供后续 generateMigrationJson 使用
+        // 携带 agent 的关键输出，供后续 generateMigrationJson 使用（截断过长字段）
         if (step.output() != null && !step.output().isEmpty()) {
             Map<String, Object> out = new LinkedHashMap<>();
             for (var e : step.output().entrySet()) {
                 if (e.getKey().startsWith("_")) continue;
-                out.put(e.getKey(), e.getValue());
+                Object val = e.getValue();
+                if (val instanceof String sval && sval.length() > 500) {
+                    val = sval.substring(0, 500) + "...(truncated)";
+                }
+                out.put(e.getKey(), val);
             }
             if (!out.isEmpty()) s.put("output", out);
         }

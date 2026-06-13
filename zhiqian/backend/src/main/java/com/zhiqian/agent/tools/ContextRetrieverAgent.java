@@ -1,8 +1,18 @@
 package com.zhiqian.agent.tools;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zhiqian.agent.AgentContext;
 import com.zhiqian.agent.AgentTool;
 import com.zhiqian.llm.LlmClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -12,14 +22,16 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Stage 02 - lightweight migration knowledge retrieval.
+ * Stage 02 - migration knowledge retrieval.
  *
- * This keeps eval evidence IDs in the same namespace as the gold fixtures
- * (kb-*) until the production vector/Qdrant retriever is wired in.
+ * Tries RAG service first (real retrieval via Qdrant + BGE-M3),
+ * falls back to local mock KB if RAG is unavailable.
  */
 public class ContextRetrieverAgent implements AgentTool {
+    private static final Logger log = LoggerFactory.getLogger(ContextRetrieverAgent.class);
     private static final List<KbDoc> KB = List.of(
         doc("kb-syntax-identifier", "Identifier quoting", "backtick reserved keyword order identifier"),
         doc("kb-func-ifnull", "IFNULL / NVL to COALESCE", "ifnull coalesce"),
@@ -41,8 +53,32 @@ public class ContextRetrieverAgent implements AgentTool {
     );
 
     private final LlmClient llm;
+    private final String ragUrl;
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final RestTemplate REST;
+    // RAG 结果缓存：避免同一 case 的 5 个模式重复查询 RAG
+    private static final ConcurrentHashMap<String, CacheEntry> RAG_CACHE = new ConcurrentHashMap<>();
+    private static final long CACHE_TTL_MS = 5 * 60 * 1000; // 5 分钟
 
-    public ContextRetrieverAgent(LlmClient llm) { this.llm = llm; }
+    private record CacheEntry(List<Map<String, Object>> docs, long timestamp) {
+        boolean expired() { return System.currentTimeMillis() - timestamp > CACHE_TTL_MS; }
+    }
+
+    static {
+        SimpleClientHttpRequestFactory rf = new SimpleClientHttpRequestFactory();
+        rf.setConnectTimeout(5000);   // 5s 连接超时
+        rf.setReadTimeout(30000);     // 30s 读取超时（RAG 检索不应超过 30s）
+        REST = new RestTemplate(rf);
+    }
+
+    public ContextRetrieverAgent(LlmClient llm) {
+        this(llm, System.getenv().getOrDefault("APP_RAG_BASE_URL", "http://localhost:8001"));
+    }
+
+    public ContextRetrieverAgent(LlmClient llm, String ragUrl) {
+        this.llm = llm;
+        this.ragUrl = ragUrl;
+    }
 
     @Override public String name() { return "Context Retriever"; }
 
@@ -53,17 +89,28 @@ public class ContextRetrieverAgent implements AgentTool {
         String pair = String.valueOf(ctx.state().getOrDefault("pair", ""));
         String retrieval = String.valueOf(ctx.state().getOrDefault("retrieval", "full"));
         String query = (sourceSql + " " + pair).toLowerCase(Locale.ROOT);
-        Set<String> tokens = tokenize(query);
 
-        List<Map<String, Object>> docs = KB.stream()
-            .map(doc -> scored(doc, query, tokens, retrieval))
-            .filter(doc -> ((Double) doc.get("score")) > 0.0)
-            .sorted(Comparator.<Map<String, Object>, Double>comparing(doc -> (Double) doc.get("score")).reversed())
-            .limit(5)
-            .toList();
+        // 尝试 RAG 服务真实检索
+        log.info("[ContextRetriever] ragUrl={}, retrieval={}, query={}", ragUrl, retrieval, query.length() > 60 ? query.substring(0, 60) + "..." : query);
+        List<Map<String, Object>> docs = tryRagRetrieve(query, retrieval);
+        log.info("[ContextRetriever] RAG returned: {}", docs == null ? "null (fallback to mock)" : docs.size() + " docs");
 
-        if (docs.isEmpty()) {
-            docs = fallbackDocs(retrieval);
+        String model;
+        if (docs != null && !docs.isEmpty()) {
+            model = "rag-" + retrieval;
+        } else {
+            // RAG 不可用,降级到本地 mock
+            Set<String> tokens = tokenize(query);
+            docs = KB.stream()
+                .map(doc -> scored(doc, query, tokens, retrieval))
+                .filter(doc -> ((Double) doc.get("score")) > 0.0)
+                .sorted(Comparator.<Map<String, Object>, Double>comparing(doc -> (Double) doc.get("score")).reversed())
+                .limit(5)
+                .toList();
+            if (docs.isEmpty()) {
+                docs = fallbackDocs(retrieval);
+            }
+            model = "mock-fallback";
         }
 
         Map<String, Object> out = new LinkedHashMap<>();
@@ -72,9 +119,73 @@ public class ContextRetrieverAgent implements AgentTool {
         out.put("retrieval", retrieval);
         out.put("retrieved", docs);
         out.put("_confidence", 0.82);
-        out.put("_model", llm.isReal() ? "kb-hybrid-heuristic" : "mock-retriever");
-        out.put("_real", true);
+        out.put("_model", model);
+        out.put("_real", docs != null && !docs.isEmpty());
         return out;
+    }
+
+    /**
+     * 调用 RAG /retrieve 端点进行真实检索。失败时返回 null。
+     * 使用 Spring RestTemplate (HTTP/1.1) 替代 JDK HttpClient，避免 Uvicorn HTTP/2 body 丢失。
+     * 内置 5 分钟 TTL 缓存，避免同一 case 的 5 个模式重复查询。
+     */
+    private List<Map<String, Object>> tryRagRetrieve(String query, String mode) {
+        // 检查缓存
+        String cacheKey = query + "|" + mode;
+        CacheEntry cached = RAG_CACHE.get(cacheKey);
+        if (cached != null && !cached.expired()) {
+            log.info("[ContextRetriever] cache hit for key={}", cacheKey.length() > 60 ? cacheKey.substring(0, 60) + "..." : cacheKey);
+            return cached.docs();
+        }
+
+        try {
+            String jsonBody = String.format(
+                Locale.ROOT,
+                "{\"query\":\"%s\",\"top_k\":5,\"mode\":\"%s\"}",
+                query.replace("\"", "\\\""), mode
+            );
+            log.info("[ContextRetriever] RAG request body: {}", jsonBody);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<String> entity = new HttpEntity<>(jsonBody, headers);
+
+            ResponseEntity<String> resp = REST.postForEntity(ragUrl + "/retrieve", entity, String.class);
+            int status = resp.getStatusCode().value();
+            String responseBody = resp.getBody() != null ? resp.getBody() : "";
+            log.info("[ContextRetriever] RAG HTTP status={}, bodyLen={}", status, responseBody.length());
+            if (status != 200) {
+                log.warn("[ContextRetriever] RAG returned non-200: {}, body: {}", status, responseBody.length() < 300 ? responseBody : responseBody.substring(0, 300));
+                return null;
+            }
+
+            JsonNode root = MAPPER.readTree(responseBody);
+            JsonNode items = root.get("items");
+            if (items == null || !items.isArray() || items.isEmpty()) {
+                return null;
+            }
+            List<Map<String, Object>> docs = new ArrayList<>();
+            for (JsonNode item : items) {
+                String id = item.has("id") ? item.get("id").asText(null) : null;
+                if (id == null) continue;
+                double score = item.has("score") ? item.get("score").asDouble(0.0) : 0.0;
+                String text = item.has("text") ? item.get("text").asText(null) : null;
+                Map<String, Object> doc = new LinkedHashMap<>();
+                doc.put("id", id);
+                doc.put("score", score);
+                if (text != null) doc.put("title", text.length() > 80 ? text.substring(0, 80) + "..." : text);
+                docs.add(doc);
+            }
+            List<Map<String, Object>> result = docs.isEmpty() ? null : docs;
+            // 存入缓存
+            if (result != null) {
+                RAG_CACHE.put(cacheKey, new CacheEntry(result, System.currentTimeMillis()));
+            }
+            return result;
+        } catch (Exception e) {
+            log.warn("[ContextRetriever] RAG call failed: {}", e.getMessage());
+            return null;
+        }
     }
 
     private static Map<String, Object> scored(KbDoc doc, String query, Set<String> tokens, String retrieval) {

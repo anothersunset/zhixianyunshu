@@ -23,7 +23,6 @@ services:
     image: qdrant/qdrant:v1.11.3
     container_name: zhiqian-qdrant
     restart: unless-stopped
-    profiles: ["ml"]
     volumes:
       - qdrantdata:/qdrant/storage
     ports:
@@ -135,10 +134,10 @@ services:
     environment:
       ZHIQIAN_RAG_CHROMA_PATH: /data/.chroma
       RAG_USE_BGE_M3: ${RAG_USE_BGE_M3:-true}
-      RAG_BGE_MODEL: ${RAG_BGE_MODEL:-BAAI/bge-m3}
+      RAG_BGE_MODEL: ${RAG_BGE_MODEL:-/models/bge-m3}
       RAG_BGE_FP16: ${RAG_BGE_FP16:-true}
       RAG_USE_RERANKER: ${RAG_USE_RERANKER:-true}
-      RAG_RERANKER_MODEL: ${RAG_RERANKER_MODEL:-BAAI/bge-reranker-v2-m3}
+      RAG_RERANKER_MODEL: ${RAG_RERANKER_MODEL:-/models/bge-reranker-v2-m3}
       RAG_RERANKER_FP16: ${RAG_RERANKER_FP16:-true}
       RAG_EMBEDDING_DIM: ${RAG_EMBEDDING_DIM:-1024}
       RAG_USE_QDRANT: ${RAG_USE_QDRANT:-true}
@@ -154,8 +153,12 @@ services:
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-https://cloud.langfuse.com}
       HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}
+      TRANSFORMERS_OFFLINE: 1
     volumes:
       - ragdata:/data
+      # Bind mount: 直接挂载宿主机模型目录，零拷贝
+      - ${HF_CACHE_DIR:-C:/Users/anoth/.hf_cache}/modelscope/BAAI/bge-m3:/models/bge-m3:ro
+      - ${HF_CACHE_DIR:-C:/Users/anoth/.hf_cache}/modelscope/BAAI/bge-reranker-v2-m3:/models/bge-reranker-v2-m3:ro
     ports:
       - "8001:8001"
     healthcheck:
