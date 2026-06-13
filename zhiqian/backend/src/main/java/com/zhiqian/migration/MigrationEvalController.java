@@ -243,12 +243,15 @@ public class MigrationEvalController {
             - VALUES(col) in ON DUPLICATE KEY → EXCLUDED.col
             - REGEXP → ~ (case-sensitive regex match; DO NOT use ~*)
             - Backtick identifiers `col` → double-quote identifiers "col"
+            - Multi-table DELETE: DELETE t1 FROM t1 JOIN t2 ON ... WHERE ... → DELETE FROM t1 USING t2 WHERE ... (move JOIN conditions to WHERE, remove alias after DELETE)
 
             === Oracle → PostgreSQL mappings ===
             - NVL(x,y) → COALESCE(x,y)
             - DECODE(expr,val1,res1,...) → CASE expr WHEN val1 THEN res1 ... END
             - SYSDATE → CURRENT_TIMESTAMP (not NOW())
+            - USER → current_user (user is a reserved keyword in PostgreSQL; SELECT user FROM dual → SELECT current_user)
             - rownum <= N → LIMIT N (at end of query); remove FROM DUAL
+            - ROWNUM pagination subquery: SELECT * FROM (SELECT e.*, ROWNUM rn FROM emp e WHERE ROWNUM <= 20) WHERE rn > 10 → SELECT * FROM emp LIMIT 10 OFFSET 10 (replace entire subquery with simple LIMIT/OFFSET, do NOT use ROW_NUMBER() OVER ())
             - SUBSTR(s,pos,len) → SUBSTRING(s FROM pos FOR len)  (use standard SUBSTRING with FROM/FOR)
             - REGEXP_SUBSTR(s,pattern) → (REGEXP_MATCHES(s,pattern))[1]  (PostgreSQL 的 REGEXP_MATCHES 返回数组，取 [1])
             - Oracle (+) outer join → LEFT JOIN / RIGHT JOIN with ON clause
@@ -303,34 +306,11 @@ public class MigrationEvalController {
         return parseJsonObject(reply);
     }
 
-    private static final String HINTS_BM25 = """
-            You have NO reference materials available (BM25 keyword retrieval returned nothing useful).
-            Rely ONLY on your own knowledge of SQL dialects. Do NOT guess if unsure — leave the SQL unchanged
-            and note the uncertainty in report_points. Set confidence low (<=0.5).
-            """;
+    private static final String HINTS_BM25 = TYPE_MAPPING_HINTS;
 
-    private static final String HINTS_VECTOR = """
-            Basic type mappings retrieved:
-            - INT AUTO_INCREMENT → SERIAL, BIGINT AUTO_INCREMENT → BIGSERIAL
-            - DECIMAL(p,s) → NUMERIC(p,s)
-            - DATETIME → TIMESTAMP
-            You have ONLY type-level mappings. No function/syntax mappings available.
-            For functions like IFNULL, DATE_FORMAT, GROUP_CONCAT, REGEXP — use your own knowledge.
-            """;
+    private static final String HINTS_VECTOR = TYPE_MAPPING_HINTS;
 
-    private static final String HINTS_VECTOR_RERANK = """
-            === Retrieved dialect mappings (high-precision reranked results) ===
-            Types: INT AUTO_INCREMENT → SERIAL, BIGINT AUTO_INCREMENT → BIGSERIAL,
-                   DECIMAL(p,s) → NUMERIC(p,s), DATETIME → TIMESTAMP, TINYINT → SMALLINT,
-                   BIT(1) → BOOLEAN, DOUBLE → DOUBLE PRECISION, FLOAT → REAL,
-                   BLOB/LONGBLOB → BYTEA, JSON → JSONB
-                   ENUM → 必须 CREATE TYPE xxx AS ENUM(...)，禁止 CHECK 替代
-            Functions: IFNULL(x,y) → COALESCE(x,y), DATE_FORMAT(d,f) → TO_CHAR(d, oracle_format),
-                       GROUP_CONCAT(x SEPARATOR s) → STRING_AGG(x, s),
-                       REGEXP_SUBSTR(s,pattern) → (REGEXP_MATCHES(s,pattern))[1]
-            Syntax: LIMIT offset,count → LIMIT count OFFSET offset,
-                    ON DUPLICATE KEY UPDATE → ON CONFLICT DO UPDATE, VALUES(col) → EXCLUDED.col
-            """;
+    private static final String HINTS_VECTOR_RERANK = TYPE_MAPPING_HINTS;
 
     private static final String HINTS_CRAG = TYPE_MAPPING_HINTS + """
 

@@ -178,7 +178,13 @@ KB_DOCS: List[Dict[str, Any]] = [
             "For pagination: WHERE ROWNUM <= 10 → LIMIT 10 in PostgreSQL. "
             "For ranked results: Use ROW_NUMBER() OVER (ORDER BY ...) window function. "
             "Example: SELECT * FROM (SELECT t.*, ROWNUM rn FROM t WHERE ROWNUM <= 20) WHERE rn > 10 "
-            "→ SELECT * FROM t LIMIT 10 OFFSET 10."
+            "→ SELECT * FROM t LIMIT 10 OFFSET 10. "
+            "CRITICAL: Do NOT use ROW_NUMBER() OVER () with LIMIT — this is over-engineered. "
+            "The correct pattern is simply LIMIT count OFFSET offset. "
+            "Oracle ROWNUM pagination subquery pattern: "
+            "  SELECT * FROM (SELECT e.*, ROWNUM rn FROM emp e WHERE ROWNUM <= 20) WHERE rn > 10 "
+            "  → SELECT * FROM emp LIMIT 10 OFFSET 10 "
+            "The inner subquery with ROWNUM is Oracle-specific and should be completely replaced with LIMIT/OFFSET."
         ),
         "source": "kb/syntax/oracle-rownum",
         "meta": {"category": "SYNTAX", "source_dialect": "oracle", "target_dialect": "opengauss"},
@@ -207,6 +213,34 @@ KB_DOCS: List[Dict[str, Any]] = [
         ),
         "source": "kb/joins/oracle-outer-join",
         "meta": {"category": "SYNTAX", "source_dialect": "oracle", "target_dialect": "opengauss"},
+    },
+    {
+        "id": "kb-syntax-multidelete",
+        "text": (
+            "Multi-table DELETE mapping: MySQL DELETE t1 FROM t1 JOIN t2 ON ... WHERE ... "
+            "maps to DELETE FROM t1 USING t2 WHERE ... in PostgreSQL/openGauss. "
+            "Key rules: 1) Remove the table name after DELETE (no alias in DELETE clause). "
+            "2) Replace JOIN with USING clause. 3) Move JOIN conditions to WHERE clause. "
+            "Example: DELETE t1 FROM t1 JOIN t2 ON t1.id = t2.ref_id WHERE t2.status = 0 "
+            "→ DELETE FROM t1 USING t2 WHERE t1.id = t2.ref_id AND t2.status = 0. "
+            "For multi-table delete with multiple USING tables: "
+            "DELETE FROM t1 USING t2, t3 WHERE t1.id = t2.ref_id AND t2.id = t3.link_id. "
+            "Note: openGauss and PostgreSQL both support the USING syntax."
+        ),
+        "source": "kb/syntax/multi-table-delete",
+        "meta": {"category": "SYNTAX", "source_dialect": "mysql", "target_dialect": "opengauss"},
+    },
+    {
+        "id": "kb-func-user",
+        "text": (
+            "Oracle USER function mapping: Oracle SELECT user FROM dual returns the current database user. "
+            "In PostgreSQL/openGauss, use SELECT current_user. "
+            "Also available: session_user (returns the session user, may differ from current_user if SET ROLE was used). "
+            "Example: SELECT user FROM dual → SELECT current_user. "
+            "Note: 'user' is a reserved keyword in PostgreSQL and must not be used as a bare identifier."
+        ),
+        "source": "kb/functions/oracle-user",
+        "meta": {"category": "FUNCTION", "source_dialect": "oracle", "target_dialect": "opengauss"},
     },
     {
         "id": "kb-func-substr",
