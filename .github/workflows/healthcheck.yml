@@ -1,0 +1,50 @@
+name: Healthcheck
+
+on:
+  schedule:
+    - cron: '17 8 * * 1-5'  # 工作日早 8:17 UTC
+  workflow_dispatch:
+
+jobs:
+  healthcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install curl
+        run: sudo apt-get install -y curl
+
+      - name: Check backend health
+        id: backend
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "${BACKEND_URL:-http://localhost:8080}/actuator/health" \
+            --connect-timeout 10 --max-time 30 || echo "000")
+          echo "status=$STATUS" >> $GITHUB_OUTPUT
+          if [ "$STATUS" != "200" ]; then
+            echo "::warning::Backend health check failed (HTTP $STATUS)"
+          fi
+
+      - name: Check RAG health
+        id: rag
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "${RAG_URL:-http://localhost:8001}/health" \
+            --connect-timeout 10 --max-time 30 || echo "000")
+          echo "status=$STATUS" >> $GITHUB_OUTPUT
+          if [ "$STATUS" != "200" ]; then
+            echo "::warning::RAG health check failed (HTTP $STATUS)"
+          fi
+
+      - name: Summary
+        run: |
+          echo "## Healthcheck Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend | ${{ steps.backend.outputs.status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| RAG     | ${{ steps.rag.outputs.status }} |" >> $GITHUB_STEP_SUMMARY

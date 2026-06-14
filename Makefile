@@ -5,7 +5,7 @@
 help:
 	@echo '智迁云枢 · 常用命令'
 	@echo ''
-	@echo '  make smoke           三路静态检 (提交前跑)'
+	@echo '  make smoke           三路冒烟检 (compile + lint + import + 单测)'
 	@echo '  make demo            一键拉 demo (6 步)'
 	@echo '  make health          7 endpoint 验状态'
 	@echo '  make seed            只拉数据集 (sakila/chinook/sales/cdc)'

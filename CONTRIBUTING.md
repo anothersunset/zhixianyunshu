@@ -7,9 +7,21 @@
 ```bash
 git clone https://github.com/anothersunset/zhixianyunshu.git
 cd zhixianyunshu
-bash scripts/smoke-test.sh           # 提交前快检 (不启服务, 仅编译)
+bash scripts/smoke-test.sh           # 三路冒烟检 (compile + lint + import + 单测)
 bash scripts/demo-walkthrough.sh     # 一键拉 demo
 ```
+
+### Pre-commit hooks (推荐)
+
+提交前自动运行冒烟检，防止低级错误入库：
+
+```bash
+pip install pre-commit
+pre-commit install          # 安装 git hooks
+pre-commit run --all-files  # 手动跑一次
+```
+
+安装后 `git push` 时自动执行 `make smoke`。跳过: `git push --no-verify`。
 
 ## Commit message 规范
 
@@ -38,7 +50,23 @@ scope 常用: `backend` `rag` `web` `deploy` `docs` `bonus` `ci` `security`。
 
 - `main` — 发布分支, 只走 PR 进 (需 review)。
 - `feat/*` `fix/*` `docs/*` — 特性分支。
-- `v*` — tag, 触发完整 CI (迁 supply-chain + image build + cosign sign)。
+- `v*` — tag, 触发完整 CI (supply-chain + image build + cosign sign + GitHub Release)。
+
+### CI 自动化
+
+PR 提交后自动触发：
+
+| Job | 作用 | 阻断合并? |
+| --- | --- | --- |
+| `backend-test` | Maven compile + test | 是 |
+| `frontend-build` | npm ci + build | 是 |
+| `rag-lint` | ruff lint + compile + import chain | 是 |
+| `labeler` | 按文件路径自动打 PR 标签 | 否 |
+| `eval-smoke` | 轻量评测回归 (continue-on-error) | 否 |
+
+### Dependabot
+
+每周一自动检查依赖更新，PR 标签：`dependencies` + 组件名 (`backend`/`rag`/`web`/`ci`)。
 
 ## PR Checklist
 
@@ -62,7 +90,7 @@ Signed-off-by: Your Name <you@example.com>
 ## Code style
 
 - **Java**: 4-space, package `com.zhiqian.<scope>`, Spring Boot 3.x conventions。
-- **Python**: ruff/pyflakes-clean, type hint 优先, FastAPI v1。
+- **Python**: ruff-clean (`ruff check app --select E,F,W --ignore E501`), type hint 优先, FastAPI v1。
 - **TS/Vue**: vue-tsc 零错, `<script setup lang="ts">`, 模板防 URL 压缩不用二重括号 — 走 `v-text` / `v-bind` / `computed`。
 - **YAML/K8s**: kustomize 不走 helm template, secret 走 sealed-secrets 或 External Secrets。
 

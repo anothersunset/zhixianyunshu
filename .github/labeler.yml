@@ -1,0 +1,31 @@
+backend:
+  - changed-files:
+      - any-glob-to-any-file: zhiqian/backend/**
+
+rag:
+  - changed-files:
+      - any-glob-to-any-file: zhiqian/rag/**
+
+web:
+  - changed-files:
+      - any-glob-to-any-file: zhiqian/web/**
+
+eval:
+  - changed-files:
+      - any-glob-to-any-file: eval/**
+
+docs:
+  - changed-files:
+      - any-glob-to-any-file: docs/**
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file: .github/**
+
+deploy:
+  - changed-files:
+      - any-glob-to-any-file: zhiqian/deploy/**
+
+scripts:
+  - changed-files:
+      - any-glob-to-any-file: scripts/**
