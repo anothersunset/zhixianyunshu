@@ -55,11 +55,16 @@ KB_DOCS: List[Dict[str, Any]] = [
     {
         "id": "kb-type-enum",
         "text": (
-            "Enum type mapping: MySQL ENUM('val1', 'val2') has no direct equivalent in PostgreSQL/openGauss. "
-            "Options: 1) Create a custom type: CREATE TYPE mood AS ENUM ('happy', 'sad'); "
-            "2) Use VARCHAR with CHECK constraint: status VARCHAR(20) CHECK (status IN ('active', 'inactive')); "
-            "3) Use smallint with lookup table for better performance. "
-            "Recommendation: Use CHECK constraint for simple cases, custom ENUM type for complex cases."
+            "Enum type mapping: MySQL ENUM('val1', 'val2') maps to CREATE TYPE in PostgreSQL/openGauss. "
+            "ALWAYS use CREATE TYPE for ENUM columns: CREATE TYPE mood AS ENUM ('happy', 'sad'); then use the type in the table. "
+            "Example: status ENUM('active','inactive') → CREATE TYPE status_type AS ENUM('active','inactive'); ... status status_type. "
+            "Do NOT use VARCHAR+CHECK as a substitute — CREATE TYPE is the correct PostgreSQL equivalent. "
+            "CRITICAL: Each ENUM column needs its own TYPE. Multi-column example: "
+            "source: CREATE TABLE orders(id INT, status ENUM('pending','shipped','done'), priority ENUM('low','high')) "
+            "→ target: CREATE TYPE order_status AS ENUM('pending','shipped','done'); "
+            "CREATE TYPE order_priority AS ENUM('low','high'); "
+            "CREATE TABLE orders(id INTEGER, status order_status, priority order_priority). "
+            "Also map other column types: INT AUTO_INCREMENT→SERIAL, DATETIME→TIMESTAMP."
         ),
         "source": "kb/types/enum-mapping",
         "meta": {"category": "TYPE_MAPPING", "source_dialect": "mysql", "target_dialect": "opengauss"},
@@ -164,8 +169,9 @@ KB_DOCS: List[Dict[str, Any]] = [
         "id": "kb-syntax-dual",
         "text": (
             "Oracle DUAL table: Oracle requires SELECT ... FROM DUAL for expressions without a table. "
-            "PostgreSQL/openGauss do not need DUAL; just use SELECT expr directly. "
-            "Example: SELECT SYSDATE FROM DUAL → SELECT CURRENT_TIMESTAMP. "
+            "PostgreSQL/openGauss do NOT need DUAL; just use SELECT expr directly. "
+            "CRITICAL: When migrating, REMOVE 'FROM DUAL' completely. Do NOT keep it in the output. "
+            "Example: SELECT SYSDATE FROM DUAL → SELECT CURRENT_TIMESTAMP (no FROM clause). "
             "If SQL must be compatible with both, create a DUAL view: CREATE VIEW dual AS SELECT 1;"
         ),
         "source": "kb/syntax/oracle-dual",
@@ -253,6 +259,626 @@ KB_DOCS: List[Dict[str, Any]] = [
         ),
         "source": "kb/functions/substr",
         "meta": {"category": "FUNCTION", "source_dialect": "mysql", "target_dialect": "opengauss"},
+    },
+    # ── 以下为补充 KB 文档（覆盖 gold_context_ids 缺失项）──
+    {
+        "id": "kb-func-concat",
+        "text": (
+            "CONCAT function mapping: MySQL CONCAT(a, b, c) concatenates strings. "
+            "PostgreSQL/openGauss support CONCAT(a, b, c) natively. "
+            "Alternatively, use the || operator: a || b || c. "
+            "Note: MySQL CONCAT returns NULL if any argument is NULL; CONCAT_WS ignores NULLs. "
+            "PostgreSQL CONCAT also returns NULL on NULL input; use COALESCE to handle NULLs. "
+            "Example: CONCAT(first_name, ' ', last_name) → CONCAT(first_name, ' ', last_name) or first_name || ' ' || last_name."
+        ),
+        "source": "kb/functions/concat",
+        "meta": {"category": "FUNCTION", "source_dialect": "mysql", "target_dialect": "opengauss"},
+    },
+    {
+        "id": "kb-func-curdate",
+        "text": (
+            "CURDATE/CURRENT_DATE mapping: MySQL CURDATE() returns the current date. "
+            "PostgreSQL/openGauss use CURRENT_DATE (no parentheses). "
+            "Also: MySQL CURTIME() → PostgreSQL CURRENT_TIME; NOW() works in both. "
+            "Example: SELECT CURDATE() → SELECT CURRENT_DATE."
+        ),
+        "source": "kb/functions/curdate",
+        "meta": {"category": "FUNCTION", "source_dialect": "mysql", "target_dialect": "opengauss"},
+    },
+    {
+        "id": "kb-func-now",
+        "text": (
+            "NOW() mapping: MySQL NOW() returns current datetime. "
+            "PostgreSQL/openGauss support NOW() natively, returning timestamptz. "
+            "Equivalent: CURRENT_TIMESTAMP (ANSI SQL standard, works in all databases). "
+            "Example: SELECT NOW() → SELECT NOW() or SELECT CURRENT_TIMESTAMP."
+        ),
+        "source": "kb/functions/now",
+        "meta": {"category": "FUNCTION", "source_dialect": "mysql", "target_dialect": "opengauss"},
+    },
+    {
+        "id": "kb-func-year",
+        "text": (
+            "YEAR() function mapping: MySQL YEAR(date) extracts the year from a date. "
+            "PostgreSQL/openGauss use EXTRACT(YEAR FROM date) or DATE_PART('year', date). "
+            "Example: YEAR(created_at) → EXTRACT(YEAR FROM created_at). "
+            "Similarly: MONTH() → EXTRACT(MONTH FROM ...), DAY() → EXTRACT(DAY FROM ...)."
+        ),
+        "source": "kb/functions/year",
+        "meta": {"category": "FUNCTION", "source_dialect": "mysql", "target_dialect": "opengauss"},
+    },
+    {
+        "id": "kb-func-if",
+        "text": (
+            "IF() function mapping: MySQL IF(condition, true_val, false_val) is a conditional function. "
+            "PostgreSQL/openGauss use CASE WHEN condition THEN true_val ELSE false_val END. "
+            "For simple NULL handling, use COALESCE(val, default). "
+            "Example: IF(status = 1, 'active', 'inactive') → CASE WHEN status = 1 THEN 'active' ELSE 'inactive' END."
+        ),
+        "source": "kb/functions/if",
+        "meta": {"category": "FUNCTION", "source_dialect": "mysql", "target_dialect": "opengauss"},
+    },
+    {
+        "id": "kb-func-trim",
+        "text": (
+            "TRIM function mapping: MySQL TRIM(str) removes leading/trailing whitespace. "
+            "PostgreSQL/openGauss support TRIM(str) natively. "
+            "Also supported: LTRIM(str), RTRIM(str), TRIM(LEADING 'x' FROM str). "
+            "All work identically across MySQL and PostgreSQL. "
+            "Example: TRIM(name) → TRIM(name) (no change needed)."
+        ),
+        "source": "kb/functions/trim",
+        "meta": {"category": "FUNCTION", "source_dialect": "mysql", "target_dialect": "opengauss"},
+    },
+    {
+        "id": "kb-func-addmonths",
+        "text": (
+            "ADD_MONTHS function mapping: Oracle ADD_MONTHS(date, n) adds n months to a date. "
+            "PostgreSQL/openGauss use date + INTERVAL 'n months' or date + (n * INTERVAL '1 month'). "
+            "Example: ADD_MONTHS(hire_date, 6) → hire_date + INTERVAL '6 months'. "
+            "For subtracting months: ADD_MONTHS(date, -3) → date - INTERVAL '3 months'."
+        ),
+        "source": "kb/functions/add-months",
+        "meta": {"category": "FUNCTION", "source_dialect": "oracle", "target_dialect": "postgresql"},
+    },
+    {
+        "id": "kb-func-monthsbetween",
+        "text": (
+            "MONTHS_BETWEEN function mapping: Oracle MONTHS_BETWEEN(date1, date2) returns the number of months between two dates. "
+            "PostgreSQL/openGauss use (EXTRACT(YEAR FROM age(date1, date2)) * 12 + EXTRACT(MONTH FROM age(date1, date2))). "
+            "Or simpler: (DATE_PART('year', date1) - DATE_PART('year', date2)) * 12 + (DATE_PART('month', date1) - DATE_PART('month', date2)). "
+            "Example: MONTHS_BETWEEN(end_date, start_date) → EXTRACT(YEAR FROM age(end_date, start_date)) * 12 + EXTRACT(MONTH FROM age(end_date, start_date))."
+        ),
+        "source": "kb/functions/months-between",
+        "meta": {"category": "FUNCTION", "source_dialect": "oracle", "target_dialect": "postgresql"},
+    },
+    {
+        "id": "kb-func-nvl2",
+        "text": (
+            "NVL2 function mapping: Oracle NVL2(expr, not_null_val, null_val) returns not_null_val if expr is not NULL, else null_val. "
+            "PostgreSQL/openGauss use CASE WHEN expr IS NOT NULL THEN not_null_val ELSE null_val END. "
+            "Example: NVL2(commission, salary + commission, salary) → CASE WHEN commission IS NOT NULL THEN salary + commission ELSE salary END."
+        ),
+        "source": "kb/functions/nvl2",
+        "meta": {"category": "FUNCTION", "source_dialect": "oracle", "target_dialect": "postgresql"},
+    },
+    {
+        "id": "kb-func-regexp_substr",
+        "text": (
+            "REGEXP_SUBSTR function mapping: Oracle REGEXP_SUBSTR(str, pattern) extracts a substring matching a regex pattern. "
+            "PostgreSQL use (REGEXP_MATCHES(str, pattern))[1] — REGEXP_MATCHES returns an array of matches, [1] gets the first. "
+            "For extracting the first match: (REGEXP_MATCHES(email, '[^@]+'))[1]. "
+            "Note: REGEXP_MATCHES returns text[], so wrap in parentheses and index with [1]."
+        ),
+        "source": "kb/functions/regexp-substr",
+        "meta": {"category": "FUNCTION", "source_dialect": "oracle", "target_dialect": "postgresql"},
+    },
+    {
+        "id": "kb-func-trunc",
+        "text": (
+            "TRUNC function mapping: Oracle TRUNC(date, format) truncates a date to specified precision. "
+            "PostgreSQL/openGauss use DATE_TRUNC('precision', date). "
+            "Format mapping: 'YYYY'→'year', 'MM'→'month', 'DD'→'day', 'HH'→'hour'. "
+            "Example: TRUNC(sysdate, 'MM') → DATE_TRUNC('month', CURRENT_DATE). "
+            "For numbers: Oracle TRUNC(number, decimals) → PostgreSQL TRUNC(number, decimals) (same syntax)."
+        ),
+        "source": "kb/functions/trunc",
+        "meta": {"category": "FUNCTION", "source_dialect": "oracle", "target_dialect": "postgresql"},
+    },
+    {
+        "id": "kb-func-initcap",
+        "text": (
+            "INITCAP function mapping: Oracle INITCAP(str) capitalizes the first letter of each word. "
+            "PostgreSQL/openGauss support INITCAP(str) natively — same syntax, same behavior. "
+            "Example: INITCAP('hello world') → 'Hello World' (works the same in both)."
+        ),
+        "source": "kb/functions/initcap",
+        "meta": {"category": "FUNCTION", "source_dialect": "oracle", "target_dialect": "postgresql"},
+    },
+    {
+        "id": "kb-func-instr",
+        "text": (
+            "INSTR function mapping: Oracle INSTR(str, substr, start, occurrence) finds the position of a substring. "
+            "PostgreSQL/openGauss use POSITION(substr IN str) for basic case, or STRPOS(str, substr). "
+            "For start position and occurrence, use: POSITION(substr IN SUBSTRING(str FROM start)). "
+            "Example: INSTR(email, '@') → POSITION('@' IN email)."
+        ),
+        "source": "kb/functions/instr",
+        "meta": {"category": "FUNCTION", "source_dialect": "oracle", "target_dialect": "postgresql"},
+    },
+    {
+        "id": "kb-func-listagg",
+        "text": (
+            "LISTAGG function mapping: Oracle LISTAGG(column, delimiter) WITHIN GROUP (ORDER BY col) aggregates strings. "
+            "PostgreSQL/openGauss use STRING_AGG(column, delimiter ORDER BY col). "
+            "Example: LISTAGG(name, ',') WITHIN GROUP (ORDER BY name) → STRING_AGG(name, ',' ORDER BY name)."
+        ),
+        "source": "kb/functions/listagg",
+        "meta": {"category": "FUNCTION", "source_dialect": "oracle", "target_dialect": "postgresql"},
+    },
+    {
+        "id": "kb-type-bit",
+        "text": (
+            "BIT type mapping: MySQL BIT(1) stores a single bit (0 or 1), commonly used as a boolean. "
+            "PostgreSQL/openGauss use BOOLEAN (true/false). "
+            "Migration: BIT(1) → BOOLEAN. Values: 0→false, 1→true. "
+            "Example: flag BIT(1) DEFAULT 0 → flag BOOLEAN DEFAULT false. "
+            "Note: MySQL BIT(n) for n>1 maps to PostgreSQL BIT(n) or BYTEA."
+        ),
+        "source": "kb/types/bit-boolean",
+        "meta": {"category": "TYPE_MAPPING", "source_dialect": "mysql", "target_dialect": "opengauss"},
+    },
+    {
+        "id": "kb-type-tinyint",
+        "text": (
+            "TINYINT type mapping: MySQL TINYINT is a 1-byte integer (-128 to 127). "
+            "PostgreSQL/openGauss use SMALLINT (2-byte, -32768 to 32767) as the smallest integer type. "
+            "Migration: TINYINT → SMALLINT. TINYINT UNSIGNED → SMALLINT (or CHECK constraint for range). "
+            "Example: status TINYINT DEFAULT 0 → status SMALLINT DEFAULT 0."
+        ),
+        "source": "kb/types/tinyint-smallint",
+        "meta": {"category": "TYPE_MAPPING", "source_dialect": "mysql", "target_dialect": "opengauss"},
+    },
+    {
+        "id": "kb-type-double",
+        "text": (
+            "DOUBLE type mapping: MySQL DOUBLE is an 8-byte floating point. "
+            "PostgreSQL/openGauss use DOUBLE PRECISION (or FLOAT8). "
+            "MySQL FLOAT is 4-byte → PostgreSQL REAL (or FLOAT4). "
+            "Example: price DOUBLE → price DOUBLE PRECISION. "
+            "Note: For exact decimal precision, use NUMERIC(p,s) instead."
+        ),
+        "source": "kb/types/double-precision",
+        "meta": {"category": "TYPE_MAPPING", "source_dialect": "mysql", "target_dialect": "opengauss"},
+    },
+    {
+        "id": "kb-type-datetime",
+        "text": (
+            "DATETIME type mapping: MySQL DATETIME stores date and time without timezone. "
+            "PostgreSQL/openGauss use TIMESTAMP (without time zone). "
+            "MySQL TIMESTAMP (auto-converted to UTC) → PostgreSQL TIMESTAMPTZ (with time zone). "
+            "Example: created_at DATETIME DEFAULT CURRENT_TIMESTAMP → created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP. "
+            "Note: MySQL DATETIME range is 1000-9999; PostgreSQL TIMESTAMP range is 4713 BC to 294276 AD."
+        ),
+        "source": "kb/types/datetime-timestamp",
+        "meta": {"category": "TYPE_MAPPING", "source_dialect": "mysql", "target_dialect": "opengauss"},
+    },
+    {
+        "id": "kb-type-blob",
+        "text": (
+            "BLOB type mapping: MySQL BLOB/LONGBLOB/MEDIUMBLOB store binary data. "
+            "PostgreSQL/openGauss use BYTEA for binary data (up to 1GB). "
+            "For larger files, use Large Objects (lo module) or external file storage. "
+            "Example: data LONGBLOB → data BYTEA. "
+            "Note: BYTEA has a hex format output; use encode(data, 'hex') for hex representation."
+        ),
+        "source": "kb/types/blob-bytea",
+        "meta": {"category": "TYPE_MAPPING", "source_dialect": "mysql", "target_dialect": "opengauss"},
+    },
+    {
+        "id": "kb-type-json",
+        "text": (
+            "JSON type mapping: MySQL JSON type stores JSON documents. "
+            "PostgreSQL/openGauss use JSONB (binary format, recommended) or JSON (text format). "
+            "JSONB supports indexing and faster processing. "
+            "Example: metadata JSON → metadata JSONB. "
+            "Note: JSONB requires valid JSON; MySQL's JSON is more permissive."
+        ),
+        "source": "kb/types/json-jsonb",
+        "meta": {"category": "TYPE_MAPPING", "source_dialect": "mysql", "target_dialect": "opengauss"},
+    },
+    {
+        "id": "kb-syntax-hierarchy",
+        "text": (
+            "Hierarchical query mapping: Oracle CONNECT BY + START WITH → PostgreSQL WITH RECURSIVE CTE. "
+            "Rules: START WITH cond → non-recursive part WHERE cond. "
+            "CONNECT BY PRIOR parent_id = child_id → recursive part JOIN on parent_id. "
+            "LEVEL → recursive level counter (start at 0, increment by 1). "
+            "CONNECT_BY_ISLEAF → NOT EXISTS(SELECT 1 FROM table WHERE parent_id = current.id). "
+            "SYS_CONNECT_BY_PATH(col, '/') → array_to_string(ARRAY[path], '/'). "
+            "Example: SELECT LEVEL, name FROM emp START WITH manager_id IS NULL CONNECT BY PRIOR id = manager_id "
+            "→ WITH RECURSIVE emp_tree AS (SELECT id, name, 0 AS lvl FROM emp WHERE manager_id IS NULL "
+            "UNION ALL SELECT e.id, e.name, t.lvl+1 FROM emp e JOIN emp_tree t ON e.manager_id = t.id) "
+            "SELECT lvl, name FROM emp_tree."
+        ),
+        "source": "kb/syntax/hierarchical-query",
+        "meta": {"category": "SYNTAX", "source_dialect": "oracle", "target_dialect": "postgresql"},
+    },
+    {
+        "id": "kb-syntax-merge",
+        "text": (
+            "MERGE statement mapping: Oracle MERGE INTO target USING source ON (condition) "
+            "WHEN MATCHED THEN UPDATE SET ... WHEN NOT MATCHED THEN INSERT ... "
+            "PostgreSQL 15+ supports MERGE natively. For older versions, use INSERT ... ON CONFLICT. "
+            "Example: MERGE INTO emp e USING updates u ON (e.id = u.id) "
+            "WHEN MATCHED THEN UPDATE SET e.salary = u.salary "
+            "→ INSERT INTO emp SELECT * FROM updates ON CONFLICT (id) DO UPDATE SET salary = EXCLUDED.salary."
+        ),
+        "source": "kb/syntax/merge-upsert",
+        "meta": {"category": "SYNTAX", "source_dialect": "oracle", "target_dialect": "postgresql"},
+    },
+    {
+        "id": "kb-syntax-fulltext",
+        "text": (
+            "Full-text search mapping: MySQL MATCH(col1, col2) AGAINST('keyword' IN BOOLEAN MODE) "
+            "→ PostgreSQL use to_tsvector('english', col1 || ' ' || col2) @@ to_tsquery('english', 'keyword'). "
+            "For simple LIKE queries: MATCH ... AGAINST → col LIKE '%keyword%' or use tsvector/tsquery. "
+            "Create GIN index for performance: CREATE INDEX idx ON t USING GIN(to_tsvector('english', col)). "
+            "Example: SELECT * FROM articles WHERE MATCH(title, content) AGAINST('database' IN BOOLEAN MODE) "
+            "→ SELECT * FROM articles WHERE to_tsvector('english', title || ' ' || content) @@ to_tsquery('english', 'database')."
+        ),
+        "source": "kb/syntax/fulltext-search",
+        "meta": {"category": "SYNTAX", "source_dialect": "mysql", "target_dialect": "postgresql"},
+    },
+    # ── 以下为从 sqlines.com 等权威来源扩充的综合迁移文档 ──
+    {
+        "id": "kb-mysql-pg-datatypes-comprehensive",
+        "text": (
+            "MySQL to PostgreSQL comprehensive data type mapping reference. "
+            "Character types: MySQL VARCHAR(n) → PostgreSQL VARCHAR(n), MySQL CHAR(n) → PostgreSQL CHAR(n), "
+            "MySQL TEXT/LONGTEXT/MEDIUMTEXT → PostgreSQL TEXT, MySQL TINYTEXT → PostgreSQL VARCHAR(255). "
+            "Numeric types: MySQL TINYINT → PostgreSQL SMALLINT, MySQL SMALLINT → PostgreSQL SMALLINT, "
+            "MySQL INT/INTEGER → PostgreSQL INTEGER, MySQL BIGINT → PostgreSQL BIGINT, "
+            "MySQL FLOAT → PostgreSQL REAL, MySQL DOUBLE → PostgreSQL DOUBLE PRECISION, "
+            "MySQL DECIMAL(p,s) → PostgreSQL DECIMAL(p,s) or NUMERIC(p,s), "
+            "MySQL TINYINT(1) → PostgreSQL BOOLEAN (common for flags), "
+            "MySQL UNSIGNED INT → PostgreSQL INTEGER with CHECK constraint (col >= 0). "
+            "Date/Time types: MySQL DATETIME → PostgreSQL TIMESTAMP, MySQL DATE → PostgreSQL DATE, "
+            "MySQL TIME → PostgreSQL TIME, MySQL TIMESTAMP → PostgreSQL TIMESTAMPTZ, "
+            "MySQL YEAR → PostgreSQL SMALLINT or INTEGER. "
+            "Binary types: MySQL BLOB/LONGBLOB/MEDIUMBLOB/TINYBLOB → PostgreSQL BYTEA, "
+            "MySQL BINARY/VARBINARY → PostgreSQL BYTEA. "
+            "Other types: MySQL ENUM → PostgreSQL CREATE TYPE ... AS ENUM, "
+            "MySQL SET → PostgreSQL TEXT[] or CREATE TYPE, "
+            "MySQL JSON → PostgreSQL JSONB (preferred over JSON for indexing). "
+            "Important differences: PostgreSQL is strict about type casting, MySQL is more permissive. "
+            "MySQL allows implicit type conversion; PostgreSQL requires explicit CAST or :: syntax."
+        ),
+        "source": "kb/types/mysql-pg-comprehensive",
+        "meta": {"category": "TYPE_MAPPING", "source_dialect": "mysql", "target_dialect": "postgresql"},
+    },
+    {
+        "id": "kb-oracle-pg-datatypes-comprehensive",
+        "text": (
+            "Oracle to PostgreSQL comprehensive data type mapping reference. "
+            "Character types: Oracle VARCHAR2(n) → PostgreSQL VARCHAR(n), Oracle CHAR(n) → PostgreSQL CHAR(n), "
+            "Oracle CLOB → PostgreSQL TEXT, Oracle LONG → PostgreSQL TEXT, "
+            "Oracle NCHAR(n) → PostgreSQL CHAR(n), Oracle NVARCHAR2(n) → PostgreSQL VARCHAR(n), "
+            "Oracle NCLOB → PostgreSQL TEXT. "
+            "Numeric types: Oracle NUMBER(p,0) where p<3 → PostgreSQL SMALLINT, "
+            "Oracle NUMBER(p,0) where 3<=p<5 → PostgreSQL SMALLINT, "
+            "Oracle NUMBER(p,0) where 5<=p<9 → PostgreSQL INTEGER, "
+            "Oracle NUMBER(p,0) where 9<=p<19 → PostgreSQL BIGINT, "
+            "Oracle NUMBER(p,0) where 19<=p<=38 → PostgreSQL DECIMAL(p), "
+            "Oracle NUMBER(p,s) where s>0 → PostgreSQL DECIMAL(p,s), "
+            "Oracle NUMBER/NUMBER(*) → PostgreSQL DECIMAL or DOUBLE PRECISION, "
+            "Oracle BINARY_FLOAT → PostgreSQL REAL, Oracle BINARY_DOUBLE → PostgreSQL DOUBLE PRECISION, "
+            "Oracle INTEGER → PostgreSQL DECIMAL(38). "
+            "Date/Time types: Oracle DATE (includes time) → PostgreSQL TIMESTAMP(0), "
+            "Oracle TIMESTAMP → PostgreSQL TIMESTAMP, "
+            "Oracle TIMESTAMP WITH TIME ZONE → PostgreSQL TIMESTAMP WITH TIME ZONE, "
+            "Oracle INTERVAL YEAR TO MONTH → PostgreSQL INTERVAL YEAR TO MONTH, "
+            "Oracle INTERVAL DAY TO SECOND → PostgreSQL INTERVAL DAY TO SECOND. "
+            "Binary types: Oracle BLOB → PostgreSQL BYTEA, Oracle LONG RAW → PostgreSQL BYTEA, "
+            "Oracle RAW(n) → PostgreSQL BYTEA. "
+            "Other types: Oracle XMLTYPE → PostgreSQL XML, Oracle BFILE → PostgreSQL VARCHAR(255), "
+            "Oracle ROWID → PostgreSQL CHAR(10), Oracle SYS_REFCURSOR → PostgreSQL REFCURSOR."
+        ),
+        "source": "kb/types/oracle-pg-comprehensive",
+        "meta": {"category": "TYPE_MAPPING", "source_dialect": "oracle", "target_dialect": "postgresql"},
+    },
+    {
+        "id": "kb-mysql-pg-functions-comprehensive",
+        "text": (
+            "MySQL to PostgreSQL comprehensive function mapping reference. "
+            "String functions: MySQL IFNULL(x,y) → PostgreSQL COALESCE(x,y), "
+            "MySQL CONCAT(a,b,...) → PostgreSQL CONCAT(a,b,...) or a||b||..., "
+            "MySQL GROUP_CONCAT(expr SEPARATOR sep) → PostgreSQL STRING_AGG(expr, sep), "
+            "MySQL SUBSTRING_INDEX(str,delim,count) → PostgreSQL split_part(str, delim, count), "
+            "MySQL CHAR_LENGTH(str) → PostgreSQL CHAR_LENGTH(str) or LENGTH(str), "
+            "MySQL LOCATE(substr, str) → PostgreSQL POSITION(substr IN str) or STRPOS(str, substr), "
+            "MySQL ELT(n, str1, str2, ...) → PostgreSQL CASE WHEN n=1 THEN str1 WHEN n=2 THEN str2 ... END, "
+            "MySQL FIELD(str, str1, str2, ...) → PostgreSQL CASE WHEN str=str1 THEN 1 WHEN str=str2 THEN 2 ... END. "
+            "Date functions: MySQL NOW() → PostgreSQL NOW() or CURRENT_TIMESTAMP, "
+            "MySQL CURDATE() → PostgreSQL CURRENT_DATE, MySQL CURTIME() → PostgreSQL CURRENT_TIME, "
+            "MySQL DATE_FORMAT(date, format) → PostgreSQL TO_CHAR(date, format), "
+            "MySQL DATEDIFF(d1,d2) → PostgreSQL d1-d2 (returns interval), "
+            "MySQL DATE_ADD(date, INTERVAL n UNIT) → PostgreSQL date + INTERVAL 'n unit', "
+            "MySQL DATE_SUB(date, INTERVAL n UNIT) → PostgreSQL date - INTERVAL 'n unit', "
+            "MySQL UNIX_TIMESTAMP() → PostgreSQL EXTRACT(EPOCH FROM NOW()), "
+            "MySQL FROM_UNIXTIME(ts) → PostgreSQL TO_TIMESTAMP(ts). "
+            "Math functions: MySQL MOD(a,b) → PostgreSQL a % b or MOD(a,b), "
+            "MySQL TRUNCATE(n,d) → PostgreSQL TRUNC(n,d), "
+            "MySQL RAND() → PostgreSQL RANDOM(). "
+            "Control flow: MySQL IF(cond,t,f) → PostgreSQL CASE WHEN cond THEN t ELSE f END, "
+            "MySQL IFNULL(x,y) → PostgreSQL COALESCE(x,y), "
+            "MySQL NULLIF(x,y) → PostgreSQL NULLIF(x,y) (same). "
+            "JSON functions: MySQL JSON_EXTRACT(json, path) → PostgreSQL json->'key' or jsonb_path_query, "
+            "MySQL JSON_ARRAY_APPEND → PostgreSQL jsonb_set or || operator."
+        ),
+        "source": "kb/functions/mysql-pg-comprehensive",
+        "meta": {"category": "FUNCTION", "source_dialect": "mysql", "target_dialect": "postgresql"},
+    },
+    {
+        "id": "kb-oracle-pg-functions-comprehensive",
+        "text": (
+            "Oracle to PostgreSQL comprehensive function mapping reference. "
+            "String functions: Oracle NVL(x,y) → PostgreSQL COALESCE(x,y), "
+            "Oracle NVL2(x,y,z) → PostgreSQL CASE WHEN x IS NOT NULL THEN y ELSE z END, "
+            "Oracle DECODE(expr, val1, res1, val2, res2, default) → PostgreSQL CASE expr WHEN val1 THEN res1 WHEN val2 THEN res2 ELSE default END, "
+            "Oracle INSTR(str, substr) → PostgreSQL POSITION(substr IN str) or STRPOS(str, substr), "
+            "Oracle INSTR(str, substr, pos) → PostgreSQL POSITION(substr IN SUBSTRING(str FROM pos)) + pos - 1, "
+            "Oracle SUBSTR(str, pos, len) → PostgreSQL SUBSTRING(str FROM pos FOR len), "
+            "Oracle LISTAGG(expr, delim) WITHIN GROUP (ORDER BY col) → PostgreSQL STRING_AGG(expr, delim ORDER BY col), "
+            "Oracle REGEXP_SUBSTR(str, pat, pos, nth) → PostgreSQL (REGEXP_MATCHES(str, pat))[nth], "
+            "Oracle REGEXP_REPLACE(str, pat, rep) → PostgreSQL REGEXP_REPLACE(str, pat, rep), "
+            "Oracle SOUNDEX(str) → PostgreSQL SOUNDEX(str) (same), "
+            "Oracle TO_CHAR(expr, format) → PostgreSQL TO_CHAR(expr, format) (same), "
+            "Oracle CONCAT(a,b) → PostgreSQL a||b (only 2 args in Oracle, use || for multiple). "
+            "Date functions: Oracle SYSDATE → PostgreSQL CURRENT_TIMESTAMP(0) or NOW(), "
+            "Oracle SYSTIMESTAMP → PostgreSQL CURRENT_TIMESTAMP, "
+            "Oracle TRUNC(datetime, 'unit') → PostgreSQL DATE_TRUNC('unit', datetime), "
+            "Oracle ADD_MONTHS(date, n) → PostgreSQL date + INTERVAL 'n months', "
+            "Oracle MONTHS_BETWEEN(d1,d2) → PostgreSQL EXTRACT(YEAR FROM age(d1,d2))*12 + EXTRACT(MONTH FROM age(d1,d2)), "
+            "Oracle NEXT_DAY(date, 'day') → PostgreSQL date + ((n - EXTRACT(DOW FROM date) + 7) % 7), "
+            "Oracle LAST_DAY(date) → PostgreSQL (DATE_TRUNC('MONTH', date) + INTERVAL '1 MONTH - 1 day')::date, "
+            "Oracle FROM_TZ(ts, tz) → PostgreSQL ts AT TIME ZONE tz. "
+            "Math functions: Oracle TRUNC(n, precision) → PostgreSQL TRUNC(n, precision) (same), "
+            "Oracle MOD(a,b) → PostgreSQL a % b or MOD(a,b), "
+            "Oracle POWER(a,b) → PostgreSQL POWER(a,b) or a^b. "
+            "System functions: Oracle USER → PostgreSQL CURRENT_USER, "
+            "Oracle SYS_CONTEXT('USERENV','SESSION_USER') → PostgreSQL SESSION_USER, "
+            "Oracle SYS_CONTEXT('USERENV','IP_ADDRESS') → PostgreSQL INET_CLIENT_ADDR()."
+        ),
+        "source": "kb/functions/oracle-pg-comprehensive",
+        "meta": {"category": "FUNCTION", "source_dialect": "oracle", "target_dialect": "postgresql"},
+    },
+    {
+        "id": "kb-mysql-pg-syntax-differences",
+        "text": (
+            "MySQL to PostgreSQL comprehensive syntax differences reference. "
+            "LIMIT clause: MySQL LIMIT offset, count → PostgreSQL LIMIT count OFFSET offset (note: order is reversed). "
+            "Example: LIMIT 10, 20 → LIMIT 20 OFFSET 10. "
+            "UPDATE with JOIN: MySQL UPDATE t1 JOIN t2 ON t1.id=t2.id SET t1.col=val → PostgreSQL UPDATE t1 SET col=val FROM t2 WHERE t1.id=t2.id. "
+            "DELETE with JOIN: MySQL DELETE t1 FROM t1 JOIN t2 ON ... → PostgreSQL DELETE FROM t1 USING t2 WHERE .... "
+            "INSERT IGNORE: MySQL INSERT IGNORE INTO t → PostgreSQL INSERT INTO t ... ON CONFLICT DO NOTHING. "
+            "REPLACE INTO: MySQL REPLACE INTO t → PostgreSQL INSERT INTO t ... ON CONFLICT DO UPDATE SET .... "
+            "ON DUPLICATE KEY UPDATE: MySQL ON DUPLICATE KEY UPDATE col=VALUES(col) → PostgreSQL ON CONFLICT (key) DO UPDATE SET col=EXCLUDED.col. "
+            "Identifier quoting: MySQL backticks `col` → PostgreSQL double quotes \"col\". "
+            "String quoting: MySQL allows single quotes and double quotes for strings; PostgreSQL only uses single quotes for strings, double quotes for identifiers. "
+            "Boolean values: MySQL uses 0/1 or TRUE/FALSE; PostgreSQL uses true/false/NULL. "
+            "Auto increment: MySQL AUTO_INCREMENT → PostgreSQL GENERATED ALWAYS AS IDENTITY (PostgreSQL 10+) or SERIAL (legacy). "
+            "Table engine: MySQL ENGINE=InnoDB → PostgreSQL (no equivalent, remove). "
+            "Character set: MySQL CHARSET=utf8 → PostgreSQL (no equivalent, use UTF-8 by default). "
+            "Collation: MySQL COLLATE utf8_general_ci → PostgreSQL (use COLLATE clause or set at database level). "
+            "Constraint naming: MySQL auto-generates constraint names; PostgreSQL may throw 'relation already exists' error if constraint name conflicts. "
+            "Solution: explicitly name constraints or use IF NOT EXISTS."
+        ),
+        "source": "kb/syntax/mysql-pg-differences",
+        "meta": {"category": "SYNTAX", "source_dialect": "mysql", "target_dialect": "postgresql"},
+    },
+    {
+        "id": "kb-oracle-pg-syntax-differences",
+        "text": (
+            "Oracle to PostgreSQL comprehensive syntax differences reference. "
+            "Outer join: Oracle (+) operator → PostgreSQL LEFT/RIGHT JOIN ... ON. "
+            "Example: WHERE e.dept_id = d.dept_id(+) → FROM e LEFT JOIN d ON e.dept_id = d.dept_id. "
+            "Hierarchical query: Oracle CONNECT BY + START WITH → PostgreSQL WITH RECURSIVE CTE. "
+            "ROWNUM: Oracle ROWNUM <= N → PostgreSQL LIMIT N. "
+            "ROWNUM pagination: Oracle SELECT * FROM (SELECT t.*, ROWNUM rn FROM t WHERE ROWNUM <= 20) WHERE rn > 10 "
+            "→ PostgreSQL SELECT * FROM t LIMIT 10 OFFSET 10 (do NOT use ROW_NUMBER() OVER ()). "
+            "DUAL table: Oracle SELECT expr FROM dual → PostgreSQL SELECT expr (remove FROM dual). "
+            "Sequences: Oracle seq.NEXTVAL → PostgreSQL NEXTVAL('seq'), Oracle seq.CURRVAL → PostgreSQL CURVAL('seq'). "
+            "Synonyms: Oracle CREATE SYNONYM → PostgreSQL (no equivalent, use schema names or views). "
+            "Packages: Oracle CREATE PACKAGE → PostgreSQL (no equivalent, use schemas and functions). "
+            "Triggers: Oracle :NEW.col and :OLD.col → PostgreSQL NEW.col and OLD.col (no colon). "
+            "Cursors: Oracle SYS_REFCURSOR → PostgreSQL REFCURSOR. "
+            "Exception handling: Oracle EXCEPTION WHEN NO_DATA_FOUND → PostgreSQL EXCEPTION WHEN NO_DATA_FOUND (same). "
+            "Oracle WHEN OTHERS → PostgreSQL WHEN OTHERS (same). "
+            "DBMS_OUTPUT: Oracle DBMS_OUTPUT.PUT_LINE(msg) → PostgreSQL RAISE NOTICE '%', msg. "
+            "Autonomous transactions: Oracle PRAGMA AUTONOMOUS_TRANSACTION → PostgreSQL (use dblink or pg_background). "
+            "Materialized views: Oracle CREATE MATERIALIZED VIEW → PostgreSQL CREATE MATERIALIZED VIEW (same syntax). "
+            "Hint syntax: Oracle /*+ HINT */ → PostgreSQL (no hints, use EXPLAIN and pg_hint_plan extension)."
+        ),
+        "source": "kb/syntax/oracle-pg-differences",
+        "meta": {"category": "SYNTAX", "source_dialect": "oracle", "target_dialect": "postgresql"},
+    },
+    {
+        "id": "kb-oracle-pg-plsql-plpgsql",
+        "text": (
+            "Oracle PL/SQL to PostgreSQL PL/pgSQL conversion reference. "
+            "Function structure: Oracle CREATE OR REPLACE FUNCTION name(params) RETURN type IS BEGIN ... END; "
+            "→ PostgreSQL CREATE OR REPLACE FUNCTION name(params) RETURNS type AS $$ BEGIN ... END; $$ LANGUAGE plpgsql; "
+            "Procedure structure: Oracle CREATE OR REPLACE PROCEDURE name(params) IS BEGIN ... END; "
+            "→ PostgreSQL CREATE OR REPLACE PROCEDURE name(params) AS $$ BEGIN ... END; $$ LANGUAGE plpgsql; "
+            "Variable declaration: Oracle var_name type; → PostgreSQL var_name type; (same). "
+            "Constant: Oracle var_name CONSTANT type := value; → PostgreSQL var_name CONSTANT type := value; (same). "
+            "Cursor: Oracle CURSOR cur IS SELECT ... → PostgreSQL cur CURSOR FOR SELECT ...; "
+            "Oracle OPEN cur; FETCH cur INTO var; CLOSE cur; → PostgreSQL OPEN cur; FETCH cur INTO var; CLOSE cur; (same). "
+            "For loop: Oracle FOR rec IN (SELECT ...) LOOP ... END LOOP; → PostgreSQL FOR rec IN SELECT ... LOOP ... END LOOP; (no parentheses). "
+            "While loop: Oracle WHILE condition LOOP ... END LOOP; → PostgreSQL WHILE condition LOOP ... END LOOP; (same). "
+            "If statement: Oracle IF condition THEN ... ELSIF ... ELSE ... END IF; "
+            "→ PostgreSQL IF condition THEN ... ELSIF ... ELSE ... END IF; (same, but ELSIF not ELSEIF). "
+            "Return: Oracle RETURN expr; → PostgreSQL RETURN expr; (same for functions). "
+            "Oracle RETURN; (no value) → PostgreSQL RETURN; (same for procedures). "
+            "Exception handling: Oracle EXCEPTION WHEN exception_name THEN ... → PostgreSQL EXCEPTION WHEN exception_name THEN ... (same). "
+            "Oracle WHEN OTHERS THEN → PostgreSQL WHEN OTHERS THEN (same). "
+            "Oracle SQLCODE → PostgreSQL SQLSTATE (different values). "
+            "Oracle SQLERRM → PostgreSQL SQLERRM (same). "
+            "Raise error: Oracle RAISE_APPLICATION_ERROR(code, msg) → PostgreSQL RAISE EXCEPTION '%', msg; "
+            "Print output: Oracle DBMS_OUTPUT.PUT_LINE(msg) → PostgreSQL RAISE NOTICE '%', msg; "
+            "Commit: Oracle COMMIT; → PostgreSQL COMMIT; (same, but PostgreSQL auto-commits outside transaction blocks). "
+            "Rollback: Oracle ROLLBACK; → PostgreSQL ROLLBACK; (same). "
+            "Savepoint: Oracle SAVEPOINT name; → PostgreSQL SAVEPOINT name; (same)."
+        ),
+        "source": "kb/plsql/oracle-pg-plsql-plpgsql",
+        "meta": {"category": "PLSQL", "source_dialect": "oracle", "target_dialect": "postgresql"},
+    },
+    {
+        "id": "kb-mysql-pg-create-table-comprehensive",
+        "text": (
+            "MySQL to PostgreSQL CREATE TABLE comprehensive conversion reference. "
+            "Auto increment: MySQL id INT AUTO_INCREMENT PRIMARY KEY → PostgreSQL id SERIAL PRIMARY KEY (legacy) "
+            "or id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY (PostgreSQL 10+). "
+            "MySQL BIGINT AUTO_INCREMENT → PostgreSQL BIGSERIAL or BIGINT GENERATED ALWAYS AS IDENTITY. "
+            "Default values: MySQL DEFAULT CURRENT_TIMESTAMP → PostgreSQL DEFAULT CURRENT_TIMESTAMP (same). "
+            "MySQL DEFAULT 0 → PostgreSQL DEFAULT 0 (same). "
+            "MySQL DEFAULT NULL → PostgreSQL DEFAULT NULL (same, but PostgreSQL treats NULL differently). "
+            "Engine: MySQL ENGINE=InnoDB → PostgreSQL (remove, PostgreSQL always uses similar storage). "
+            "Charset: MySQL DEFAULT CHARSET=utf8mb4 → PostgreSQL (remove, use UTF-8 by default). "
+            "Collation: MySQL COLLATE=utf8mb4_unicode_ci → PostgreSQL (remove or use COLLATE clause). "
+            "Comment: MySQL COMMENT 'text' → PostgreSQL (use COMMENT ON COLUMN after CREATE TABLE). "
+            "Index: MySQL KEY idx_name (col) → PostgreSQL CREATE INDEX idx_name ON table(col) (separate statement). "
+            "Unique: MySQL UNIQUE KEY idx (col) → PostgreSQL UNIQUE (col) or CREATE UNIQUE INDEX. "
+            "Foreign key: MySQL FOREIGN KEY (col) REFERENCES t2(id) → PostgreSQL same syntax. "
+            "Check constraint: MySQL CHECK (expr) → PostgreSQL CHECK (expr) (same). "
+            "Enum: MySQL status ENUM('a','b') → PostgreSQL CREATE TYPE status_type AS ENUM('a','b'); then status status_type. "
+            "Set: MySQL tags SET('a','b','c') → PostgreSQL tags TEXT[] or CREATE TYPE tags_type AS ENUM('a','b','c'). "
+            "Unsigned: MySQL col INT UNSIGNED → PostgreSQL col INTEGER CHECK (col >= 0). "
+            "Zerofill: MySQL col INT ZEROFILL → PostgreSQL col INTEGER (remove ZEROFILL, use LPAD for display)."
+        ),
+        "source": "kb/ddl/mysql-pg-create-table",
+        "meta": {"category": "DDL", "source_dialect": "mysql", "target_dialect": "postgresql"},
+    },
+    {
+        "id": "kb-oracle-pg-create-table-comprehensive",
+        "text": (
+            "Oracle to PostgreSQL CREATE TABLE comprehensive conversion reference. "
+            "Data types: Oracle NUMBER → PostgreSQL NUMERIC/INTEGER/BIGINT (depends on precision), "
+            "Oracle VARCHAR2(n) → PostgreSQL VARCHAR(n), Oracle DATE → PostgreSQL TIMESTAMP(0), "
+            "Oracle CLOB → PostgreSQL TEXT, Oracle BLOB → PostgreSQL BYTEA. "
+            "Storage clauses: Oracle LOGGING → PostgreSQL (remove, logged by default), "
+            "Oracle TABLESPACE ts_name → PostgreSQL TABLESPACE ts_name (same, but must exist). "
+            "Constraints: Oracle CONSTRAINT pk_name PRIMARY KEY → PostgreSQL CONSTRAINT pk_name PRIMARY KEY (same), "
+            "Oracle CONSTRAINT uk_name UNIQUE → PostgreSQL CONSTRAINT uk_name UNIQUE (same), "
+            "Oracle CONSTRAINT fk_name FOREIGN KEY → PostgreSQL CONSTRAINT fk_name FOREIGN KEY (same). "
+            "Sequences: Oracle CREATE SEQUENCE seq_name START WITH 1 INCREMENT BY 1; "
+            "→ PostgreSQL CREATE SEQUENCE seq_name START WITH 1 INCREMENT BY 1; (same syntax). "
+            "Identity columns: Oracle id NUMBER GENERATED ALWAYS AS IDENTITY → PostgreSQL id INTEGER GENERATED ALWAYS AS IDENTITY. "
+            "Default values: Oracle DEFAULT expr → PostgreSQL DEFAULT expr (same). "
+            "Not null: Oracle col NOT NULL → PostgreSQL col NOT NULL (same). "
+            "Comments: Oracle COMMENT ON COLUMN t.col IS 'text' → PostgreSQL COMMENT ON COLUMN t.col IS 'text' (same). "
+            "Partitioning: Oracle PARTITION BY RANGE(col) → PostgreSQL PARTITION BY RANGE(col) (similar syntax). "
+            "Index-organized tables: Oracle IOT → PostgreSQL (no direct equivalent, use clustered indexes). "
+            "Global temporary tables: Oracle CREATE GLOBAL TEMPORARY TABLE → PostgreSQL CREATE TEMPORARY TABLE."
+        ),
+        "source": "kb/ddl/oracle-pg-create-table",
+        "meta": {"category": "DDL", "source_dialect": "oracle", "target_dialect": "postgresql"},
+    },
+    {
+        "id": "kb-mysql-pg-select-differences",
+        "text": (
+            "MySQL to PostgreSQL SELECT statement differences reference. "
+            "LIMIT: MySQL LIMIT offset, count → PostgreSQL LIMIT count OFFSET offset. "
+            "Example: SELECT * FROM t LIMIT 10, 20 → SELECT * FROM t LIMIT 20 OFFSET 10. "
+            "GROUP_CONCAT: MySQL GROUP_CONCAT(col SEPARATOR ',') → PostgreSQL STRING_AGG(col, ','). "
+            "WITH ROLLUP: MySQL GROUP BY col WITH ROLLUP → PostgreSQL GROUP BY ROLLUP(col). "
+            "HAVING: MySQL HAVING can use aliases; PostgreSQL HAVING cannot use aliases (use full expression). "
+            "Example: MySQL SELECT COUNT(*) AS cnt ... HAVING cnt > 5 → PostgreSQL SELECT COUNT(*) AS cnt ... HAVING COUNT(*) > 5. "
+            "Backticks: MySQL SELECT `col` FROM `table` → PostgreSQL SELECT \"col\" FROM \"table\". "
+            "String comparison: MySQL 'abc' = 'ABC' (case-insensitive by default); PostgreSQL 'abc' = 'abc' (case-sensitive). "
+            "Use ILIKE for case-insensitive matching in PostgreSQL. "
+            "REGEXP: MySQL col REGEXP 'pattern' → PostgreSQL col ~ 'pattern' (case-sensitive) or col ~* 'pattern' (case-insensitive). "
+            "IF function: MySQL IF(cond, t, f) → PostgreSQL CASE WHEN cond THEN t ELSE f END. "
+            "IFNULL: MySQL IFNULL(x, y) → PostgreSQL COALESCE(x, y). "
+            "NULL-safe equality: MySQL col <=> val → PostgreSQL col IS NOT DISTINCT FROM val. "
+            "FORCE INDEX: MySQL FORCE INDEX(idx) → PostgreSQL (no equivalent, use pg_hint_plan extension). "
+            "SQL_CALC_FOUND_ROWS: MySQL SELECT SQL_CALC_FOUND_ROWS ... → PostgreSQL use window function COUNT(*) OVER()."
+        ),
+        "source": "kb/query/mysql-pg-select",
+        "meta": {"category": "QUERY", "source_dialect": "mysql", "target_dialect": "postgresql"},
+    },
+    {
+        "id": "kb-oracle-pg-select-differences",
+        "text": (
+            "Oracle to PostgreSQL SELECT statement differences reference. "
+            "ROWNUM: Oracle SELECT * FROM t WHERE ROWNUM <= 10 → PostgreSQL SELECT * FROM t LIMIT 10. "
+            "ROWNUM pagination: Oracle SELECT * FROM (SELECT t.*, ROWNUM rn FROM t WHERE ROWNUM <= 20) WHERE rn > 10 "
+            "→ PostgreSQL SELECT * FROM t LIMIT 10 OFFSET 10. "
+            "Do NOT use ROW_NUMBER() OVER () for simple pagination in PostgreSQL. "
+            "CONNECT BY: Oracle SELECT LEVEL, name FROM emp START WITH manager_id IS NULL CONNECT BY PRIOR id = manager_id "
+            "→ PostgreSQL WITH RECURSIVE emp_tree AS (SELECT id, name, 0 AS lvl FROM emp WHERE manager_id IS NULL "
+            "UNION ALL SELECT e.id, e.name, t.lvl+1 FROM emp e JOIN emp_tree t ON e.manager_id = t.id) SELECT lvl, name FROM emp_tree. "
+            "DUAL table: Oracle SELECT SYSDATE FROM dual → PostgreSQL SELECT CURRENT_TIMESTAMP (remove FROM dual). "
+            "NVL: Oracle SELECT NVL(col, 'default') → PostgreSQL SELECT COALESCE(col, 'default'). "
+            "DECODE: Oracle DECODE(col, 'a', 1, 'b', 2, 0) → PostgreSQL CASE col WHEN 'a' THEN 1 WHEN 'b' THEN 2 ELSE 0 END. "
+            "LISTAGG: Oracle LISTAGG(name, ',') WITHIN GROUP (ORDER BY name) → PostgreSQL STRING_AGG(name, ',' ORDER BY name). "
+            "REGEXP_SUBSTR: Oracle REGEXP_SUBSTR(str, '[^@]+') → PostgreSQL (REGEXP_MATCHES(str, '[^@]+'))[1]. "
+            "Outer join (+): Oracle WHERE e.dept_id = d.dept_id(+) → PostgreSQL FROM e LEFT JOIN d ON e.dept_id = d.dept_id. "
+            "Minus: Oracle MINUS → PostgreSQL EXCEPT. "
+            "INTERSECT: same in both. "
+            "UNION: same in both. "
+            "Subquery in FROM: Oracle SELECT * FROM (SELECT ...) → PostgreSQL SELECT * FROM (SELECT ...) AS alias (alias required). "
+            "Inline view alias: Oracle (SELECT ...) alias → PostgreSQL (SELECT ...) AS alias (AS keyword required)."
+        ),
+        "source": "kb/query/oracle-pg-select",
+        "meta": {"category": "QUERY", "source_dialect": "oracle", "target_dialect": "postgresql"},
+    },
+    {
+        "id": "kb-mysql-pg-update-delete",
+        "text": (
+            "MySQL to PostgreSQL UPDATE and DELETE statement differences. "
+            "UPDATE with JOIN: MySQL UPDATE t1 INNER JOIN t2 ON t1.id = t2.ref_id SET t1.col = t2.val WHERE t2.status = 1 "
+            "→ PostgreSQL UPDATE t1 SET col = t2.val FROM t2 WHERE t1.id = t2.ref_id AND t2.status = 1. "
+            "Note: In PostgreSQL, JOIN conditions go in WHERE clause, not FROM clause. "
+            "DELETE with JOIN: MySQL DELETE t1 FROM t1 INNER JOIN t2 ON t1.id = t2.ref_id WHERE t2.status = 0 "
+            "→ PostgreSQL DELETE FROM t1 USING t2 WHERE t1.id = t2.ref_id AND t2.status = 0. "
+            "Note: MySQL uses DELETE alias FROM ...; PostgreSQL uses DELETE FROM ... USING .... "
+            "Multi-table DELETE: MySQL DELETE t1, t2 FROM t1 JOIN t2 ON ... WHERE ... "
+            "→ PostgreSQL requires separate DELETE statements for each table. "
+            "INSERT ... ON DUPLICATE KEY UPDATE: MySQL INSERT INTO t (id, val) VALUES (1, 'a') ON DUPLICATE KEY UPDATE val = VALUES(val) "
+            "→ PostgreSQL INSERT INTO t (id, val) VALUES (1, 'a') ON CONFLICT (id) DO UPDATE SET val = EXCLUDED.val. "
+            "Note: VALUES(col) in MySQL → EXCLUDED.col in PostgreSQL. "
+            "REPLACE INTO: MySQL REPLACE INTO t (id, val) VALUES (1, 'a') "
+            "→ PostgreSQL INSERT INTO t (id, val) VALUES (1, 'a') ON CONFLICT (id) DO UPDATE SET val = EXCLUDED.val. "
+            "INSERT IGNORE: MySQL INSERT IGNORE INTO t ... → PostgreSQL INSERT INTO t ... ON CONFLICT DO NOTHING."
+        ),
+        "source": "kb/dml/mysql-pg-update-delete",
+        "meta": {"category": "DML", "source_dialect": "mysql", "target_dialect": "postgresql"},
+    },
+    {
+        "id": "kb-oracle-pg-update-delete",
+        "text": (
+            "Oracle to PostgreSQL UPDATE and DELETE statement differences. "
+            "UPDATE with subquery: Oracle UPDATE t1 SET col = (SELECT val FROM t2 WHERE t2.id = t1.ref_id) "
+            "→ PostgreSQL same syntax (works in both). "
+            "UPDATE with MERGE: Oracle MERGE INTO target USING source ON (condition) WHEN MATCHED THEN UPDATE SET ... "
+            "→ PostgreSQL 15+ MERGE INTO target USING source ON (condition) WHEN MATCHED THEN UPDATE SET ... (same syntax). "
+            "For older PostgreSQL: INSERT ... ON CONFLICT DO UPDATE SET .... "
+            "DELETE with ROWNUM: Oracle DELETE FROM t WHERE ROWNUM <= 10 → PostgreSQL DELETE FROM t WHERE ctid IN (SELECT ctid FROM t LIMIT 10). "
+            "Note: PostgreSQL doesn't support ROWNUM; use ctid or LIMIT in subquery. "
+            "TRUNCATE: Oracle TRUNCATE TABLE t → PostgreSQL TRUNCATE TABLE t (same syntax). "
+            "Oracle TRUNCATE TABLE t CASCADE → PostgreSQL TRUNCATE TABLE t CASCADE (same). "
+            "Oracle TRUNCATE TABLE t PURGE → PostgreSQL (no equivalent, PostgreSQL doesn't have recycle bin). "
+            "INSERT with sequence: Oracle INSERT INTO t (id, name) VALUES (seq.NEXTVAL, 'a') "
+            "→ PostgreSQL INSERT INTO t (id, name) VALUES (NEXTVAL('seq'), 'a'). "
+            "INSERT with RETURNING: Oracle INSERT INTO t ... RETURNING col INTO var "
+            "→ PostgreSQL INSERT INTO t ... RETURNING col INTO var (same in PL/pgSQL). "
+            "BULK COLLECT: Oracle BULK COLLECT INTO collection → PostgreSQL use arrays or FOR loop. "
+            "FORALL: Oracle FORALL i IN 1..count INSERT INTO t ... → PostgreSQL use FOR loop or COPY command."
+        ),
+        "source": "kb/dml/oracle-pg-update-delete",
+        "meta": {"category": "DML", "source_dialect": "oracle", "target_dialect": "postgresql"},
     },
 ]
 

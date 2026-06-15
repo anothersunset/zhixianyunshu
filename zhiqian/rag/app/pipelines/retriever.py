@@ -249,7 +249,8 @@ class HybridRetriever:
         if qdrant is not None:
             self._qdrant = qdrant
         elif settings.use_qdrant:
-            self._qdrant = QdrantStore(url=settings.qdrant_url, api_key=settings.qdrant_api_key or None, dim=settings.embedding_dim)
+            local_path = settings.qdrant_local_path or None
+            self._qdrant = QdrantStore(url=settings.qdrant_url, api_key=settings.qdrant_api_key or None, dim=settings.embedding_dim, local_path=local_path)
         else:
             self._qdrant = None
         self.graph_index = None  # GraphRagIndex, set by main.py lifespan
@@ -429,71 +430,62 @@ class HybridRetriever:
                     break
 
             # ── Rerank ──
+            result: List[Dict[str, Any]] = []
             if use_rerank and self._reranker and self._reranker.available and coarse:
                 try:
                     with tr.span("rerank.cross_encoder", input={"candidates": len(coarse), "top_n": top_k}) as sp:
                         texts = [c["text"] for c in coarse]
                         reranked = self._reranker.rerank(question, texts, top_n=top_k)
-                        out: List[Dict[str, Any]] = []
                         for idx, rscore in reranked:
                             item = dict(coarse[idx])
                             item["rerank_score"] = float(rscore)
                             item["score"] = float(rscore)
-                            out.append(item)
-                        sp.output({"reranked": len(out), "top_id": out[0]["id"] if out else None})
-                    if parent_trace is None:
-                        tr.output({"final_ids": [x["id"] for x in out]})
-                    return out
+                            result.append(item)
+                        sp.output({"reranked": len(result), "top_id": result[0]["id"] if result else None})
                 except Exception as e:
                     log.warning("[HybridRetriever] rerank 失败 (可能是 OOM), 降级到原序: %s", e)
+                    result = coarse[:top_k]
+            else:
+                result = coarse[:top_k]
 
-            result = coarse[:top_k]
-
-            # ── v2-step-13: GraphRAG 扩展（仅 full 模式）──
+            # ── GraphRAG 增强：在 CRAG 结果后补充图关联文档 ──
             if mode == "full" and self.graph_index and self.graph_index.nodes:
                 try:
-                    with tr.span("graphrag.local", input={"question": question, "max_entities": 3, "hop": 1}) as sp:
-                        gr = self.graph_index.query_local(question, max_entities=3, hop=1, weight_threshold=0.0)
-                        graph_ctx = gr.get("context", "")
-                        hits = gr.get("hits", [])
-                        sp.output({"hits": len(hits), "neighbors": len(gr.get("neighbors", []))})
-                    # 将 graph context 附加到结果，追加未覆盖的实体
-                    existing_ids = {item["id"] for item in result}
-                    # neighbors 返回的是 dict 列表，需提取 id
-                    neighbor_dicts = gr.get("neighbors", [])
-                    neighbor_ids = [n["id"] if isinstance(n, dict) else n for n in neighbor_dicts]
-                    for nid in hits + neighbor_ids:
-                        if nid in existing_ids:
-                            continue
-                        d = self._by_id.get(nid)
-                        if d:
+                    with tr.span("graphrag.enhance", input={"question": question}) as sp:
+                        existing_ids = {r["id"] for r in result}
+                        gr = self.graph_index.query_local(question, max_entities=5, hop=1, weight_threshold=0.0)
+                        added = 0
+                        # 补充 CRAG 没找到的邻居文档
+                        for n in gr.get("neighbors", []):
+                            nid = n["id"] if isinstance(n, dict) else n
+                            if nid not in existing_ids:
+                                d = self._by_id.get(nid)
+                                if d:
+                                    result.append({
+                                        "id": d["id"],
+                                        "text": d["text"],
+                                        "score": 0.3,
+                                        "source": d.get("source", "graphrag"),
+                                        "meta": d.get("meta"),
+                                        "channels": {"graphrag_supplement": 1},
+                                    })
+                                    existing_ids.add(nid)
+                                    added += 1
+                        # 追加 community reports
+                        gr_global = self.graph_index.query_global(question, max_reports=2)
+                        global_ctx = gr_global.get("context", "")
+                        if global_ctx:
                             result.append({
-                                "id": d["id"],
-                                "text": d["text"],
-                                "score": 0.3,
-                                "rrf_score": 0.3,
-                                "channels": {"graphrag": 1},
-                                "source": d.get("source", "unknown"),
-                                "meta": dict(d.get("meta") or {}),
-                                "graphrag_hit": nid in hits,
+                                "id": "graphrag-global",
+                                "text": global_ctx[:500],
+                                "score": 0.2,
+                                "source": "graphrag/community-reports",
+                                "meta": {"graphrag": True},
+                                "channels": {"graphrag_global": 1},
                             })
-                            existing_ids.add(nid)
-                    # 也获取 global 社区报告
-                    gr_global = self.graph_index.query_global(question, max_reports=2)
-                    global_ctx = gr_global.get("context", "")
-                    if global_ctx:
-                        # 作为虚拟文档追加
-                        result.append({
-                            "id": "graphrag-global",
-                            "text": global_ctx[:500],
-                            "score": 0.2,
-                            "rrf_score": 0.2,
-                            "channels": {"graphrag_global": 1},
-                            "source": "graphrag/community-reports",
-                            "meta": {"graphrag": True},
-                        })
+                        sp.output({"added": added, "total": len(result)})
                 except Exception as e:
-                    log.warning("[HybridRetriever] GraphRAG query failed, falling back: %s", e)
+                    log.warning("[HybridRetriever] GraphRAG enhance failed: %s", e)
 
             if parent_trace is None:
                 tr.output({"final_ids": [x["id"] for x in result]})

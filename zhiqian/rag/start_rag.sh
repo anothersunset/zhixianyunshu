@@ -44,7 +44,10 @@ kill_port_process() {
 start_rag() {
     log "启动 RAG 服务 (端口=$RAG_PORT, 内存限制=${MEMORY_LIMIT}MB)..."
 
+    export HF_HOME=/c/Users/anoth/.hf_cache
     export HF_HUB_OFFLINE=1
+    export TRANSFORMERS_OFFLINE=1
+    export HF_DATASETS_OFFLINE=1
     export RAG_USE_RERANKER=true
     export RAG_RRF_K=15
     export RAG_RRF_CHANNEL_WEIGHTS="1.0,1.0,0.5"

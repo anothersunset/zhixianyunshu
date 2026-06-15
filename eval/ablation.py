@@ -18,25 +18,32 @@ from eval.run_eval import RETRIEVAL_CHOICES, _eval_one, evaluate, load_dataset, 
 LOCK_FILE = Path("eval/results/.ablation.lock")
 
 
-def _acquire_lock():
-    """防止多个消融进程同时运行。"""
+def _acquire_lock(force=False):
+    """防止多个消融进程同时运行。force=True 时强制获取锁。"""
     if LOCK_FILE.exists():
         try:
-            old_pid = int(LOCK_FILE.read_text().strip())
+            content = LOCK_FILE.read_text().strip()
+            old_pid = int(content)
             # 检查进程是否还在
             if sys.platform == "win32":
                 import subprocess
                 r = subprocess.run(["tasklist", "/FI", f"PID eq {old_pid}"],
                                    capture_output=True, text=True, timeout=5)
                 if str(old_pid) in r.stdout:
-                    print(f"[FATAL] 另一个消融进程 (PID={old_pid}) 正在运行！请先杀掉它。", flush=True)
-                    sys.exit(1)
+                    if force:
+                        print(f"[warn] 强制覆盖旧锁 (PID={old_pid})", flush=True)
+                    else:
+                        print(f"[FATAL] 另一个消融进程 (PID={old_pid}) 正在运行！用 --force 强制覆盖。", flush=True)
+                        sys.exit(1)
             else:
                 os.kill(old_pid, 0)
-                print(f"[FATAL] 另一个消融进程 (PID={old_pid}) 正在运行！", flush=True)
-                sys.exit(1)
+                if force:
+                    print(f"[warn] 强制覆盖旧锁 (PID={old_pid})", flush=True)
+                else:
+                    print(f"[FATAL] 另一个消融进程 (PID={old_pid}) 正在运行！用 --force 强制覆盖。", flush=True)
+                    sys.exit(1)
         except (ValueError, OSError, ProcessLookupError):
-            pass  # 旧进程已死，可以继续
+            pass  # 旧进程已死或文件损坏，可以继续
     LOCK_FILE.write_text(str(os.getpid()))
 
 
@@ -198,10 +205,13 @@ def _print_interim(checkpoint: dict, done: int, total: int, t_start: float):
     print(f"{'─' * 60}\n", flush=True)
 
 
-def run_all_per_case(dataset="eval/datasets", pair="all", use_judge=True, fast=False, cooldown=None):
+def run_all_per_case(dataset="eval/datasets", pair="all", use_judge=True, fast=False, cooldown=None,
+                     max_workers=2, max_consecutive_errors=10, limit=0):
     """Per-case 模式：每个 case 并行跑 A-E 全部 5 组，方便 per-case 对比分析。
 
-    优化：5 个模式并发执行（ThreadPoolExecutor），冷却在 case 间而非请求间。
+    优化：max_workers 个模式并发执行（默认 2，避免后端过载），冷却在 case 间而非请求间。
+    容错：每个 case 独立 try/except，单个 case 失败不影响整体进度。
+          连续失败达 max_consecutive_errors 次时暂停 120s 冷却。
     """
     client = MigrationClient(cooldown=cooldown)
     judge = LLMJudge() if use_judge else None
@@ -209,28 +219,72 @@ def run_all_per_case(dataset="eval/datasets", pair="all", use_judge=True, fast=F
     results_dir = Path("eval/results").resolve()
     results_dir.mkdir(parents=True, exist_ok=True)
 
+    # 日志文件（独立于 stdout，防止 nohup 吞输出）
+    log_file = results_dir / "per_case_ablation.log"
+    try:
+        _log_fh = open(log_file, "a", encoding="utf-8")
+    except Exception:
+        _log_fh = None
+
+    def _log(msg: str):
+        print(msg, flush=True)
+        if _log_fh:
+            try:
+                _log_fh.write(msg + "\n")
+                _log_fh.flush()
+            except Exception:
+                pass
+
+    # 限制 case 数量
+    if limit > 0:
+        cases = cases[:limit]
+        _log(f"[per-case] 限制为前 {limit} 个 case")
+
     # checkpoint 结构: {case_id: {mode: row_dict, ...}, ...}
     ckpt_file = results_dir / f"per_case_{pair}{'_fast' if fast else ''}.json"
     checkpoint = {}
     if ckpt_file.exists():
         try:
             checkpoint = json.load(open(ckpt_file, encoding="utf-8"))
-            print(f"[per-case] 加载 checkpoint: {len(checkpoint)} cases 已完成", flush=True)
+            _log(f"[per-case] 加载 checkpoint: {len(checkpoint)} cases 已完成")
         except (json.JSONDecodeError, KeyError):
             pass
 
     total = len(cases)
     t_start = time.time()
+    consecutive_errors = 0
+    backend_ok_until = 0  # 上次后端健康检查通过的时间
 
     for ci, case in enumerate(cases):
         cid = case["id"]
         if cid in checkpoint and len(checkpoint[cid]) == len(RETRIEVAL_CHOICES):
-            print(f"[{ci+1}/{total}] {cid}: 已完成，跳过", flush=True)
+            _log(f"[{ci+1}/{total}] {cid}: 已完成，跳过")
             continue
+
+        # 每 10 个 case 或连续错误后检查后端健康
+        now = time.time()
+        if ci % 10 == 0 or consecutive_errors > 0 or now - backend_ok_until > 120:
+            if not wait_for_backend(client.base_url, timeout=60):
+                _log(f"[{ci+1}/{total}] 后端不可用，暂停 30s 后重试...")
+                time.sleep(30)
+                if not wait_for_backend(client.base_url, timeout=60):
+                    _log(f"[{ci+1}/{total}] 后端持续不可用，跳过本 case")
+                    continue
+            backend_ok_until = time.time()
 
         # case 间冷却（第一个 case 不冷却）
         if ci > 0 and cid not in checkpoint:
             client.batch_throttle()
+
+        # 连续错误过多时暂停冷却
+        if consecutive_errors >= max_consecutive_errors:
+            _log(f"  *** 连续 {consecutive_errors} 个 case 出错，暂停 120s 冷却...")
+            time.sleep(120)
+            consecutive_errors = 0
+            # 冷却后重新检查后端
+            if not wait_for_backend(client.base_url, timeout=60):
+                _log(f"  *** 冷却后后端仍不可用，退出")
+                break
 
         # 确定本 case 需要跑的模式
         case_results = checkpoint.get(cid, {})
@@ -239,32 +293,45 @@ def run_all_per_case(dataset="eval/datasets", pair="all", use_judge=True, fast=F
         if not remaining_modes:
             continue
 
-        print(f"\n[{ci+1}/{total}] {cid} ({case['pair']}): 并行跑 {len(remaining_modes)} 组...", flush=True)
+        _log(f"\n[{ci+1}/{total}] {cid} ({case['pair']}): 并行跑 {len(remaining_modes)} 组 (workers={max_workers})...")
         t_case = time.time()
 
-        # 并行执行 5 个模式（skip_throttle=True，冷却由 case 层面控制）
-        with ThreadPoolExecutor(max_workers=5) as mode_pool:
-            futures = {
-                mode_pool.submit(_eval_one, case, mode, client, judge, fast, True): mode
-                for mode in remaining_modes
-            }
-            for fut in as_completed(futures):
-                mode = futures[fut]
-                try:
-                    row = fut.result()
-                    tag = "OK" if row["sql_ok"] else "FAIL"
-                    print(f"  {GROUP_LABEL[mode]}: {tag}", flush=True)
-                except Exception as e:
-                    row = {"id": cid, "pair": case["pair"], "sql_ok": False, "error": str(e)}
-                    print(f"  {GROUP_LABEL[mode]}: ERROR {e}", flush=True)
+        try:
+            # 并行执行模式（skip_throttle=True，冷却由 case 层面控制）
+            with ThreadPoolExecutor(max_workers=max_workers) as mode_pool:
+                futures = {
+                    mode_pool.submit(_eval_one, case, mode, client, judge, fast, True): mode
+                    for mode in remaining_modes
+                }
+                for fut in as_completed(futures):
+                    mode = futures[fut]
+                    try:
+                        row = fut.result(timeout=180)  # 单个模式最多 3 分钟
+                        tag = "OK" if row["sql_ok"] else "FAIL"
+                        _log(f"  {GROUP_LABEL[mode]}: {tag}")
+                    except Exception as e:
+                        row = {"id": cid, "pair": case["pair"], "sql_ok": False, "error": str(e)}
+                        _log(f"  {GROUP_LABEL[mode]}: ERROR {e}")
 
-                case_results[mode] = row
-                checkpoint[cid] = case_results
-                _save_per_case_checkpoint(ckpt_file, checkpoint)
+                    case_results[mode] = row
+                    checkpoint[cid] = case_results
+                    _save_per_case_checkpoint(ckpt_file, checkpoint)
+
+            consecutive_errors = 0  # 成功则重置
+            backend_ok_until = time.time()  # 更新健康时间
+        except Exception as e:
+            consecutive_errors += 1
+            _log(f"  *** CASE {cid} 异常: {e} (连续错误={consecutive_errors})")
+            # 为未完成的模式填充错误结果
+            for mode in remaining_modes:
+                if mode not in case_results:
+                    case_results[mode] = {"id": cid, "pair": case["pair"], "sql_ok": False, "error": str(e)}
+            checkpoint[cid] = case_results
+            _save_per_case_checkpoint(ckpt_file, checkpoint)
 
         case_elapsed = time.time() - t_case
         ok_modes = [m for m in RETRIEVAL_CHOICES if case_results.get(m, {}).get("sql_ok")]
-        print(f"  → 通过: {', '.join(ok_modes) if ok_modes else '无'} ({case_elapsed:.0f}s)", flush=True)
+        _log(f"  → 通过: {', '.join(ok_modes) if ok_modes else '无'} ({case_elapsed:.0f}s)")
 
         # 每 5 个 case 输出一次中间汇总
         completed_so_far = ci + 1
@@ -272,7 +339,9 @@ def run_all_per_case(dataset="eval/datasets", pair="all", use_judge=True, fast=F
             _print_interim(checkpoint, completed_so_far, total, t_start)
 
     total_elapsed = time.time() - t_start
-    print(f"\n[per-case] 全部完成，总耗时 {total_elapsed/60:.1f} 分钟", flush=True)
+    _log(f"\n[per-case] 全部完成，总耗时 {total_elapsed/60:.1f} 分钟")
+    if _log_fh:
+        _log_fh.close()
 
     # 转换为 table 格式并输出汇总
     table = {}
@@ -302,34 +371,69 @@ def to_markdown(table) -> str:
 
 
 def main():
-    _acquire_lock()
-    try:
-        ap = argparse.ArgumentParser()
-        ap.add_argument("--dataset", default="eval/datasets")
-        ap.add_argument("--pair", default="all")
-        ap.add_argument("--use-judge", action="store_true")
-        ap.add_argument("--fast", action="store_true",
-                        help="快速模式：跳过 AgentGraph，用 chat-model 模拟不同检索等级")
-        ap.add_argument("--parallel", type=int, default=1)
-        ap.add_argument("--cooldown", type=float, default=None,
-                        help="两次请求之间的最小间隔秒数（防后端过载，默认 3）")
-        ap.add_argument("--per-case", action="store_true",
-                        help="Per-case 模式：每个 case 依次跑 A-E 全部 5 组")
-        args = ap.parse_args()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--dataset", default="eval/datasets")
+    ap.add_argument("--pair", default="all")
+    ap.add_argument("--use-judge", action="store_true")
+    ap.add_argument("--fast", action="store_true",
+                    help="快速模式：跳过 AgentGraph，用 chat-model 模拟不同检索等级")
+    ap.add_argument("--parallel", type=int, default=1)
+    ap.add_argument("--cooldown", type=float, default=None,
+                    help="两次请求之间的最小间隔秒数（防后端过载，默认 3）")
+    ap.add_argument("--per-case", action="store_true",
+                    help="Per-case 模式：每个 case 依次跑 A-E 全部 5 组")
+    ap.add_argument("--auto-restart", type=int, default=0, metavar="N",
+                    help="内部自动重试 N 次（不再需要 bash watchdog）")
+    ap.add_argument("--max-workers", type=int, default=2,
+                    help="per-case 模式下每个 case 的并行模式数（默认 2，避免后端过载）")
+    ap.add_argument("--max-consecutive-errors", type=int, default=10,
+                    help="连续错误达此次数后暂停冷却（默认 10）")
+    ap.add_argument("--force", action="store_true",
+                    help="强制获取进程锁（覆盖残留锁文件）")
+    ap.add_argument("--limit", type=int, default=0,
+                    help="限制 case 数量（0=不限制，用于快速验证）")
+    args = ap.parse_args()
 
-        if args.per_case:
-            table = run_all_per_case(args.dataset, args.pair, args.use_judge, fast=args.fast, cooldown=args.cooldown)
-        else:
-            table = run_all(args.dataset, args.pair, args.use_judge, fast=args.fast, parallel=args.parallel, cooldown=args.cooldown)
-        md = to_markdown(table)
-        Path("eval/results").mkdir(parents=True, exist_ok=True)
-        suffix = "_fast" if args.fast else ""
-        mode_suffix = "_per_case" if args.per_case else ""
-        with open(f"eval/results/p1-ablation{suffix}{mode_suffix}.md", "w", encoding="utf-8") as fh:
-            fh.write(md + "\n")
-        with open(f"eval/results/p1-ablation{suffix}{mode_suffix}.json", "w", encoding="utf-8") as fh:
-            json.dump({k: v["summary"] for k, v in table.items()}, fh, ensure_ascii=False, indent=2)
-        print("\n" + md, flush=True)
+    _acquire_lock(force=args.force)
+    try:
+        max_restarts = args.auto_restart
+        for restart_i in range(max_restarts + 1):
+            if restart_i > 0:
+                print(f"\n[auto-restart] 第 {restart_i}/{max_restarts} 次重启（等待 10s）...", flush=True)
+                time.sleep(10)
+                _release_lock()
+                _acquire_lock(force=True)
+
+            try:
+                if args.per_case:
+                    table = run_all_per_case(args.dataset, args.pair, args.use_judge, fast=args.fast,
+                                              cooldown=args.cooldown, max_workers=args.max_workers,
+                                              max_consecutive_errors=args.max_consecutive_errors,
+                                              limit=args.limit)
+                else:
+                    table = run_all(args.dataset, args.pair, args.use_judge, fast=args.fast, parallel=args.parallel, cooldown=args.cooldown)
+
+                md = to_markdown(table)
+                Path("eval/results").mkdir(parents=True, exist_ok=True)
+                suffix = "_fast" if args.fast else ""
+                mode_suffix = "_per_case" if args.per_case else ""
+                with open(f"eval/results/p1-ablation{suffix}{mode_suffix}.md", "w", encoding="utf-8") as fh:
+                    fh.write(md + "\n")
+                with open(f"eval/results/p1-ablation{suffix}{mode_suffix}.json", "w", encoding="utf-8") as fh:
+                    json.dump({k: v["summary"] for k, v in table.items()}, fh, ensure_ascii=False, indent=2)
+                print("\n" + md, flush=True)
+                break  # 成功完成，退出重试循环
+
+            except KeyboardInterrupt:
+                print("\n[ablation] 用户中断，退出", flush=True)
+                break
+            except Exception as e:
+                print(f"\n[ablation] 未捕获异常: {type(e).__name__}: {e}", flush=True)
+                import traceback
+                traceback.print_exc()
+                if restart_i >= max_restarts:
+                    print(f"[ablation] 已达最大重试次数 ({max_restarts})，退出", flush=True)
+                    raise
     finally:
         _release_lock()
 

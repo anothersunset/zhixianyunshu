@@ -141,9 +141,10 @@ public class MigrationEvalController {
             fastCtx.state().put("source_sql", sourceSql);
             fastCtx.state().put("pair", pair);
             fastCtx.state().put("retrieval", retrieval);
-            List<String> fastRetrievedIds = extractRetrievedIds(
-                new ContextRetrieverAgent(llm).run(fastCtx, Map.of()).get("retrieved"));
-            Map<String, Object> generated = generateMigrationJsonFast(sourceSql, pair, retrieval);
+            Object retrievedRaw = new ContextRetrieverAgent(llm).run(fastCtx, Map.of()).get("retrieved");
+            List<String> fastRetrievedIds = extractRetrievedIds(retrievedRaw);
+            String retrievedKnowledge = extractRetrievedText(retrievedRaw);
+            Map<String, Object> generated = generateMigrationJsonFast(sourceSql, pair, retrieval, retrievedKnowledge);
             return ResponseEntity.ok(new MigrateResponse(
                 stringValue(generated.get("target_sql")),
                 stringList(generated.get("report_points")),
@@ -170,6 +171,7 @@ public class MigrationEvalController {
         List<Map<String, Object>> stages = new ArrayList<>();
         runner.run(buildGraph(), ctx, step -> stages.add(stageSnapshot(step)));
         List<String> retrievedIds = extractRetrievedIds(ctx.state().get("retrieved"));
+        String retrievedKnowledge = extractRetrievedText(ctx.state().get("retrieved"));
 
         if (!llm.isReal()) {
             return ResponseEntity.ok(new MigrateResponse(
@@ -188,7 +190,7 @@ public class MigrationEvalController {
             ));
         }
 
-        Map<String, Object> generated = generateMigrationJson(sourceSql, pair, retrieval, stages, retrievedIds);
+        Map<String, Object> generated = generateMigrationJson(sourceSql, pair, retrieval, stages, retrievedIds, retrievedKnowledge);
         return ResponseEntity.ok(new MigrateResponse(
             stringValue(generated.get("target_sql")),
             stringList(generated.get("report_points")),
@@ -223,74 +225,30 @@ public class MigrationEvalController {
         return g;
     }
 
-    private static final String TYPE_MAPPING_HINTS = """
-            === MySQL → openGauss/PostgreSQL mappings ===
-            Types:
-            - INT AUTO_INCREMENT → SERIAL, BIGINT AUTO_INCREMENT → BIGSERIAL
-            - DECIMAL(p,s) → NUMERIC(p,s)  (openGauss 规范要求使用 NUMERIC)
-            - DATETIME → TIMESTAMP, TINYINT → SMALLINT
-            - BIT(1) → BOOLEAN  (MySQL 的 BIT(1) 本质是布尔值)
-            - DOUBLE → DOUBLE PRECISION, FLOAT → REAL
-            - BLOB/LONGBLOB → BYTEA, JSON → JSONB
-            - ENUM → 对于 PostgreSQL: 【必须】先 CREATE TYPE xxx AS ENUM('v1','v2',...)，再在 CREATE TABLE 中引用该类型。示例: source "status ENUM('a','b')" → target "CREATE TYPE status_type AS ENUM('a','b'); CREATE TABLE t(status status_type)"。禁止使用 CHECK 约束替代。对于 openGauss: VARCHAR + CHECK constraint
-            - VARCHAR/CHAR/TEXT → 不变
-            Functions & syntax:
-            - IFNULL(x,y) → COALESCE(x,y)
-            - DATE_FORMAT(d,f) → TO_CHAR(d, oracle_format_string)
-            - GROUP_CONCAT(x SEPARATOR s) → STRING_AGG(x, s)
-            - LIMIT offset,count → LIMIT count OFFSET offset
-            - ON DUPLICATE KEY UPDATE → ON CONFLICT DO UPDATE
-            - VALUES(col) in ON DUPLICATE KEY → EXCLUDED.col
-            - REGEXP → ~ (case-sensitive regex match; DO NOT use ~*)
-            - Backtick identifiers `col` → double-quote identifiers "col"
-            - Multi-table DELETE: DELETE t1 FROM t1 JOIN t2 ON ... WHERE ... → DELETE FROM t1 USING t2 WHERE ... (move JOIN conditions to WHERE, remove alias after DELETE)
-
-            === Oracle → PostgreSQL mappings ===
-            - NVL(x,y) → COALESCE(x,y)
-            - DECODE(expr,val1,res1,...) → CASE expr WHEN val1 THEN res1 ... END
-            - SYSDATE → CURRENT_TIMESTAMP (not NOW())
-            - USER → current_user (user is a reserved keyword in PostgreSQL; SELECT user FROM dual → SELECT current_user)
-            - rownum <= N → LIMIT N (at end of query); remove FROM DUAL
-            - ROWNUM pagination subquery: SELECT * FROM (SELECT e.*, ROWNUM rn FROM emp e WHERE ROWNUM <= 20) WHERE rn > 10 → SELECT * FROM emp LIMIT 10 OFFSET 10 (replace entire subquery with simple LIMIT/OFFSET, do NOT use ROW_NUMBER() OVER ())
-            - SUBSTR(s,pos,len) → SUBSTRING(s FROM pos FOR len)  (use standard SUBSTRING with FROM/FOR)
-            - REGEXP_SUBSTR(s,pattern) → (REGEXP_MATCHES(s,pattern))[1]  (PostgreSQL 的 REGEXP_MATCHES 返回数组，取 [1])
-            - Oracle (+) outer join → LEFT JOIN / RIGHT JOIN with ON clause
-            - Comma join → explicit JOIN ... ON
-            - || concatenation → same (|| works in both)
-            - CONNECT BY + START WITH → WITH RECURSIVE CTE。关键规则:
-              * START WITH cond → CTE 的非递归部分 WHERE cond
-              * CONNECT BY PRIOR parent_id = child_id → CTE 递归部分 JOIN
-              * LEVEL → 递归层级计数器 (初始 0,每层 +1)
-              * CONNECT_BY_ISLEAF → NOT EXISTS(SELECT 1 FROM table WHERE parent_id = current.id)
-              * 必须保留原表的 id/parent_id 列用于 JOIN
-              示例: SELECT CONNECT_BY_ISLEAF, LEVEL, name FROM emp START WITH manager_id IS NULL CONNECT BY PRIOR id = manager_id
-              → WITH RECURSIVE emp_tree AS (SELECT id, name, manager_id, 0 AS lvl, false AS is_leaf FROM emp WHERE manager_id IS NULL UNION ALL SELECT e.id, e.name, e.manager_id, t.lvl+1, NOT EXISTS(SELECT 1 FROM emp WHERE manager_id=e.id) FROM emp e JOIN emp_tree t ON e.manager_id = t.id) SELECT is_leaf, lvl, name FROM emp_tree
-            """;
-
     private Map<String, Object> generateMigrationJson(
             String sourceSql,
             String pair,
             String retrieval,
             List<Map<String, Object>> stages,
-            List<String> retrievedIds
+            List<String> retrievedIds,
+            String retrievedKnowledge
     ) {
         String prompt = """
             You are a senior database migration agent. Convert the source SQL according to the dialect pair.
-            Use the executed 6-stage AgentGraph context as supporting evidence, but do not copy any gold answer.
+            Use ONLY the Retrieved Knowledge below as reference for conversion rules. Do NOT guess or use external knowledge.
             Return strict JSON only with this schema:
             {"target_sql":"...","report_points":["..."],"risk_level":"low|medium|high","confidence":0.0}
 
+            === Retrieved Knowledge (retrieval mode: %s) ===
             %s
 
             IMPORTANT — report_points requirements:
             - List EVERY transformation applied, one per point. For a query with 3 changes, generate 3 report_points.
             - Even "no change needed" items (e.g. "|| operator works in both dialects") count as a point.
             - Format: "SOURCE_FEATURE → TARGET_FEATURE: brief reason".
-            - Examples of multi-point output: for "(+) → LEFT JOIN" also report "comma join → explicit JOIN"; for "SUBSTR → SUBSTRING" also report "|| concatenation works in both".
             - Generate at least 1 report_point; for any query with multiple SQL constructs, generate one point per construct.
 
             Dialect pair: %s
-            Retrieval mode: %s
             Source SQL:
             %s
 
@@ -299,63 +257,39 @@ public class MigrationEvalController {
 
             AgentGraph stage summaries:
             %s
-            """.formatted(TYPE_MAPPING_HINTS, pair, retrieval, sourceSql, retrievedIds, toJson(stages));
+            """.formatted(retrieval, retrievedKnowledge, pair, sourceSql, retrievedIds, toJson(stages));
         boolean complex = isComplexSql(sourceSql, pair);
         log.info("[AdaptiveLLM] complex={}, pair={}, sql={}", complex, pair, sourceSql.length() > 80 ? sourceSql.substring(0, 80) + "..." : sourceSql);
         String reply = complex ? llm.reason(prompt) : llm.chat(prompt);
         return parseJsonObject(reply);
     }
 
-    private static final String HINTS_BM25 = TYPE_MAPPING_HINTS;
-
-    private static final String HINTS_VECTOR = TYPE_MAPPING_HINTS;
-
-    private static final String HINTS_VECTOR_RERANK = TYPE_MAPPING_HINTS;
-
-    private static final String HINTS_CRAG = TYPE_MAPPING_HINTS + """
-
-            ADDITIONAL CRAG VERIFICATION: After writing the target SQL, mentally verify each
-            transformation against known PostgreSQL/openGauss documentation. If any transformation
-            is uncertain, note it in report_points and set confidence accordingly.
-            """;
-
-    private static final String HINTS_FULL = TYPE_MAPPING_HINTS;
-
-    private String hintsForRetrieval(String retrieval) {
-        return switch (retrieval) {
-            case "bm25" -> HINTS_BM25;
-            case "vector" -> HINTS_VECTOR;
-            case "vector_rerank" -> HINTS_VECTOR_RERANK;
-            case "crag" -> HINTS_CRAG;
-            default -> HINTS_FULL; // full / GraphRAG / CKG
-        };
-    }
 
     private Map<String, Object> generateMigrationJsonFast(
             String sourceSql,
             String pair,
-            String retrieval
+            String retrieval,
+            String retrievedKnowledge
     ) {
-        String hints = hintsForRetrieval(retrieval);
         String prompt = """
             You are a senior database migration agent. Convert the source SQL according to the dialect pair.
+            Use ONLY the Retrieved Knowledge below as reference for conversion rules. Do NOT guess or use external knowledge.
             Return strict JSON only with this schema:
             {"target_sql":"...","report_points":["..."],"risk_level":"low|medium|high","confidence":0.0}
 
-            === Reference Knowledge (quality depends on retrieval mode: %s) ===
+            === Retrieved Knowledge (retrieval mode: %s) ===
             %s
 
             IMPORTANT — report_points requirements:
             - List EVERY transformation applied, one per point. For a query with 3 changes, generate 3 report_points.
             - Even "no change needed" items (e.g. "|| operator works in both dialects") count as a point.
             - Format: "SOURCE_FEATURE → TARGET_FEATURE: brief reason".
-            - Examples of multi-point output: for "(+) → LEFT JOIN" also report "comma join → explicit JOIN"; for "SUBSTR → SUBSTRING" also report "|| concatenation works in both".
             - Generate at least 1 report_point; for any query with multiple SQL constructs, generate one point per construct.
 
             Dialect pair: %s
             Source SQL:
             %s
-            """.formatted(retrieval, hints, pair, sourceSql);
+            """.formatted(retrieval, retrievedKnowledge, pair, sourceSql);
         boolean complex = isComplexSql(sourceSql, pair);
         log.info("[AdaptiveLLM] complex={}, pair={}, sql={}", complex, pair, sourceSql.length() > 80 ? sourceSql.substring(0, 80) + "..." : sourceSql);
         String reply = complex ? llm.reason(prompt) : llm.chat(prompt);
@@ -430,6 +364,26 @@ public class MigrationEvalController {
             }
         }
         return ids;
+    }
+
+    /** 从检索结果中提取文档文本，格式化为 prompt 可用的知识段落。 */
+    @SuppressWarnings("unchecked")
+    private String extractRetrievedText(Object retrieved) {
+        if (!(retrieved instanceof List<?> docs) || docs.isEmpty()) return "(no knowledge retrieved)";
+        StringBuilder sb = new StringBuilder();
+        int idx = 1;
+        for (Object doc : docs) {
+            if (doc instanceof Map) {
+                Map<String, Object> map = (Map<String, Object>) doc;
+                String id = String.valueOf(map.getOrDefault("id", "unknown"));
+                Object titleObj = map.get("title");
+                Object textObj = map.get("text");
+                String text = textObj != null ? String.valueOf(textObj)
+                            : titleObj != null ? String.valueOf(titleObj) : "";
+                sb.append(idx++).append(". [").append(id).append("] ").append(text).append("\n");
+            }
+        }
+        return sb.length() > 0 ? sb.toString() : "(no knowledge retrieved)";
     }
 
     private String normalizeRetrieval(String retrieval) {

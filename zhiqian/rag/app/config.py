@@ -27,8 +27,9 @@ class Settings(BaseSettings):
     use_qdrant: bool = True
     qdrant_url: str = "http://qdrant:6333"
     qdrant_api_key: str = ""
+    qdrant_local_path: str = ""  # 本地存储路径，设置后使用本地模式替代远程服务器
     rrf_k: int = 15  # Reduced from 60 to 15 to reward top-ranked documents more
-    rrf_channel_weights: str = "1.0,1.0,0.5"  # BM25, Dense, Sparse 权重 (Sparse weight reduced)
+    rrf_channel_weights: str = "1.0,1.0,0.5,0.8"  # BM25, Dense, Sparse, Graph 权重
 
     # v2-step-06: Chunking
     # 默认策略 semantic；/ingest 请求可在单次调用中覆盖

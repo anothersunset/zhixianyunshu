@@ -49,11 +49,14 @@ def restart_backend():
     log_path = "/tmp/backend.log"
 
     with open(log_path, "a") as log_f:
+        # 显式传递当前环境变量（确保 LLM_API_KEY 等不丢失）
+        env = os.environ.copy()
         proc = subprocess.Popen(
             [sys.executable, "-c", "import subprocess; subprocess.run(['./mvnw', 'spring-boot:run', '-Dspring-boot.run.profiles=local'])"],
             cwd=backend_dir,
             stdout=log_f,
             stderr=subprocess.STDOUT,
+            env=env,
         )
     print(f"[watchdog] Backend restarted PID={proc.pid}", flush=True)
     return proc.pid

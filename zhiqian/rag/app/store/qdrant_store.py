@@ -14,10 +14,11 @@ log = logging.getLogger(__name__)
 
 
 class QdrantStore:
-    def __init__(self, url: str = "http://qdrant:6333", api_key: Optional[str] = None, dim: int = 1024):
+    def __init__(self, url: str = "http://qdrant:6333", api_key: Optional[str] = None, dim: int = 1024, local_path: Optional[str] = None):
         self.url = url
         self.api_key = api_key
         self.dim = dim
+        self.local_path = local_path  # 本地存储路径，设置后使用本地模式
         self._client = None
         self._available: Optional[bool] = None
 
@@ -36,11 +37,17 @@ class QdrantStore:
         if self._client is not None:
             return self._client
         from qdrant_client import QdrantClient
-        log.info("[Qdrant] 连接 %s", self.url)
-        kwargs: Dict[str, Any] = {"url": self.url, "timeout": 10.0}
-        if self.api_key:
-            kwargs["api_key"] = self.api_key
-        self._client = QdrantClient(**kwargs)
+        if self.local_path:
+            import os
+            os.makedirs(self.local_path, exist_ok=True)
+            log.info("[Qdrant] 本地模式 path=%s", self.local_path)
+            self._client = QdrantClient(path=self.local_path)
+        else:
+            log.info("[Qdrant] 远程模式 url=%s", self.url)
+            kwargs: Dict[str, Any] = {"url": self.url, "timeout": 10.0}
+            if self.api_key:
+                kwargs["api_key"] = self.api_key
+            self._client = QdrantClient(**kwargs)
         return self._client
 
     def ensure_collection(self, name: str) -> bool:
