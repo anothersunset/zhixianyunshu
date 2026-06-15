@@ -189,17 +189,36 @@ class GraphRagIndex:
                         nxt.add(nb)
             frontier = nxt - visited
             visited |= frontier
+        # 为邻居计算最大关联边权重（用于排序）
+        neighbor_ids = visited - set(hits)
+        neighbor_weights: Dict[str, float] = {}
+        for nid in neighbor_ids:
+            max_w = 0.0
+            for hit_nid in hits:
+                w1 = self._edge_weights.get((hit_nid, nid), 0.0)
+                w2 = self._edge_weights.get((nid, hit_nid), 0.0)
+                max_w = max(max_w, w1, w2)
+            neighbor_weights[nid] = max_w
+
         # 拼接 context: 命中以 [HIT], 邻居 以 [NB]
         ctx_lines = []
         for nid in hits:
             nd = self.nodes[nid]
             ctx_lines.append(f"[HIT] {nd.type}:{nd.label} — {nd.text[:200]}")
-        for nid in visited - set(hits):
+        # 按边权重降序排列邻居
+        sorted_neighbors = sorted(neighbor_ids, key=lambda nid: -neighbor_weights.get(nid, 0.0))
+        for nid in sorted_neighbors:
             nd = self.nodes[nid]
             ctx_lines.append(f"[NB]  {nd.type}:{nd.label} — {nd.text[:120]}")
+        # 返回 neighbors 时附带权重信息
+        neighbor_dicts = []
+        for nid in sorted_neighbors:
+            d = self.nodes[nid].to_dict()
+            d["_edge_weight"] = neighbor_weights.get(nid, 0.0)
+            neighbor_dicts.append(d)
         return {
             "entities": [self.nodes[nid].to_dict() for nid in hits],
-            "neighbors": [self.nodes[nid].to_dict() for nid in visited - set(hits)],
+            "neighbors": neighbor_dicts,
             "context": "\n".join(ctx_lines),
             "hits": hits,
         }
