@@ -20,10 +20,40 @@ public class SqlPatcherAgent implements AgentTool {
         Object reasoning = input.getOrDefault("reasoning", "");
         String sourceSql = String.valueOf(ctx.state().getOrDefault("source_sql", ""));
         String pair = String.valueOf(ctx.state().getOrDefault("pair", "mysql->opengauss"));
-        String prompt = "你是 " + pair + " 迁移工程师。\n"
+
+        // 构建迁移知识上下文：SchemaAnalyzer 输出 + RAG 检索文档 + Reasoner 推理（如有）
+        StringBuilder knowledge = new StringBuilder();
+        Object summary = ctx.state().getOrDefault("summary", "");
+        if (summary != null && !summary.toString().isBlank()) {
+            knowledge.append("Schema 分析结果：\n").append(summary).append("\n\n");
+        }
+        // 提取 RAG 检索引擎返回的知识文本
+        Object retrieved = ctx.state().getOrDefault("retrieved", null);
+        if (retrieved instanceof List<?> docs && !docs.isEmpty()) {
+            knowledge.append("参考知识库：\n");
+            for (Object doc : docs) {
+                if (doc instanceof Map<?, ?> m) {
+                    Object text = m.get("text");
+                    if (text != null && !text.toString().isBlank()) {
+                        knowledge.append("- ").append(text.toString()).append("\n");
+                    }
+                }
+            }
+        }
+        if (reasoning != null && !reasoning.toString().isBlank()) {
+            knowledge.append("\n推理链路：\n").append(reasoning).append("\n");
+        }
+
+        Object critique = ctx.state().getOrDefault("critique", "");
+        String critiqueContext = "";
+        if (critique != null && !critique.toString().isBlank()) {
+            critiqueContext = "\n\n上一轮评审意见（请据此修正）：\n" + critique;
+        }
+        String prompt = "你是 " + pair + " 迁移工程师。根据以下知识，将原始 SQL 转换为目标方言。\n\n"
+            + knowledge + "\n"
             + "原始 SQL：\n" + sourceSql + "\n\n"
-            + "修改思路：\n" + reasoning + "\n\n"
-            + "请输出完整的目标 SQL（仅输出 SQL 代码块，不要解释）：";
+            + "请输出完整的目标 SQL（仅输出 SQL 代码块，不要解释）："
+            + critiqueContext;
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("patches", 12);
         out.put("review_required", 2);

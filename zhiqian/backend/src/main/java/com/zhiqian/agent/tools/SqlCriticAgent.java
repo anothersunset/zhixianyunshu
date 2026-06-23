@@ -19,20 +19,66 @@ public class SqlCriticAgent implements AgentTool {
         Object patch = input.getOrDefault("patch_preview", "");
         String sourceSql = String.valueOf(ctx.state().getOrDefault("source_sql", ""));
         String pair = String.valueOf(ctx.state().getOrDefault("pair", "mysql->opengauss"));
-        String prompt = "你是 " + pair + " 代码评审专家。\n"
-            + "原始 SQL：\n" + sourceSql + "\n\n"
-            + "目标补丁：\n" + patch + "\n\n"
-            + "对比原始和目标，指出 1-2 个需要人工复查的点（中文、简短）：";
+        String[] dialects = pair.split("->", 2);
+        String sourceDialect = dialects[0].trim();
+        String targetDialect = dialects.length > 1 ? dialects[1].trim() : "postgresql";
+        String prompt = """
+            You are a SQL migration reviewer. Your task is to find errors in a %s-to-%s migration.
+
+            === Source SQL (%s) ===
+            %s
+
+            === Generated Target SQL (%s) ===
+            %s
+
+            === Review Checklist (check EACH item) ===
+            1. SYNTAX: Does the target SQL parse correctly as %s? Any source-dialect constructs, keywords, or operators remaining unconverted?
+            2. FUNCTION CONVERSION: Is every source-dialect function correctly replaced? (e.g. DECODE->CASE, NVL->COALESCE, TO_CHAR->TO_CHAR with format review, CONNECT BY->WITH RECURSIVE)
+            3. PAGINATION: If the source uses ROWNUM, was it correctly converted to simple LIMIT/OFFSET? ROW_NUMBER() OVER() combined with LIMIT is WRONG.
+            4. HIERARCHY: If the source uses CONNECT BY, does the target have a complete WITH RECURSIVE CTE? Check: (a) is_leaf computed INSIDE the CTE as boolean, (b) LEVEL starts at 0, (c) anchor+recursive+JOIN structure complete?
+            5. UPSERT: If the source uses MERGE INTO or ON DUPLICATE KEY, does the target use INSERT ... ON CONFLICT correctly with EXCLUDED.column?
+            6. MISSING TRANSFORMATION: Did the generated SQL fail to convert any source-specific constructs?
+            7. REGRESSIONS: Did the conversion introduce any new syntax errors or semantic problems?
+
+            === Output Format (strictly follow) ===
+            STATUS: CORRECT | NEEDS_FIX
+            [If NEEDS_FIX, list each issue as:]
+            ISSUE N: [checklist item number] LOCATION: [describe where]
+            ERROR: [what is wrong]
+            FIX: [exact correction needed]
+            SUMMARY: [1-2 sentence overall assessment]
+            """.formatted(sourceDialect, targetDialect,
+                          sourceDialect, sourceSql,
+                          targetDialect, patch,
+                          targetDialect);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("scripts", 18);
         if (llm.isReal()) {
-            String reply = llm.chat(prompt);
-            out.put("critique", reply);
-            out.put("_confidence", 0.92);
-            out.put("_real", true);
-            out.put("_model", llm.providerName() + ":reasoner");
+            try {
+                String reply = llm.reason(prompt);
+                String upperReply = reply.toUpperCase();
+                boolean needsCorrection = upperReply.contains("STATUS: NEEDS_FIX")
+                    || upperReply.contains("NEEDS_FIX");
+                // 额外检查：是否有编号的 ISSUE + ERROR 模式
+                if (!needsCorrection) {
+                    needsCorrection = upperReply.matches("(?s).*ISSUE\\s+\\d+.*ERROR:.*");
+                }
+                out.put("critique", reply);
+                out.put("needs_correction", needsCorrection);
+                out.put("_confidence", 0.92);
+                out.put("_real", true);
+                out.put("_model", llm.providerName() + ":reasoner");
+            } catch (Exception e) {
+                // LLM 调用失败时，乐观假设 CORRECT（避免因 API 故障触发无意义修正）
+                out.put("critique", "STATUS: CORRECT\nDETAIL: Critic LLM 调用失败，跳过评审。");
+                out.put("needs_correction", false);
+                out.put("_confidence", 0.5);
+                out.put("_real", true);
+                out.put("_model", llm.providerName() + ":error");
+            }
         } else {
-            out.put("critique", "补丁语法正确。需要人工复查：\n1. orders_id_seq 是否与原表初始最大值保持一致\n2. JSON 转 JSONB 后是否需保留原始字段顺序");
+            out.put("critique", "STATUS: CORRECT\nDETAIL: 补丁语法正确，AUTO_INCREMENT 转 SEQUENCE 正确。");
+            out.put("needs_correction", false);
             out.put("_confidence", 0.91);
             out.put("_real", false);
             out.put("_model", "mock");

@@ -66,8 +66,8 @@ public class ContextRetrieverAgent implements AgentTool {
 
     static {
         SimpleClientHttpRequestFactory rf = new SimpleClientHttpRequestFactory();
-        rf.setConnectTimeout(5000);   // 5s 连接超时
-        rf.setReadTimeout(30000);     // 30s 读取超时（RAG 检索不应超过 30s）
+        rf.setConnectTimeout(8000);   // 8s 连接超时
+        rf.setReadTimeout(60000);     // 60s 读取超时（并发负载下 embedding 检索可能较慢）
         REST = new RestTemplate(rf);
     }
 
@@ -138,6 +138,9 @@ public class ContextRetrieverAgent implements AgentTool {
             return cached.docs();
         }
 
+        // 重试逻辑：Connection refused 时重试一次（RAG 可能正在重启）
+        int maxAttempts = 2;
+        for (int attempt = 0; attempt < maxAttempts; attempt++) {
         try {
             String jsonBody = String.format(
                 Locale.ROOT,
@@ -183,9 +186,17 @@ public class ContextRetrieverAgent implements AgentTool {
             }
             return result;
         } catch (Exception e) {
+            boolean isConnRefused = e.getMessage() != null && e.getMessage().contains("Connection refused");
+            if (isConnRefused && attempt < maxAttempts - 1) {
+                log.warn("[ContextRetriever] RAG Connection refused (attempt {}/{}), 3s 后重试", attempt + 1, maxAttempts);
+                try { Thread.sleep(3000); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); return null; }
+                continue;
+            }
             log.warn("[ContextRetriever] RAG call failed: {}", e.getMessage());
             return null;
         }
+        } // end for
+        return null;
     }
 
     private static Map<String, Object> scored(KbDoc doc, String query, Set<String> tokens, String retrieval) {
