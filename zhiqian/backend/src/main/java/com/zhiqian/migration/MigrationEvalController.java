@@ -787,6 +787,17 @@ public class MigrationEvalController {
         }
     }
 
+    /** 通用 LLM 代理端点——供 Python 工具链（kb_generator/recipe_suggester）调用，复用后端的 LLM 认证配置。 */
+    @PostMapping({"/chat", "/api/chat"})
+    public ResponseEntity<Map<String, Object>> chat(@RequestBody ChatRequest req) {
+        String reply = llm.chat(req.prompt());
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("reply", reply);
+        return ResponseEntity.ok(result);
+    }
+
+    public record ChatRequest(String prompt) {}
+
     public record MigrateRequest(String source_sql, String pair, String retrieval, boolean fast, String mode) {
         public boolean isAgentMode() {
             return "agent".equals(mode);

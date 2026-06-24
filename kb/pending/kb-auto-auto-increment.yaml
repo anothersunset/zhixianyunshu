@@ -1,0 +1,37 @@
+category: TYPE
+docs:
+- id: kb-generated-auto-increment
+  source_dialect: mysql
+  target_dialect: postgresql
+  text: '## Auto Increment → SERIAL / SEQUENCE Conversion
+
+
+    ### Source Construct
+
+    MySQL''s `AUTO_INCREMENT` attribute on an integer column automatically generates sequential unique values. It is commonly
+    used with `INT` or `BIGINT` and often combined with `PRIMARY KEY`.
+
+
+    ### Correct Target Equivalent
+
+    In PostgreSQL, the idiomatic replacement is `SERIAL` (for `INT`) or `BIGSERIAL` (for `BIGINT`), which creates an implicit
+    sequence. For more control, use `INT GENERATED ALWAYS AS IDENTITY` (SQL standard). Additionally, MySQL `BIT(1)` should
+    become `BOOLEAN`, and `DOUBLE` becomes `DOUBLE PRECISION`. `ENUM` types must be converted to a custom `CREATE TYPE` statement.
+
+
+    ### Common Pitfalls
+
+    1. **BIT(1) → BOOLEAN**: Many converters leave `BIT(1)` unchanged, but PostgreSQL requires `BOOLEAN` for single-bit flags.
+
+    2. **ENUM Handling**: MySQL `ENUM` must be converted to a PostgreSQL `CREATE TYPE` with the same values. Failing to do
+    so results in invalid syntax.
+
+    3. **SERIAL vs IDENTITY**: While both work, `SERIAL` is simpler for basic cases. Using `INT GENERATED ALWAYS AS IDENTITY`
+    is more standards-compliant but may cause confusion if the source uses `AUTO_INCREMENT` without explicit sequence control.
+
+    4. **Type Precision**: `DOUBLE` in MySQL maps to `DOUBLE PRECISION`, not `DOUBLE` alone.
+
+
+    ### Correct Example
+
+    **Source (MySQL)**:'

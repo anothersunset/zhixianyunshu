@@ -1,0 +1,43 @@
+category: SYNTAX
+docs:
+- id: kb-generated-start-with
+  source_dialect: oracle
+  target_dialect: postgresql
+  text: '## CONNECT BY START WITH → WITH RECURSIVE Conversion
+
+
+    ### Source Construct
+
+    Oracle''s `CONNECT BY PRIOR` with `START WITH` performs hierarchical queries. `LEVEL` returns the depth (starting at 1),
+    and `CONNECT_BY_ISLEAF` indicates whether a row is a leaf node (no children). The `START WITH` clause defines the root
+    rows.
+
+
+    ### Correct Target Equivalent
+
+    In PostgreSQL, use a `WITH RECURSIVE` CTE. The anchor member selects root rows (equivalent to `START WITH`). The recursive
+    member joins the CTE to the child table using the parent-child relationship. Key points:
+
+    - `LEVEL` → `lvl` column starting at **0** (not 1) in the anchor, incremented by 1 in the recursive member.
+
+    - `CONNECT_BY_ISLEAF` → computed as `NOT EXISTS(SELECT 1 FROM emp WHERE manager_id = e.id)` in the recursive member, or
+    `false` in the anchor (since roots may have children).
+
+
+    ### Common Pitfalls
+
+    1. **Incorrect LEVEL starting value**: Oracle starts at 1; the correct PostgreSQL equivalent starts at 0 to match the
+    recursive depth semantics.
+
+    2. **Missing is_leaf computation**: Simply omitting `CONNECT_BY_ISLEAF` or computing it incorrectly (e.g., using a post-query
+    LEFT JOIN instead of inline `NOT EXISTS`) leads to wrong results.
+
+    3. **Incorrect join condition**: The recursive join must use `ON e.manager_id = t.id` (child.parent = parent.id), not
+    the reverse.
+
+    4. **CTE alias mismatch**: Using different aliases in anchor vs. recursive member can cause scoping errors.
+
+
+    ### Correct Example
+
+    Source (Oracle):'

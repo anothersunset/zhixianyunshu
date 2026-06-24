@@ -1,0 +1,40 @@
+category: SYNTAX
+docs:
+- id: kb-generated-connect-by
+  source_dialect: oracle
+  target_dialect: postgresql
+  text: '## CONNECT BY → WITH RECURSIVE Conversion
+
+
+    ### Source Construct (Oracle)
+
+    Oracle''s `CONNECT BY` clause performs hierarchical queries. `LEVEL` returns the depth (starting at 1 for root rows).
+    `CONNECT_BY_ISLEAF` returns 1 if the current row has no children (leaf node), 0 otherwise. `START WITH` defines root rows,
+    and `CONNECT BY PRIOR` defines the parent-child relationship.
+
+
+    ### Correct Target Equivalent (PostgreSQL)
+
+    Use a recursive CTE (`WITH RECURSIVE`). The anchor member selects root rows. The recursive member joins the child table
+    to the CTE using the parent-child relationship. `LEVEL` is emulated by incrementing a counter (starting at 0 or 1). `CONNECT_BY_ISLEAF`
+    is emulated by checking if a row has no children, typically using `NOT EXISTS` or a `LEFT JOIN` with a null check.
+
+
+    ### Common Pitfalls
+
+    1. **Incorrect LEVEL start value**: Oracle `LEVEL` starts at 1. The CTE anchor should start at 0 or 1 depending on desired
+    output; using 1 in the anchor and incrementing in the recursive member is correct for matching Oracle behavior.
+
+    2. **Incorrect IS_LEAF logic**: Using `CASE WHEN child.manager_id IS NULL THEN true ELSE false END` with a `LEFT JOIN`
+    on distinct manager_ids is fragile and can produce false positives. The gold standard uses `NOT EXISTS(SELECT 1 FROM emp
+    WHERE manager_id=e.id)` inside the recursive member for accuracy.
+
+    3. **Missing IS_LEAF in anchor**: The anchor must also compute `is_leaf` for root nodes that may have no children.
+
+    4. **Incorrect join direction**: The recursive join must be `child.manager_id = parent.id` (child joins to parent), not
+    the reverse.
+
+
+    ### Correct Example
+
+    **Source (Oracle):**'

@@ -1,0 +1,38 @@
+keyword: start with
+mapping: WITH RECURSIVE anchor clause
+category: syntax
+is_recipe: true
+construct_name: CONNECT_BY_ISLEAF and LEVEL in Hierarchical Queries
+few_shot_source: "SELECT CONNECT_BY_ISLEAF AS is_leaf, LEVEL AS lvl, name \nFROM emp \nSTART WITH manager_id IS NULL \nCONNECT\
+  \ BY PRIOR id = manager_id\n"
+few_shot_target: "WITH RECURSIVE emp_tree AS (\n  SELECT id, name, manager_id, 0 AS lvl, false AS is_leaf\n  FROM emp\n  WHERE\
+  \ manager_id IS NULL\n  UNION ALL\n  SELECT e.id, e.name, e.manager_id, t.lvl + 1,\n         NOT EXISTS (SELECT 1 FROM emp\
+  \ WHERE manager_id = e.id) AS is_leaf\n  FROM emp e\n  JOIN emp_tree t ON e.manager_id = t.id\n)\nSELECT is_leaf, lvl, name\
+  \ FROM emp_tree\n"
+step_by_step: '1. Replace START WITH with the anchor SELECT in the WITH RECURSIVE CTE. The anchor must use the same condition
+  (e.g., WHERE manager_id IS NULL) and set lvl = 0 (not 1) to match Oracle''s LEVEL starting at 1.
+
+  2. Replace CONNECT BY PRIOR with the recursive UNION ALL join: FROM child_table JOIN cte ON child.parent_id = cte.id. Increment
+  lvl by 1 in the recursive branch.
+
+  3. For CONNECT_BY_ISLEAF, compute is_leaf in the recursive branch using NOT EXISTS (SELECT 1 FROM table WHERE parent_id
+  = child.id). In the anchor, set is_leaf = false (since root nodes are never leaves in a tree unless they are the only node).
+
+  4. In the final SELECT, output the is_leaf, lvl, and other columns directly from the CTE. Do NOT attempt to compute is_leaf
+  after the CTE using a LEFT JOIN or subquery—this is error-prone and duplicates logic.
+
+  5. Ensure the CTE column order matches between anchor and recursive branches, and that all columns used in the final SELECT
+  are present in both branches.
+
+  '
+pitfalls:
+- DO NOT set lvl = 1 in the anchor. Oracle's LEVEL starts at 1, but in PostgreSQL the anchor is level 0; increment to 1 in
+  the recursive branch. Setting lvl = 1 in the anchor will cause off-by-one errors.
+- DO NOT compute is_leaf outside the CTE using a LEFT JOIN or CASE on child.manager_id IS NULL. This often fails because it
+  does not correctly identify leaf nodes (nodes with no children). Always compute is_leaf inside the recursive branch using
+  NOT EXISTS.
+- DO NOT omit is_leaf from the anchor branch. The anchor must include a placeholder (e.g., false) so the column exists in
+  the CTE. Omitting it will cause a column mismatch error in the UNION ALL.
+- DO NOT use a separate subquery or join to determine is_leaf after the CTE. This duplicates logic and can produce incorrect
+  results for nodes that appear at multiple levels.
+dialect: oracle

@@ -1,0 +1,34 @@
+keyword: connect by
+mapping: WITH RECURSIVE
+category: syntax
+is_recipe: true
+construct_name: CONNECT BY to WITH RECURSIVE Hierarchical Query
+few_shot_source: "SELECT CONNECT_BY_ISLEAF AS is_leaf, LEVEL AS lvl, name \nFROM emp \nSTART WITH manager_id IS NULL \nCONNECT\
+  \ BY PRIOR id = manager_id\n"
+few_shot_target: "WITH RECURSIVE emp_tree AS (\n  SELECT id, name, manager_id, 0 AS lvl, false AS is_leaf\n  FROM emp\n  WHERE\
+  \ manager_id IS NULL\n  UNION ALL\n  SELECT e.id, e.name, e.manager_id, t.lvl + 1,\n         NOT EXISTS(SELECT 1 FROM emp\
+  \ WHERE manager_id = e.id) AS is_leaf\n  FROM emp e\n  JOIN emp_tree t ON e.manager_id = t.id\n)\nSELECT is_leaf, lvl, name\
+  \ FROM emp_tree\n"
+step_by_step: '1. Replace START WITH with the anchor member: SELECT base columns, 0 AS lvl, false AS is_leaf FROM table WHERE
+  root_condition.
+
+  2. Replace CONNECT BY PRIOR with the recursive member: SELECT child columns, parent.lvl + 1, NOT EXISTS(SELECT 1 FROM table
+  WHERE manager_id = child.id) AS is_leaf FROM table child JOIN recursive_cte parent ON child.manager_id = parent.id.
+
+  3. Set LEVEL to start at 0 (not 1) in the anchor, then increment by 1 in the recursive member.
+
+  4. Compute CONNECT_BY_ISLEAF using NOT EXISTS in the recursive member (check if child has no children), not with a separate
+  LEFT JOIN or CASE in the final SELECT.
+
+  5. Wrap the entire query in WITH RECURSIVE cte_name AS (...) and select the final columns from the CTE.
+
+  '
+pitfalls:
+- DO NOT start LEVEL at 1 in the anchor; it must be 0 to match Oracle's LEVEL behavior (root = 1 in Oracle, but PostgreSQL
+  convention uses 0-based start).
+- DO NOT compute is_leaf using a LEFT JOIN or subquery in the final SELECT; it must be computed per row in the recursive member
+  using NOT EXISTS to ensure correctness for all nodes.
+- DO NOT use CASE WHEN EXISTS to determine is_leaf; use NOT EXISTS directly as a boolean expression in the recursive member.
+- DO NOT forget to include the is_leaf column in both the anchor and recursive member of the CTE; omitting it from the anchor
+  causes NULL values for root nodes.
+dialect: oracle

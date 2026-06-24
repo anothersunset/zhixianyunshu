@@ -36,13 +36,28 @@ KB_PENDING = PROJECT_ROOT / "kb" / "pending"
 # ── LLM 调用 ──
 
 def _llm_chat(prompt: str, system: str = "You are a senior database migration expert.") -> str:
-    """调用 LLM（复用项目已有的 LLM API 配置）。"""
+    """调用 LLM —— 优先通过后端 /chat 代理（复用后端认证配置），回退到直连 API。"""
+    backend_url = os.environ.get("ZHIQIAN_MIGRATE_URL", "http://localhost:8080")
+
+    # 方式 1: 通过后端 /chat 代理
+    try:
+        resp = requests.post(
+            f"{backend_url}/chat",
+            json={"prompt": prompt},
+            timeout=120,
+        )
+        if resp.status_code == 200:
+            return resp.json().get("reply", "")
+    except Exception:
+        pass
+
+    # 方式 2: 直连 LLM API
     api_key = os.environ.get("LLM_API_KEY", "")
     base_url = os.environ.get("LLM_BASE_URL", "https://api.deepseek.com/v1")
     model = os.environ.get("LLM_CHAT_MODEL", "deepseek-chat")
 
     if not api_key:
-        raise RuntimeError("LLM_API_KEY not set in environment. Cannot generate KB docs without LLM.")
+        raise RuntimeError("Neither backend /chat nor LLM_API_KEY available.")
 
     resp = requests.post(
         f"{base_url}/chat/completions",
@@ -62,8 +77,7 @@ def _llm_chat(prompt: str, system: str = "You are a senior database migration ex
         timeout=120,
     )
     resp.raise_for_status()
-    data = resp.json()
-    return data["choices"][0]["message"]["content"]
+    return resp.json()["choices"][0]["message"]["content"]
 
 
 # ── KB 文档生成 ──

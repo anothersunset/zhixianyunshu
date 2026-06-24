@@ -1,0 +1,63 @@
+category: TYPE
+docs:
+- id: kb-generated-enum-
+  source_dialect: mysql
+  target_dialect: postgresql
+  text: '## ENUM to PostgreSQL Conversion
+
+
+    ### Source Construct
+
+    MySQL''s `ENUM(''val1'',''val2'',...)` is a string column type that restricts values to a predefined list. It is defined
+    inline within the column definition and implicitly enforces data integrity.
+
+
+    ### Correct Target Equivalent
+
+    PostgreSQL does not support inline ENUMs. The correct conversion has two valid approaches:
+
+    1. **CREATE TYPE + typed column** (preferred for reusable enums): Create a custom enum type with `CREATE TYPE type_name
+    AS ENUM(...)`, then reference it in the column definition.
+
+    2. **VARCHAR + CHECK constraint** (preferred for one-off enums): Use `VARCHAR(n)` with a `CHECK (column IN (...))` constraint.
+
+
+    The choice depends on whether the enum values are reused across multiple tables. For single-table usage, VARCHAR+CHECK
+    is simpler and avoids type proliferation.
+
+
+    ### Common Pitfalls (67% failure rate)
+
+    - **Inconsistent type naming**: Generating type names like `orders_status_enum` instead of semantic names like `order_status`
+    leads to confusion and duplicate types.
+
+    - **Missing or incorrect CHECK constraints**: When using VARCHAR approach, failing to add the CHECK constraint loses data
+    validation.
+
+    - **Incorrect data type mapping**: Keeping `DATETIME` instead of converting to `TIMESTAMP`, or using `DECIMAL` instead
+    of `NUMERIC`.
+
+    - **Server errors**: Attempting to create duplicate types or using invalid syntax causes migration failures (Sample 2).
+
+    - **Mixed approach**: Creating a type but then not using it in the table definition, or using VARCHAR without CHECK.
+
+
+    ### Correct Example
+
+    Source: `CREATE TABLE orders(id INT AUTO_INCREMENT PRIMARY KEY, status ENUM(''pending'',''shipped'',''done''), created_at
+    DATETIME DEFAULT CURRENT_TIMESTAMP)`
+
+
+    Target (VARCHAR+CHECK): `CREATE TABLE orders(id SERIAL PRIMARY KEY, status VARCHAR(20) CHECK (status IN (''pending'',''shipped'',''done'')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`
+
+
+    Target (CREATE TYPE): `CREATE TYPE order_status AS ENUM(''pending'',''shipped'',''done''); CREATE TABLE orders(id SERIAL
+    PRIMARY KEY, status order_status, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`
+
+    '
+  source: kb/auto/enum-
+  terms:
+  - enum
+  - conversion
+  - migration

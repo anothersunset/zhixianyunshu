@@ -1,0 +1,33 @@
+keyword: months_between(
+mapping: EXTRACT(YEAR FROM age(a,b))*12 + EXTRACT(MONTH FROM age(a,b))
+category: function
+is_recipe: true
+construct_name: MONTHS_BETWEEN Date Difference
+few_shot_source: 'SELECT MONTHS_BETWEEN(end_date, start_date) AS month_diff FROM project_schedule;
+
+  '
+few_shot_target: 'SELECT EXTRACT(YEAR FROM age(end_date, start_date)) * 12 + EXTRACT(MONTH FROM age(end_date, start_date))
+  AS month_diff FROM project_schedule;
+
+  '
+step_by_step: '1. Replace MONTHS_BETWEEN(date1, date2) with EXTRACT(YEAR FROM age(date1, date2)) * 12 + EXTRACT(MONTH FROM
+  age(date1, date2)).
+
+  2. Use the PostgreSQL age() function to compute the interval between the two dates (age(date1, date2) returns years, months,
+  days).
+
+  3. Extract the YEAR component from the interval and multiply by 12 to convert years to months.
+
+  4. Extract the MONTH component from the interval and add it to the result.
+
+  5. Do NOT add any fractional day calculation (e.g., + EXTRACT(DAY FROM ...)/30.0) — this is not part of the standard conversion
+  and will produce incorrect results.
+
+  '
+pitfalls:
+- DO NOT add a fractional day component like + (EXTRACT(DAY FROM AGE(date1, date2)) / 30.0). This overcomplicates the result
+  and does not match Oracle's integer month behavior.
+- DO NOT use direct year/month subtraction like (EXTRACT(YEAR FROM date1) - EXTRACT(YEAR FROM date2)) * 12 + (EXTRACT(MONTH
+  FROM date1) - EXTRACT(MONTH FROM date2)). This ignores day-level carryover and produces wrong results when day-of-month
+  differs.
+dialect: oracle
