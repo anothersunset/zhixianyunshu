@@ -1,0 +1,25 @@
+category: PLSQL
+docs:
+- id: kb-oracle-pg-plsql-plpgsql
+  source_dialect: oracle
+  target_dialect: postgresql
+  text: 'Oracle PL/SQL to PostgreSQL PL/pgSQL conversion reference. Function structure: Oracle CREATE OR REPLACE FUNCTION
+    name(params) RETURN type IS BEGIN ... END; → PostgreSQL CREATE OR REPLACE FUNCTION name(params) RETURNS type AS $$ BEGIN
+    ... END; $$ LANGUAGE plpgsql; Procedure structure: Oracle CREATE OR REPLACE PROCEDURE name(params) IS BEGIN ... END; →
+    PostgreSQL CREATE OR REPLACE PROCEDURE name(params) AS $$ BEGIN ... END; $$ LANGUAGE plpgsql; Variable declaration: Oracle
+    var_name type; → PostgreSQL var_name type; (same). Constant: Oracle var_name CONSTANT type := value; → PostgreSQL var_name
+    CONSTANT type := value; (same). Cursor: Oracle CURSOR cur IS SELECT ... → PostgreSQL cur CURSOR FOR SELECT ...; Oracle
+    OPEN cur; FETCH cur INTO var; CLOSE cur; → PostgreSQL OPEN cur; FETCH cur INTO var; CLOSE cur; (same). For loop: Oracle
+    FOR rec IN (SELECT ...) LOOP ... END LOOP; → PostgreSQL FOR rec IN SELECT ... LOOP ... END LOOP; (no parentheses). While
+    loop: Oracle WHILE condition LOOP ... END LOOP; → PostgreSQL WHILE condition LOOP ... END LOOP; (same). If statement:
+    Oracle IF condition THEN ... ELSIF ... ELSE ... END IF; → PostgreSQL IF condition THEN ... ELSIF ... ELSE ... END IF;
+    (same, but ELSIF not ELSEIF). Return: Oracle RETURN expr; → PostgreSQL RETURN expr; (same for functions). Oracle RETURN;
+    (no value) → PostgreSQL RETURN; (same for procedures). Exception handling: Oracle EXCEPTION WHEN exception_name THEN ...
+    → PostgreSQL EXCEPTION WHEN exception_name THEN ... (same). Oracle WHEN OTHERS THEN → PostgreSQL WHEN OTHERS THEN (same).
+    Oracle SQLCODE → PostgreSQL SQLSTATE (different values). Oracle SQLERRM → PostgreSQL SQLERRM (same). Raise error: Oracle
+    RAISE_APPLICATION_ERROR(code, msg) → PostgreSQL RAISE EXCEPTION ''%'', msg; Print output: Oracle DBMS_OUTPUT.PUT_LINE(msg)
+    → PostgreSQL RAISE NOTICE ''%'', msg; Commit: Oracle COMMIT; → PostgreSQL COMMIT; (same, but PostgreSQL auto-commits outside
+    transaction blocks). Rollback: Oracle ROLLBACK; → PostgreSQL ROLLBACK; (same). Savepoint: Oracle SAVEPOINT name; → PostgreSQL
+    SAVEPOINT name; (same).'
+  source: kb/plsql/oracle-pg-plsql-plpgsql
+  terms: sql create replace function return begin end returns

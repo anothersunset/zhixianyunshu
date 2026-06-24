@@ -1,0 +1,124 @@
+category: TYPES
+docs:
+- id: kb-type-autoincrement
+  source_dialect: mysql
+  target_dialect: opengauss
+  text: 'Auto increment mapping: MySQL AUTO_INCREMENT maps to different strategies in openGauss/PostgreSQL. For new tables,
+    use GENERATED ALWAYS AS IDENTITY (SQL standard) or SERIAL/BIGSERIAL (legacy). For existing data migration, use sequences:
+    CREATE SEQUENCE seq_name; then set column default to nextval(''seq_name''). Example: id INT AUTO_INCREMENT → id INTEGER
+    GENERATED ALWAYS AS IDENTITY. Important: When using SERIAL, the sequence is automatically created but not tied to the
+    column identity.'
+  source: kb/types/auto-increment
+  terms: sql auto_increment generated always identity serial bigserial create
+- id: kb-type-enum
+  source_dialect: mysql
+  target_dialect: opengauss
+  text: 'Enum type mapping: MySQL ENUM(''val1'', ''val2'') maps to CREATE TYPE in PostgreSQL/openGauss. ALWAYS use CREATE
+    TYPE for ENUM columns: CREATE TYPE mood AS ENUM (''happy'', ''sad''); then use the type in the table. Example: status
+    ENUM(''active'',''inactive'') → CREATE TYPE status_type AS ENUM(''active'',''inactive''); ... status status_type. Do NOT
+    use VARCHAR+CHECK as a substitute — CREATE TYPE is the correct PostgreSQL equivalent. CRITICAL: Each ENUM column needs
+    its own TYPE. Multi-column example: source: CREATE TABLE orders(id INT, status ENUM(''pending'',''shipped'',''done''),
+    priority ENUM(''low'',''high'')) → target: CREATE TYPE order_status AS ENUM(''pending'',''shipped'',''done''); CREATE
+    TYPE order_priority AS ENUM(''low'',''high''); CREATE TABLE orders(id INTEGER, status order_status, priority order_priority).
+    Also map other column types: INT AUTO_INCREMENT→SERIAL, DATETIME→TIMESTAMP.'
+  source: kb/types/enum-mapping
+  terms: sql enum create type always not varchar check
+- id: kb-type-decimal
+  source_dialect: mysql
+  target_dialect: opengauss
+  text: 'Decimal/NUMERIC mapping: MySQL DECIMAL(p, s) maps directly to NUMERIC(p, s) or DECIMAL(p, s) in openGauss. Both are
+    equivalent in PostgreSQL/openGauss. For monetary values, use NUMERIC(20, 4) to avoid floating-point errors. MySQL NUMBER
+    (Oracle) maps to NUMERIC. Oracle NUMBER(p, s) → NUMERIC(p, s). Important: MySQL FLOAT/DOUBLE are approximate types; consider
+    NUMERIC for exact precision requirements.'
+  source: kb/types/decimal-numeric
+  terms: numeric sql decimal number float double
+- id: kb-type-bit
+  source_dialect: mysql
+  target_dialect: opengauss
+  text: 'BIT type mapping: MySQL BIT(1) stores a single bit (0 or 1), commonly used as a boolean. PostgreSQL/openGauss use
+    BOOLEAN (true/false). Migration: BIT(1) → BOOLEAN. Values: 0→false, 1→true. Example: flag BIT(1) DEFAULT 0 → flag BOOLEAN
+    DEFAULT false. Note: MySQL BIT(n) for n>1 maps to PostgreSQL BIT(n) or BYTEA.'
+  source: kb/types/bit-boolean
+  terms: bit sql boolean default bytea
+- id: kb-type-tinyint
+  source_dialect: mysql
+  target_dialect: opengauss
+  text: 'TINYINT type mapping: MySQL TINYINT is a 1-byte integer (-128 to 127). PostgreSQL/openGauss use SMALLINT (2-byte,
+    -32768 to 32767) as the smallest integer type. Migration: TINYINT → SMALLINT. TINYINT UNSIGNED → SMALLINT (or CHECK constraint
+    for range). Example: status TINYINT DEFAULT 0 → status SMALLINT DEFAULT 0.'
+  source: kb/types/tinyint-smallint
+  terms: tinyint sql smallint unsigned check default
+- id: kb-type-double
+  source_dialect: mysql
+  target_dialect: opengauss
+  text: 'DOUBLE type mapping: MySQL DOUBLE is an 8-byte floating point. PostgreSQL/openGauss use DOUBLE PRECISION (or FLOAT8).
+    MySQL FLOAT is 4-byte → PostgreSQL REAL (or FLOAT4). Example: price DOUBLE → price DOUBLE PRECISION. Note: For exact decimal
+    precision, use NUMERIC(p,s) instead.'
+  source: kb/types/double-precision
+  terms: double sql precision float8 float real float4 numeric
+- id: kb-type-datetime
+  source_dialect: mysql
+  target_dialect: opengauss
+  text: 'DATETIME type mapping: MySQL DATETIME stores date and time without timezone. PostgreSQL/openGauss use TIMESTAMP (without
+    time zone). MySQL TIMESTAMP (auto-converted to UTC) → PostgreSQL TIMESTAMPTZ (with time zone). Example: created_at DATETIME
+    DEFAULT CURRENT_TIMESTAMP → created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP. Note: MySQL DATETIME range is 1000-9999; PostgreSQL
+    TIMESTAMP range is 4713 BC to 294276 AD.'
+  source: kb/types/datetime-timestamp
+  terms: datetime sql timestamp utc timestamptz default current_timestamp
+- id: kb-type-blob
+  source_dialect: mysql
+  target_dialect: opengauss
+  text: 'BLOB type mapping: MySQL BLOB/LONGBLOB/MEDIUMBLOB store binary data. PostgreSQL/openGauss use BYTEA for binary data
+    (up to 1GB). For larger files, use Large Objects (lo module) or external file storage. Example: data LONGBLOB → data BYTEA.
+    Note: BYTEA has a hex format output; use encode(data, ''hex'') for hex representation.'
+  source: kb/types/blob-bytea
+  terms: blob sql longblob mediumblob bytea
+- id: kb-type-json
+  source_dialect: mysql
+  target_dialect: opengauss
+  text: 'JSON type mapping: MySQL JSON type stores JSON documents. PostgreSQL/openGauss use JSONB (binary format, recommended)
+    or JSON (text format). JSONB supports indexing and faster processing. Example: metadata JSON → metadata JSONB. Note: JSONB
+    requires valid JSON; MySQL''s JSON is more permissive.'
+  source: kb/types/json-jsonb
+  terms: json sql jsonb
+- id: kb-mysql-pg-datatypes-comprehensive
+  source_dialect: mysql
+  target_dialect: postgresql
+  text: 'MySQL to PostgreSQL comprehensive data type mapping reference. Character types: MySQL VARCHAR(n) → PostgreSQL VARCHAR(n),
+    MySQL CHAR(n) → PostgreSQL CHAR(n), MySQL TEXT/LONGTEXT/MEDIUMTEXT → PostgreSQL TEXT, MySQL TINYTEXT → PostgreSQL VARCHAR(255).
+    Numeric types: MySQL TINYINT → PostgreSQL SMALLINT, MySQL SMALLINT → PostgreSQL SMALLINT, MySQL INT/INTEGER → PostgreSQL
+    INTEGER, MySQL BIGINT → PostgreSQL BIGINT, MySQL FLOAT → PostgreSQL REAL, MySQL DOUBLE → PostgreSQL DOUBLE PRECISION,
+    MySQL DECIMAL(p,s) → PostgreSQL DECIMAL(p,s) or NUMERIC(p,s), MySQL TINYINT(1) → PostgreSQL BOOLEAN (common for flags),
+    MySQL UNSIGNED INT → PostgreSQL INTEGER with CHECK constraint (col >= 0). Date/Time types: MySQL DATETIME → PostgreSQL
+    TIMESTAMP, MySQL DATE → PostgreSQL DATE, MySQL TIME → PostgreSQL TIME, MySQL TIMESTAMP → PostgreSQL TIMESTAMPTZ, MySQL
+    YEAR → PostgreSQL SMALLINT or INTEGER. Binary types: MySQL BLOB/LONGBLOB/MEDIUMBLOB/TINYBLOB → PostgreSQL BYTEA, MySQL
+    BINARY/VARBINARY → PostgreSQL BYTEA. Other types: MySQL ENUM → PostgreSQL CREATE TYPE ... AS ENUM, MySQL SET → PostgreSQL
+    TEXT[] or CREATE TYPE, MySQL JSON → PostgreSQL JSONB (preferred over JSON for indexing). Important differences: PostgreSQL
+    is strict about type casting, MySQL is more permissive. MySQL allows implicit type conversion; PostgreSQL requires explicit
+    CAST or :: syntax.'
+  source: kb/types/mysql-pg-comprehensive
+  terms: sql varchar char text longtext mediumtext tinytext tinyint
+- id: kb-oracle-pg-datatypes-comprehensive
+  source_dialect: oracle
+  target_dialect: postgresql
+  text: 'Oracle to PostgreSQL comprehensive data type mapping reference. Character types: Oracle VARCHAR2(n) → PostgreSQL
+    VARCHAR(n), Oracle CHAR(n) → PostgreSQL CHAR(n), Oracle CLOB → PostgreSQL TEXT, Oracle LONG → PostgreSQL TEXT, Oracle
+    NCHAR(n) → PostgreSQL CHAR(n), Oracle NVARCHAR2(n) → PostgreSQL VARCHAR(n), Oracle NCLOB → PostgreSQL TEXT. Numeric types:
+    Oracle NUMBER(p,0) where p<3 → PostgreSQL SMALLINT, Oracle NUMBER(p,0) where 3<=p<5 → PostgreSQL SMALLINT, Oracle NUMBER(p,0)
+    where 5<=p<9 → PostgreSQL INTEGER, Oracle NUMBER(p,0) where 9<=p<19 → PostgreSQL BIGINT, Oracle NUMBER(p,0) where 19<=p<=38
+    → PostgreSQL DECIMAL(p), Oracle NUMBER(p,s) where s>0 → PostgreSQL DECIMAL(p,s), Oracle NUMBER/NUMBER(*) → PostgreSQL
+    DECIMAL or DOUBLE PRECISION, Oracle BINARY_FLOAT → PostgreSQL REAL, Oracle BINARY_DOUBLE → PostgreSQL DOUBLE PRECISION,
+    Oracle INTEGER → PostgreSQL DECIMAL(38). Date/Time types: Oracle DATE (includes time) → PostgreSQL TIMESTAMP(0), Oracle
+    TIMESTAMP → PostgreSQL TIMESTAMP, Oracle TIMESTAMP WITH TIME ZONE → PostgreSQL TIMESTAMP WITH TIME ZONE, Oracle INTERVAL
+    YEAR TO MONTH → PostgreSQL INTERVAL YEAR TO MONTH, Oracle INTERVAL DAY TO SECOND → PostgreSQL INTERVAL DAY TO SECOND.
+    Binary types: Oracle BLOB → PostgreSQL BYTEA, Oracle LONG RAW → PostgreSQL BYTEA, Oracle RAW(n) → PostgreSQL BYTEA. Other
+    types: Oracle XMLTYPE → PostgreSQL XML, Oracle BFILE → PostgreSQL VARCHAR(255), Oracle ROWID → PostgreSQL CHAR(10), Oracle
+    SYS_REFCURSOR → PostgreSQL REFCURSOR.'
+  source: kb/types/oracle-pg-comprehensive
+  terms: sql varchar2 varchar char clob text long nchar
+- id: doc-6
+  source_dialect: mysql
+  target_dialect: openGauss
+  text: BigDecimal 推荐映射为 openGauss 的 NUMERIC(p, s),例如金额使用 NUMERIC(20, 4),避免精度丢失。MySQL FLOAT/DOUBLE 是近似类型,迁移时应改为 NUMERIC 以保证精确计算。
+  source: opengauss/type-mapping.md#numeric
+  terms: numeric sql float double 推荐映射为 例如金额使用 避免精度丢失 是近似类型

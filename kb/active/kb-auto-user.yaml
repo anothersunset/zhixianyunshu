@@ -1,0 +1,46 @@
+category: FUNCTION
+docs:
+- id: kb-generated-user
+  source_dialect: oracle
+  target_dialect: postgresql
+  text: '## Pattern: `user` → `CURRENT_USER`
+
+
+    ### 1. What the source construct does
+
+    In Oracle, `USER` is a built-in function that returns the name of the current database session user (the user who is currently
+    logged in). It is commonly used in queries like `SELECT user FROM dual` to retrieve the session username.
+
+
+    ### 2. The correct target equivalent
+
+    In PostgreSQL, the equivalent function is `CURRENT_USER`. This returns the current session user name as a text value.
+    The correct conversion is:
+
+    - Source: `SELECT user FROM dual`
+
+    - Target: `SELECT current_user`
+
+
+    Note that `CURRENT_USER` is a SQL standard function and does not require a `FROM` clause in PostgreSQL.
+
+
+    ### 3. Common pitfalls that cause conversion failure
+
+    - **Literal string conversion**: A naive converter may treat `user` as a column name or identifier, wrapping it in double
+    quotes (`"user"`) or leaving it unquoted, which causes PostgreSQL to look for a column named `user` rather than invoking
+    the function.
+
+    - **Missing function recognition**: The converter fails to recognize `user` as a built-in Oracle function and instead
+    treats it as a regular identifier.
+
+    - **FROM clause retention**: The converter may incorrectly keep `FROM dual` in the output, which is invalid in PostgreSQL
+    for this function call.
+
+    - **Case sensitivity**: PostgreSQL''s `CURRENT_USER` is case-insensitive by default, but incorrect casing (e.g., `current_user`)
+    still works; however, the function must not be quoted.
+
+
+    ### 4. Correct source → target example
+
+    **Source (Oracle):**'

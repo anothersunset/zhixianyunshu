@@ -1,0 +1,37 @@
+category: FUNCTION
+docs:
+- id: kb-generated-regexp-substr-
+  source_dialect: oracle
+  target_dialect: postgresql
+  text: '## Pattern: REGEXP_SUBSTR → (REGEXP_MATCHES(str,pattern))[1]
+
+
+    ### Source Construct (Oracle)
+
+    `REGEXP_SUBSTR(str, pattern)` extracts the first substring matching the regular expression pattern from the input string.
+    It returns a single string value (the first match).
+
+
+    ### Target Equivalent (PostgreSQL)
+
+    `(REGEXP_MATCHES(str, pattern))[1]` achieves the same result. `REGEXP_MATCHES` returns a set of text arrays (one array
+    per match). Wrapping it in parentheses and appending `[1]` extracts the first element of the first match array, replicating
+    Oracle''s single-value return.
+
+
+    ### Common Pitfalls Causing Conversion Failure
+
+    1. **Incorrect flags argument**: A frequent mistake is adding the `''g''` (global) flag to `REGEXP_MATCHES`, e.g., `REGEXP_MATCHES(str,
+    pattern, ''g'')`. This causes PostgreSQL to return *all* matches as multiple rows, breaking the single-value expectation.
+    The correct conversion omits the `''g''` flag to return only the first match.
+
+    2. **Missing parentheses or array indexing**: Forgetting the outer parentheses around `REGEXP_MATCHES` or omitting `[1]`
+    results in a set-returning function error or an array value instead of a plain string.
+
+    3. **Syntax errors in migration tool**: Some automated migration tools fail to parse the complex nested expression, producing
+    empty output or a 500 server error. This often occurs when the tool cannot correctly handle the array subscript syntax.
+
+
+    ### Correct Source → Target Example
+
+    **Source (Oracle):**'

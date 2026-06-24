@@ -1,0 +1,75 @@
+name: mysql
+pairs:
+- mysql->postgresql
+- mysql->opengauss
+complexity_keywords:
+- on duplicate key
+- group_concat(
+- auto_increment
+- enum(
+standard_whitelist: []
+features:
+- keyword: IFNULL(
+  mapping: COALESCE
+  category: function
+  is_recipe: false
+- keyword: DATE_FORMAT(
+  mapping: TO_CHAR
+  category: function
+  is_recipe: false
+- keyword: GROUP_CONCAT(
+  mapping: STRING_AGG
+  category: function
+  is_recipe: false
+- keyword: AUTO_INCREMENT
+  mapping: SERIAL / SEQUENCE
+  category: type
+  is_recipe: false
+- keyword: ENUM(
+  mapping: VARCHAR + CHECK or CREATE TYPE
+  category: type
+  is_recipe: false
+- keyword: ON DUPLICATE KEY
+  mapping: ON CONFLICT ... DO UPDATE
+  category: syntax
+  is_recipe: false
+- keyword: REGEXP
+  mapping: ~ (or SIMILAR TO / regexp_matches)
+  category: function
+  is_recipe: false
+- keyword: NOW()
+  mapping: CURRENT_TIMESTAMP
+  category: function
+  is_recipe: false
+- keyword: TINYINT
+  mapping: SMALLINT
+  category: type
+  is_recipe: false
+- keyword: BIT(
+  mapping: BOOLEAN
+  category: type
+  is_recipe: false
+- keyword: '`'
+  mapping: remove backticks
+  category: syntax
+  is_recipe: false
+- keyword: ENGINE=
+  mapping: omit ENGINE clause
+  category: ddl
+  is_recipe: false
+- keyword: CHARACTER SET
+  mapping: omit or adjust charset
+  category: ddl
+  is_recipe: false
+- keyword: COLLATE
+  mapping: omit collation
+  category: ddl
+  is_recipe: false
+- keyword: UNSIGNED
+  mapping: use CHECK constraint instead
+  category: type
+  is_recipe: false
+- keyword: ZEROFILL
+  mapping: LPAD or format
+  category: type
+  is_recipe: false

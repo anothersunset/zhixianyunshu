@@ -1,0 +1,18 @@
+category: FUNCTION
+docs:
+- id: kb-generated-months-between-
+  source_dialect: oracle
+  target_dialect: postgresql
+  text: '## Pattern: MONTHS_BETWEEN() → EXTRACT(YEAR FROM age()) * 12 + EXTRACT(MONTH FROM age())
+
+
+    ### 1. What the source construct does
+
+    Oracle''s `MONTHS_BETWEEN(date1, date2)` returns the number of months between two dates as a decimal value. The integer
+    part represents whole months, and the fractional part represents the remaining days divided by 31 (Oracle uses a 31-day
+    month for fractional calculation). The result can be negative if date1 < date2.
+
+
+    ### 2. Correct target equivalent
+
+    In PostgreSQL, the exact equivalent for whole-month arithmetic is:'

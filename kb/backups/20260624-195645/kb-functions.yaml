@@ -1,0 +1,241 @@
+category: FUNCTIONS
+docs:
+- id: kb-func-ifnull
+  source_dialect: mysql
+  target_dialect: opengauss
+  text: 'IFNULL / NVL to COALESCE: MySQL IFNULL(x, y) and Oracle NVL(x, y) should be replaced with COALESCE(x, y) in openGauss/PostgreSQL.
+    COALESCE is SQL standard and supports multiple arguments: COALESCE(a, b, c) returns the first non-null value. Example:
+    SELECT IFNULL(name, ''unknown'') → SELECT COALESCE(name, ''unknown''). Note: NVL2(x, y, z) in Oracle maps to CASE WHEN
+    x IS NOT NULL THEN y ELSE z END.'
+  source: kb/functions/null-handling
+  terms: ifnull nvl coalesce sql select nvl2 case when
+- id: kb-func-dateformat
+  source_dialect: mysql
+  target_dialect: opengauss
+  text: 'Date formatting functions: MySQL DATE_FORMAT(date, format) maps to TO_CHAR(date, format) in openGauss/PostgreSQL.
+    Format specifiers differ: MySQL %Y-%m-%d → PostgreSQL YYYY-MM-DD. Common mappings: %Y→YYYY, %m→MM, %d→DD, %H→HH24, %i→MI,
+    %s→SS. Example: DATE_FORMAT(created_at, ''%Y-%m'') → TO_CHAR(created_at, ''YYYY-MM''). Also: MySQL STR_TO_DATE(str, format)
+    → TO_DATE(str, format) in PostgreSQL.'
+  source: kb/functions/date-format
+  terms: sql date_format to_char yyyy hh24 str_to_date to_date
+- id: kb-func-groupconcat
+  source_dialect: mysql
+  target_dialect: opengauss
+  text: 'GROUP_CONCAT to STRING_AGG: MySQL GROUP_CONCAT(expr SEPARATOR sep) maps to STRING_AGG(expr::text, sep) in PostgreSQL/openGauss.
+    Example: GROUP_CONCAT(name SEPARATOR '', '') → STRING_AGG(name, '', ''). Note: STRING_AGG requires explicit type cast
+    (::text) if the expression is not already text. ORDER BY inside GROUP_CONCAT: GROUP_CONCAT(name ORDER BY name) → STRING_AGG(name,
+    '','' ORDER BY name).'
+  source: kb/functions/group-concat
+  terms: group_concat string_agg sql separator order
+- id: kb-func-regexp
+  source_dialect: mysql
+  target_dialect: opengauss
+  text: 'Regular expression operator: MySQL REGEXP/RLIKE maps to ~ (case-sensitive) or ~* (case-insensitive) in PostgreSQL/openGauss.
+    Example: WHERE name REGEXP ''^test'' → WHERE name ~ ''^test''. MySQL REGEXP_REPLACE(str, pattern, repl) → regexp_replace(str,
+    pattern, repl) in PostgreSQL. POSIX regex syntax in PostgreSQL is slightly different from MySQL''s regex syntax.'
+  source: kb/functions/regexp
+  terms: sql regexp rlike where regexp_replace posix
+- id: kb-func-nvl
+  source_dialect: oracle
+  target_dialect: opengauss
+  text: 'Oracle NVL mapping: NVL(expr1, expr2) returns expr2 if expr1 is null, otherwise returns expr1. Direct replacement:
+    NVL(x, y) → COALESCE(x, y). NVL2(expr1, expr2, expr3): returns expr2 if expr1 is NOT null, else expr3. NVL2 equivalent:
+    CASE WHEN x IS NOT NULL THEN y ELSE z END, or COALESCE(y, z) if x determines nullability. openGauss supports COALESCE
+    (SQL standard) but not NVL/NVL2 (Oracle proprietary).'
+  source: kb/functions/oracle-nvl
+  terms: nvl coalesce nvl2 not case when null then
+- id: kb-func-sysdate
+  source_dialect: oracle
+  target_dialect: opengauss
+  text: 'Oracle SYSDATE mapping: Oracle SYSDATE returns current date and time. In PostgreSQL/openGauss: CURRENT_TIMESTAMP
+    (with timezone) or LOCALTIMESTAMP (without timezone). Also: NOW() is equivalent to CURRENT_TIMESTAMP in PostgreSQL. Example:
+    SELECT SYSDATE FROM dual → SELECT CURRENT_TIMESTAMP; For date-only: TRUNC(SYSDATE) → CURRENT_DATE or DATE_TRUNC(''day'',
+    CURRENT_TIMESTAMP).'
+  source: kb/functions/oracle-sysdate
+  terms: sysdate sql current_timestamp localtimestamp now select from trunc
+- id: kb-func-decode
+  source_dialect: oracle
+  target_dialect: opengauss
+  text: 'Oracle DECODE mapping: DECODE(expr, search1, result1, search2, result2, default) is Oracle''s conditional function.
+    Maps to CASE WHEN in standard SQL: DECODE(status, ''A'', ''Active'', ''I'', ''Inactive'', ''Unknown'') → CASE status WHEN
+    ''A'' THEN ''Active'' WHEN ''I'' THEN ''Inactive'' ELSE ''Unknown'' END. openGauss supports CASE WHEN (SQL standard) but
+    not DECODE (Oracle proprietary).'
+  source: kb/functions/oracle-decode
+  terms: decode case when sql then else end
+- id: kb-func-user
+  source_dialect: oracle
+  target_dialect: opengauss
+  text: 'Oracle USER function mapping: Oracle SELECT user FROM dual returns the current database user. In PostgreSQL/openGauss,
+    use SELECT current_user. Also available: session_user (returns the session user, may differ from current_user if SET ROLE
+    was used). Example: SELECT user FROM dual → SELECT current_user. Note: ''user'' is a reserved keyword in PostgreSQL and
+    must not be used as a bare identifier.'
+  source: kb/functions/oracle-user
+  terms: user select from sql set role
+- id: kb-func-substr
+  source_dialect: mysql
+  target_dialect: opengauss
+  text: 'SUBSTR/SUBSTRING mapping: MySQL SUBSTR(str, start, length) and SUBSTRING(str, start, length) are interchangeable.
+    PostgreSQL/openGauss use SUBSTRING(str, start, length) or SUBSTR(str, start, length) — both work. Key difference: MySQL
+    uses 1-based indexing with negative values counting from end. Oracle SUBSTR is the same. All are compatible across databases.
+    Example: SUBSTR(''hello'', 2, 3) → ''ell'' (works the same in all databases).'
+  source: kb/functions/substr
+  terms: substr substring sql
+- id: kb-func-concat
+  source_dialect: mysql
+  target_dialect: opengauss
+  text: 'CONCAT function mapping: MySQL CONCAT(a, b, c) concatenates strings. PostgreSQL/openGauss support CONCAT(a, b, c)
+    natively. Alternatively, use the || operator: a || b || c. Note: MySQL CONCAT returns NULL if any argument is NULL; CONCAT_WS
+    ignores NULLs. PostgreSQL CONCAT also returns NULL on NULL input; use COALESCE to handle NULLs. Example: CONCAT(first_name,
+    '' '', last_name) → CONCAT(first_name, '' '', last_name) or first_name || '' '' || last_name.'
+  source: kb/functions/concat
+  terms: concat sql null concat_ws coalesce
+- id: kb-func-curdate
+  source_dialect: mysql
+  target_dialect: opengauss
+  text: 'CURDATE/CURRENT_DATE mapping: MySQL CURDATE() returns the current date. PostgreSQL/openGauss use CURRENT_DATE (no
+    parentheses). Also: MySQL CURTIME() → PostgreSQL CURRENT_TIME; NOW() works in both. Example: SELECT CURDATE() → SELECT
+    CURRENT_DATE.'
+  source: kb/functions/curdate
+  terms: curdate current_date sql curtime current_time now select
+- id: kb-func-now
+  source_dialect: mysql
+  target_dialect: opengauss
+  text: 'NOW() mapping: MySQL NOW() returns current datetime. PostgreSQL/openGauss support NOW() natively, returning timestamptz.
+    Equivalent: CURRENT_TIMESTAMP (ANSI SQL standard, works in all databases). Example: SELECT NOW() → SELECT NOW() or SELECT
+    CURRENT_TIMESTAMP.'
+  source: kb/functions/now
+  terms: now sql current_timestamp ansi select
+- id: kb-func-year
+  source_dialect: mysql
+  target_dialect: opengauss
+  text: 'YEAR() function mapping: MySQL YEAR(date) extracts the year from a date. PostgreSQL/openGauss use EXTRACT(YEAR FROM
+    date) or DATE_PART(''year'', date). Example: YEAR(created_at) → EXTRACT(YEAR FROM created_at). Similarly: MONTH() → EXTRACT(MONTH
+    FROM ...), DAY() → EXTRACT(DAY FROM ...).'
+  source: kb/functions/year
+  terms: year sql extract from date_part month day
+- id: kb-func-if
+  source_dialect: mysql
+  target_dialect: opengauss
+  text: 'IF() function mapping: MySQL IF(condition, true_val, false_val) is a conditional function. PostgreSQL/openGauss use
+    CASE WHEN condition THEN true_val ELSE false_val END. For simple NULL handling, use COALESCE(val, default). Example: IF(status
+    = 1, ''active'', ''inactive'') → CASE WHEN status = 1 THEN ''active'' ELSE ''inactive'' END.'
+  source: kb/functions/if
+  terms: sql case when then else end null coalesce
+- id: kb-func-trim
+  source_dialect: mysql
+  target_dialect: opengauss
+  text: 'TRIM function mapping: MySQL TRIM(str) removes leading/trailing whitespace. PostgreSQL/openGauss support TRIM(str)
+    natively. Also supported: LTRIM(str), RTRIM(str), TRIM(LEADING ''x'' FROM str). All work identically across MySQL and
+    PostgreSQL. Example: TRIM(name) → TRIM(name) (no change needed).'
+  source: kb/functions/trim
+  terms: trim sql ltrim rtrim leading from
+- id: kb-func-addmonths
+  source_dialect: oracle
+  target_dialect: postgresql
+  text: 'ADD_MONTHS function mapping: Oracle ADD_MONTHS(date, n) adds n months to a date. PostgreSQL/openGauss use date +
+    INTERVAL ''n months'' or date + (n * INTERVAL ''1 month''). Example: ADD_MONTHS(hire_date, 6) → hire_date + INTERVAL ''6
+    months''. For subtracting months: ADD_MONTHS(date, -3) → date - INTERVAL ''3 months''.'
+  source: kb/functions/add-months
+  terms: add_months sql interval
+- id: kb-func-monthsbetween
+  source_dialect: oracle
+  target_dialect: postgresql
+  text: 'MONTHS_BETWEEN function mapping: Oracle MONTHS_BETWEEN(date1, date2) returns the number of months between two dates.
+    PostgreSQL/openGauss use (EXTRACT(YEAR FROM age(date1, date2)) * 12 + EXTRACT(MONTH FROM age(date1, date2))). Or simpler:
+    (DATE_PART(''year'', date1) - DATE_PART(''year'', date2)) * 12 + (DATE_PART(''month'', date1) - DATE_PART(''month'', date2)).
+    Example: MONTHS_BETWEEN(end_date, start_date) → EXTRACT(YEAR FROM age(end_date, start_date)) * 12 + EXTRACT(MONTH FROM
+    age(end_date, start_date)).'
+  source: kb/functions/months-between
+  terms: months_between sql extract year from month date_part
+- id: kb-func-nvl2
+  source_dialect: oracle
+  target_dialect: postgresql
+  text: 'NVL2 function mapping: Oracle NVL2(expr, not_null_val, null_val) returns not_null_val if expr is not NULL, else null_val.
+    PostgreSQL/openGauss use CASE WHEN expr IS NOT NULL THEN not_null_val ELSE null_val END. Example: NVL2(commission, salary
+    + commission, salary) → CASE WHEN commission IS NOT NULL THEN salary + commission ELSE salary END.'
+  source: kb/functions/nvl2
+  terms: nvl2 null sql case when not then else
+- id: kb-func-regexp_substr
+  source_dialect: oracle
+  target_dialect: postgresql
+  text: 'REGEXP_SUBSTR function mapping: Oracle REGEXP_SUBSTR(str, pattern) extracts a substring matching a regex pattern.
+    PostgreSQL use (REGEXP_MATCHES(str, pattern))[1] — REGEXP_MATCHES returns an array of matches, [1] gets the first. For
+    extracting the first match: (REGEXP_MATCHES(email, ''[^@]+''))[1]. Note: REGEXP_MATCHES returns text[], so wrap in parentheses
+    and index with [1].'
+  source: kb/functions/regexp-substr
+  terms: regexp_substr sql regexp_matches
+- id: kb-func-trunc
+  source_dialect: oracle
+  target_dialect: postgresql
+  text: 'TRUNC function mapping: Oracle TRUNC(date, format) truncates a date to specified precision. PostgreSQL/openGauss
+    use DATE_TRUNC(''precision'', date). Format mapping: ''YYYY''→''year'', ''MM''→''month'', ''DD''→''day'', ''HH''→''hour''.
+    Example: TRUNC(sysdate, ''MM'') → DATE_TRUNC(''month'', CURRENT_DATE). For numbers: Oracle TRUNC(number, decimals) → PostgreSQL
+    TRUNC(number, decimals) (same syntax).'
+  source: kb/functions/trunc
+  terms: trunc sql date_trunc yyyy current_date
+- id: kb-func-initcap
+  source_dialect: oracle
+  target_dialect: postgresql
+  text: 'INITCAP function mapping: Oracle INITCAP(str) capitalizes the first letter of each word. PostgreSQL/openGauss support
+    INITCAP(str) natively — same syntax, same behavior. Example: INITCAP(''hello world'') → ''Hello World'' (works the same
+    in both).'
+  source: kb/functions/initcap
+  terms: initcap sql
+- id: kb-func-instr
+  source_dialect: oracle
+  target_dialect: postgresql
+  text: 'INSTR function mapping: Oracle INSTR(str, substr, start, occurrence) finds the position of a substring. PostgreSQL/openGauss
+    use POSITION(substr IN str) for basic case, or STRPOS(str, substr). For start position and occurrence, use: POSITION(substr
+    IN SUBSTRING(str FROM start)). Example: INSTR(email, ''@'') → POSITION(''@'' IN email).'
+  source: kb/functions/instr
+  terms: instr sql position strpos substring from
+- id: kb-func-listagg
+  source_dialect: oracle
+  target_dialect: postgresql
+  text: 'LISTAGG function mapping: Oracle LISTAGG(column, delimiter) WITHIN GROUP (ORDER BY col) aggregates strings. PostgreSQL/openGauss
+    use STRING_AGG(column, delimiter ORDER BY col). Example: LISTAGG(name, '','') WITHIN GROUP (ORDER BY name) → STRING_AGG(name,
+    '','' ORDER BY name).'
+  source: kb/functions/listagg
+  terms: listagg within group order sql string_agg
+- id: kb-mysql-pg-functions-comprehensive
+  source_dialect: mysql
+  target_dialect: postgresql
+  text: 'MySQL to PostgreSQL comprehensive function mapping reference. String functions: MySQL IFNULL(x,y) → PostgreSQL COALESCE(x,y),
+    MySQL CONCAT(a,b,...) → PostgreSQL CONCAT(a,b,...) or a||b||..., MySQL GROUP_CONCAT(expr SEPARATOR sep) → PostgreSQL STRING_AGG(expr,
+    sep), MySQL SUBSTRING_INDEX(str,delim,count) → PostgreSQL split_part(str, delim, count), MySQL CHAR_LENGTH(str) → PostgreSQL
+    CHAR_LENGTH(str) or LENGTH(str), MySQL LOCATE(substr, str) → PostgreSQL POSITION(substr IN str) or STRPOS(str, substr),
+    MySQL ELT(n, str1, str2, ...) → PostgreSQL CASE WHEN n=1 THEN str1 WHEN n=2 THEN str2 ... END, MySQL FIELD(str, str1,
+    str2, ...) → PostgreSQL CASE WHEN str=str1 THEN 1 WHEN str=str2 THEN 2 ... END. Date functions: MySQL NOW() → PostgreSQL
+    NOW() or CURRENT_TIMESTAMP, MySQL CURDATE() → PostgreSQL CURRENT_DATE, MySQL CURTIME() → PostgreSQL CURRENT_TIME, MySQL
+    DATE_FORMAT(date, format) → PostgreSQL TO_CHAR(date, format), MySQL DATEDIFF(d1,d2) → PostgreSQL d1-d2 (returns interval),
+    MySQL DATE_ADD(date, INTERVAL n UNIT) → PostgreSQL date + INTERVAL ''n unit'', MySQL DATE_SUB(date, INTERVAL n UNIT) →
+    PostgreSQL date - INTERVAL ''n unit'', MySQL UNIX_TIMESTAMP() → PostgreSQL EXTRACT(EPOCH FROM NOW()), MySQL FROM_UNIXTIME(ts)
+    → PostgreSQL TO_TIMESTAMP(ts). Math functions: MySQL MOD(a,b) → PostgreSQL a % b or MOD(a,b), MySQL TRUNCATE(n,d) → PostgreSQL
+    TRUNC(n,d), MySQL RAND() → PostgreSQL RANDOM(). Control flow: MySQL IF(cond,t,f) → PostgreSQL CASE WHEN cond THEN t ELSE
+    f END, MySQL IFNULL(x,y) → PostgreSQL COALESCE(x,y), MySQL NULLIF(x,y) → PostgreSQL NULLIF(x,y) (same). JSON functions:
+    MySQL JSON_EXTRACT(json, path) → PostgreSQL json->''key'' or jsonb_path_query, MySQL JSON_ARRAY_APPEND → PostgreSQL jsonb_set
+    or || operator.'
+  source: kb/functions/mysql-pg-comprehensive
+  terms: sql ifnull coalesce concat group_concat separator string_agg substring_index
+- id: kb-oracle-pg-functions-comprehensive
+  source_dialect: oracle
+  target_dialect: postgresql
+  text: 'Oracle to PostgreSQL comprehensive function mapping reference. String functions: Oracle NVL(x,y) → PostgreSQL COALESCE(x,y),
+    Oracle NVL2(x,y,z) → PostgreSQL CASE WHEN x IS NOT NULL THEN y ELSE z END, Oracle DECODE(expr, val1, res1, val2, res2,
+    default) → PostgreSQL CASE expr WHEN val1 THEN res1 WHEN val2 THEN res2 ELSE default END, Oracle INSTR(str, substr) →
+    PostgreSQL POSITION(substr IN str) or STRPOS(str, substr), Oracle INSTR(str, substr, pos) → PostgreSQL POSITION(substr
+    IN SUBSTRING(str FROM pos)) + pos - 1, Oracle SUBSTR(str, pos, len) → PostgreSQL SUBSTRING(str FROM pos FOR len), Oracle
+    LISTAGG(expr, delim) WITHIN GROUP (ORDER BY col) → PostgreSQL STRING_AGG(expr, delim ORDER BY col), Oracle REGEXP_SUBSTR(str,
+    pat, pos, nth) → PostgreSQL (REGEXP_MATCHES(str, pat))[nth], Oracle REGEXP_REPLACE(str, pat, rep) → PostgreSQL REGEXP_REPLACE(str,
+    pat, rep), Oracle SOUNDEX(str) → PostgreSQL SOUNDEX(str) (same), Oracle TO_CHAR(expr, format) → PostgreSQL TO_CHAR(expr,
+    format) (same), Oracle CONCAT(a,b) → PostgreSQL a||b (only 2 args in Oracle, use || for multiple). Date functions: Oracle
+    SYSDATE → PostgreSQL CURRENT_TIMESTAMP(0) or NOW(), Oracle SYSTIMESTAMP → PostgreSQL CURRENT_TIMESTAMP, Oracle TRUNC(datetime,
+    ''unit'') → PostgreSQL DATE_TRUNC(''unit'', datetime), Oracle ADD_MONTHS(date, n) → PostgreSQL date + INTERVAL ''n months'',
+    Oracle MONTHS_BETWEEN(d1,d2) → PostgreSQL EXTRACT(YEAR FROM age(d1,d2))*12 + EXTRACT(MONTH FROM age(d1,d2)), Oracle NEXT_DAY(date,
+    ''day'') → PostgreSQL date + ((n - EXTRACT(DOW FROM date) + 7) % 7), Oracle LAST_DAY(date) → PostgreSQL (DATE_TRUNC(''MONTH'',
+    date) + INTERVAL ''1 MONTH - 1 day'')::date, Oracle FROM_TZ(ts, tz) → PostgreSQL ts AT TIME ZONE tz. Math functions: Oracle
+    TRUNC(n, precision) → PostgreSQL TRUNC(n, precision) (same), Oracle MOD(a,b) → PostgreSQL a % b or MOD(a,b), Oracle POWER(a,b)
+    → PostgreSQL POWER(a,b) or a^b. System functions: Oracle USER → PostgreSQL CURRENT_USER, Oracle SYS_CONTEXT(''USERENV'',''SESSION_USER'')
+    → PostgreSQL SESSION_USER, Oracle SYS_CONTEXT(''USERENV'',''IP_ADDRESS'') → PostgreSQL INET_CLIENT_ADDR().'
+  source: kb/functions/oracle-pg-comprehensive
+  terms: sql nvl coalesce nvl2 case when not null

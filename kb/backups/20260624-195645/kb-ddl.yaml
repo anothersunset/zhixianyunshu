@@ -1,0 +1,53 @@
+category: DDL
+docs:
+- id: kb-mysql-pg-create-table-comprehensive
+  source_dialect: mysql
+  target_dialect: postgresql
+  text: 'MySQL to PostgreSQL CREATE TABLE comprehensive conversion reference. Auto increment: MySQL id INT AUTO_INCREMENT
+    PRIMARY KEY → PostgreSQL id SERIAL PRIMARY KEY (legacy) or id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY (PostgreSQL
+    10+). MySQL BIGINT AUTO_INCREMENT → PostgreSQL BIGSERIAL or BIGINT GENERATED ALWAYS AS IDENTITY. Default values: MySQL
+    DEFAULT CURRENT_TIMESTAMP → PostgreSQL DEFAULT CURRENT_TIMESTAMP (same). MySQL DEFAULT 0 → PostgreSQL DEFAULT 0 (same).
+    MySQL DEFAULT NULL → PostgreSQL DEFAULT NULL (same, but PostgreSQL treats NULL differently). Engine: MySQL ENGINE=InnoDB
+    → PostgreSQL (remove, PostgreSQL always uses similar storage). Charset: MySQL DEFAULT CHARSET=utf8mb4 → PostgreSQL (remove,
+    use UTF-8 by default). Collation: MySQL COLLATE=utf8mb4_unicode_ci → PostgreSQL (remove or use COLLATE clause). Comment:
+    MySQL COMMENT ''text'' → PostgreSQL (use COMMENT ON COLUMN after CREATE TABLE). Index: MySQL KEY idx_name (col) → PostgreSQL
+    CREATE INDEX idx_name ON table(col) (separate statement). Unique: MySQL UNIQUE KEY idx (col) → PostgreSQL UNIQUE (col)
+    or CREATE UNIQUE INDEX. Foreign key: MySQL FOREIGN KEY (col) REFERENCES t2(id) → PostgreSQL same syntax. Check constraint:
+    MySQL CHECK (expr) → PostgreSQL CHECK (expr) (same). Enum: MySQL status ENUM(''a'',''b'') → PostgreSQL CREATE TYPE status_type
+    AS ENUM(''a'',''b''); then status status_type. Set: MySQL tags SET(''a'',''b'',''c'') → PostgreSQL tags TEXT[] or CREATE
+    TYPE tags_type AS ENUM(''a'',''b'',''c''). Unsigned: MySQL col INT UNSIGNED → PostgreSQL col INTEGER CHECK (col >= 0).
+    Zerofill: MySQL col INT ZEROFILL → PostgreSQL col INTEGER (remove ZEROFILL, use LPAD for display).'
+  source: kb/ddl/mysql-pg-create-table
+  terms: sql create table int auto_increment primary key serial
+- id: kb-oracle-pg-create-table-comprehensive
+  source_dialect: oracle
+  target_dialect: postgresql
+  text: 'Oracle to PostgreSQL CREATE TABLE comprehensive conversion reference. Data types: Oracle NUMBER → PostgreSQL NUMERIC/INTEGER/BIGINT
+    (depends on precision), Oracle VARCHAR2(n) → PostgreSQL VARCHAR(n), Oracle DATE → PostgreSQL TIMESTAMP(0), Oracle CLOB
+    → PostgreSQL TEXT, Oracle BLOB → PostgreSQL BYTEA. Storage clauses: Oracle LOGGING → PostgreSQL (remove, logged by default),
+    Oracle TABLESPACE ts_name → PostgreSQL TABLESPACE ts_name (same, but must exist). Constraints: Oracle CONSTRAINT pk_name
+    PRIMARY KEY → PostgreSQL CONSTRAINT pk_name PRIMARY KEY (same), Oracle CONSTRAINT uk_name UNIQUE → PostgreSQL CONSTRAINT
+    uk_name UNIQUE (same), Oracle CONSTRAINT fk_name FOREIGN KEY → PostgreSQL CONSTRAINT fk_name FOREIGN KEY (same). Sequences:
+    Oracle CREATE SEQUENCE seq_name START WITH 1 INCREMENT BY 1; → PostgreSQL CREATE SEQUENCE seq_name START WITH 1 INCREMENT
+    BY 1; (same syntax). Identity columns: Oracle id NUMBER GENERATED ALWAYS AS IDENTITY → PostgreSQL id INTEGER GENERATED
+    ALWAYS AS IDENTITY. Default values: Oracle DEFAULT expr → PostgreSQL DEFAULT expr (same). Not null: Oracle col NOT NULL
+    → PostgreSQL col NOT NULL (same). Comments: Oracle COMMENT ON COLUMN t.col IS ''text'' → PostgreSQL COMMENT ON COLUMN
+    t.col IS ''text'' (same). Partitioning: Oracle PARTITION BY RANGE(col) → PostgreSQL PARTITION BY RANGE(col) (similar syntax).
+    Index-organized tables: Oracle IOT → PostgreSQL (no direct equivalent, use clustered indexes). Global temporary tables:
+    Oracle CREATE GLOBAL TEMPORARY TABLE → PostgreSQL CREATE TEMPORARY TABLE.'
+  source: kb/ddl/oracle-pg-create-table
+  terms: sql create table number numeric integer bigint varchar2
+- id: doc-3
+  source_dialect: mysql
+  target_dialect: openGauss
+  text: 从 MySQL 迁移到 openGauss 时,JDBC URL 需从 jdbc:mysql:// 改为 jdbc:opengauss://,默认端口从 3306 变为 5432。驱动类从 com.mysql.cj.jdbc.Driver
+    改为 org.opengauss.Driver。
+  source: opengauss/migration-guide.md#jdbc
+  terms: sql jdbc url 迁移到 需从 改为 默认端口从 变为
+- id: doc-4
+  source_dialect: mysql
+  target_dialect: openGauss
+  text: 'openGauss 驱动 GA 版本仅提供 opengauss-jdbc artifact,在 Maven 中需替换 mysql-connector-java。Maven 坐标: org.opengauss:opengauss-jdbc:版本号。Gradle
+    也需同步更新依赖。'
+  source: opengauss/migration-guide.md#dependency
+  terms: 驱动 版本仅提供 中需替换 坐标 版本号 也需同步更新依赖

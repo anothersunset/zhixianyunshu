@@ -1,0 +1,37 @@
+category: TYPE
+docs:
+- id: kb-generated-bit-
+  source_dialect: mysql
+  target_dialect: postgresql
+  text: '## BIT(1) → BOOLEAN Conversion
+
+
+    ### Source Construct
+
+    In MySQL, `BIT(1)` is a bit-field type that stores a single bit value (0 or 1). It is commonly used as a boolean-like
+    column, often representing true/false or on/off states. The `(1)` specifies the width as 1 bit.
+
+
+    ### Correct Target Equivalent
+
+    In PostgreSQL, the equivalent for a single-bit boolean column is `BOOLEAN`. PostgreSQL''s `BOOLEAN` type natively stores
+    `TRUE`, `FALSE`, or `NULL`, and is the standard SQL way to represent binary logic. Unlike MySQL''s `BIT(1)`, it does not
+    require width specification and integrates seamlessly with PostgreSQL''s query optimizer and type system.
+
+
+    ### Common Pitfalls
+
+    1. **Literal retention**: The most frequent failure is leaving `BIT(1)` unchanged in the target SQL. This causes a type
+    mismatch because PostgreSQL''s `BIT(1)` is a fixed-length bit string, not a boolean, and behaves differently (e.g., comparisons
+    require `B''1''` syntax).
+
+    2. **Width misinterpretation**: Developers may assume `BIT(1)` maps to `BIT(1)` in PostgreSQL, but the semantic intent
+    (boolean flag) is lost. PostgreSQL `BIT` types are for bitwise operations, not logical predicates.
+
+    3. **Missing type coercion**: When `BIT(1)` is used in expressions (e.g., `WHERE flag = 1`), the conversion must also
+    adjust comparison logic to use boolean literals (`WHERE flag = TRUE`).
+
+
+    ### Correct Conversion Example
+
+    **Source (MySQL):**'
