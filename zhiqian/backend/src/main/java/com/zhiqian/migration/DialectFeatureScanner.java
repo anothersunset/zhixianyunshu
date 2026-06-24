@@ -1,12 +1,22 @@
 package com.zhiqian.migration;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.yaml.snakeyaml.Yaml;
 
 import com.zhiqian.migration.TranslationRecipeRegistry.RegisteredFeature;
 
@@ -40,6 +50,52 @@ public class DialectFeatureScanner {
         "TEXT", "VARCHAR", "INTEGER", "BIGINT", "NUMERIC", "TIMESTAMP", "TIMESTAMPTZ", "DATE",
         "INTERVAL", "SERIAL", "BIGSERIAL", "UUID", "BYTEA", "FLOAT8", "FLOAT4", "INT2", "INT4", "INT8"
     );
+
+    private static final Logger log = LoggerFactory.getLogger(DialectFeatureScanner.class);
+
+    // ── Per-dialect whitelist additions loaded from YAML ──
+    private static final Map<String, Set<String>> DIALECT_WHITELIST_ADDITIONS = loadWhitelistFromYaml();
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Set<String>> loadWhitelistFromYaml() {
+        Map<String, Set<String>> result = new ConcurrentHashMap<>();
+        try {
+            Path dir = resolveDialectsDir();
+            if (Files.isDirectory(dir)) {
+                Yaml yaml = new Yaml();
+                try (Stream<Path> files = Files.list(dir)) {
+                    for (Path f : files.filter(p -> p.toString().endsWith(".yaml")).toList()) {
+                        Map<String, Object> data = yaml.load(Files.readString(f));
+                        String dialect = (String) data.get("name");
+                        List<String> whitelist = (List<String>) data.get("standard_whitelist");
+                        if (dialect != null && whitelist != null && !whitelist.isEmpty()) {
+                            result.put(dialect, Set.copyOf(whitelist));
+                            log.info("[DialectFeatureScanner] Loaded {} whitelist entries for dialect '{}'",
+                                    whitelist.size(), dialect);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[DialectFeatureScanner] Failed to load whitelist from YAML: {}", e.getMessage());
+        }
+        return result;
+    }
+
+    private static Path resolveDialectsDir() {
+        String configured = System.getProperty("kb.yaml.path", "");
+        if (!configured.isBlank()) {
+            return Paths.get(configured, "dialects");
+        }
+        Path cwd = Paths.get(System.getProperty("user.dir", "."));
+        for (int i = 0; i < 5; i++) {
+            Path kb = cwd.resolve("kb/active/dialects");
+            if (Files.isDirectory(kb)) return kb;
+            cwd = cwd.getParent();
+            if (cwd == null) break;
+        }
+        return Paths.get("kb/active/dialects");
+    }
 
     // 大写函数调用正则：至少 3 个字符的大写标识符后跟 (
     private static final Pattern CAP_FUNC = Pattern.compile("\\b([A-Z][A-Z0-9_]{2,})\\s*\\(");
@@ -82,8 +138,10 @@ public class DialectFeatureScanner {
         java.util.regex.Matcher m = CAP_FUNC.matcher(clean);
         while (m.find()) {
             String func = m.group(1).toUpperCase(Locale.ROOT);
-            // 跳过 PG 标准函数、SQL 关键字、已注册特征
+            // 跳过 PG 标准函数（含 per-dialect 白名单扩展）、SQL 关键字、已注册特征
             if (PG_STANDARD.contains(func)) continue;
+            Set<String> dialectAdditions = DIALECT_WHITELIST_ADDITIONS.get(dial);
+            if (dialectAdditions != null && dialectAdditions.contains(func)) continue;
             if (phase1Keywords.contains(func)) continue;
             // 同义词去重（INSTR 和 INSTR( 可能分别注册）
             if (phase1Keywords.contains(func + "(")) continue;

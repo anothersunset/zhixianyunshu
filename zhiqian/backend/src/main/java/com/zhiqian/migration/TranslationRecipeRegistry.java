@@ -1,9 +1,20 @@
 package com.zhiqian.migration;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.yaml.snakeyaml.Yaml;
 
 /**
  * 统一注册表：方言特征的唯一注册源。
@@ -26,6 +37,8 @@ public class TranslationRecipeRegistry {
     ) {
         public boolean isRecipe() { return fewShotSource != null; }
     }
+
+    private static final Logger log = LoggerFactory.getLogger(TranslationRecipeRegistry.class);
 
     // ── Oracle features ──
 
@@ -196,9 +209,76 @@ public class TranslationRecipeRegistry {
     private static final RegisteredFeature MYSQL_UNSIGNED  = simple("UNSIGNED", "use CHECK constraint instead", "mysql");
     private static final RegisteredFeature MYSQL_ZEROFILL  = simple("ZEROFILL", "LPAD or format", "mysql");
 
-    // ── Master list ──
+    // ── YAML 加载：优先从 kb/active/dialects/*.yaml 读取，失败回退到硬编码 ──
 
-    private static final List<RegisteredFeature> ALL = List.of(
+    private static Path resolveDialectsDir() {
+        String configured = System.getProperty("kb.yaml.path", "");
+        if (!configured.isBlank()) {
+            return Paths.get(configured, "dialects");
+        }
+        Path cwd = Paths.get(System.getProperty("user.dir", "."));
+        for (int i = 0; i < 5; i++) {
+            Path kb = cwd.resolve("kb/active/dialects");
+            if (Files.isDirectory(kb)) return kb;
+            cwd = cwd.getParent();
+            if (cwd == null) break;
+        }
+        return Paths.get("kb/active/dialects");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<RegisteredFeature> loadFromYaml() {
+        try {
+            Path dir = resolveDialectsDir();
+            if (Files.isDirectory(dir)) {
+                log.info("[TranslationRecipeRegistry] Loading dialect features from YAML: {}", dir.toAbsolutePath());
+                Yaml yaml = new Yaml();
+                List<RegisteredFeature> loaded = new ArrayList<>();
+                try (Stream<Path> files = Files.list(dir)) {
+                    for (Path f : files.filter(p -> p.toString().endsWith(".yaml")).sorted().toList()) {
+                        Map<String, Object> data = yaml.load(Files.readString(f));
+                        String dialect = (String) data.get("name");
+                        List<Map<String, Object>> features = (List<Map<String, Object>>) data.get("features");
+                        if (dialect != null && features != null) {
+                            for (Map<String, Object> feat : features) {
+                                String keyword = (String) feat.get("keyword");
+                                String mapping = (String) feat.get("mapping");
+                                if (keyword == null || mapping == null) continue;
+                                Boolean isRecipe = (Boolean) feat.getOrDefault("is_recipe", false);
+                                if (Boolean.TRUE.equals(isRecipe)) {
+                                    loaded.add(new RegisteredFeature(
+                                        keyword, mapping, dialect,
+                                        (String) feat.get("construct_name"),
+                                        (String) feat.get("few_shot_source"),
+                                        (String) feat.get("few_shot_target"),
+                                        (String) feat.get("step_by_step"),
+                                        (List<String>) feat.get("pitfalls")
+                                    ));
+                                } else {
+                                    loaded.add(simple(keyword, mapping, dialect));
+                                }
+                            }
+                        }
+                    }
+                }
+                if (!loaded.isEmpty()) {
+                    log.info("[TranslationRecipeRegistry] Loaded {} features from YAML ({} dialects)",
+                            loaded.size(), loaded.stream().map(RegisteredFeature::dialectGroup).distinct().count());
+                    return loaded;
+                }
+            } else {
+                log.warn("[TranslationRecipeRegistry] Dialects YAML dir not found: {}", dir.toAbsolutePath());
+            }
+        } catch (Exception e) {
+            log.warn("[TranslationRecipeRegistry] Failed to load features from YAML: {}", e.getMessage());
+        }
+        log.info("[TranslationRecipeRegistry] Using hardcoded fallback features");
+        return List.of();
+    }
+
+    // ── Hardcoded fallback (used when YAML is unavailable) ──
+
+    private static final List<RegisteredFeature> HARDCODED = List.of(
         // Oracle recipes
         ORACLE_ROWNUM, ORACLE_CONNECT_BY, ORACLE_MERGE_INTO, ORACLE_TRUNC,
         ORACLE_MONTHS_BETWEEN, ORACLE_ADD_MONTHS, ORACLE_LISTAGG, ORACLE_REGEXP_SUBSTR,
@@ -214,6 +294,25 @@ public class TranslationRecipeRegistry {
         MYSQL_TINYINT, MYSQL_BIT, MYSQL_BACKTICK, MYSQL_ENGINE,
         MYSQL_CHARSET, MYSQL_COLLATE, MYSQL_UNSIGNED, MYSQL_ZEROFILL
     );
+
+    // ── Master list: YAML features take precedence over hardcoded ──
+
+    private static final List<RegisteredFeature> YAML_FEATURES = loadFromYaml();
+    private static final List<RegisteredFeature> ALL = buildAll();
+
+    private static List<RegisteredFeature> buildAll() {
+        if (YAML_FEATURES.isEmpty()) return HARDCODED;
+        // YAML features take precedence over hardcoded for same keyword+dialect
+        Set<String> yamlKeys = YAML_FEATURES.stream()
+            .map(f -> f.dialectGroup() + ":" + f.sourceKeyword().toUpperCase(Locale.ROOT))
+            .collect(Collectors.toSet());
+        List<RegisteredFeature> merged = new ArrayList<>(YAML_FEATURES);
+        for (RegisteredFeature f : HARDCODED) {
+            String key = f.dialectGroup() + ":" + f.sourceKeyword().toUpperCase(Locale.ROOT);
+            if (!yamlKeys.contains(key)) merged.add(f);
+        }
+        return Collections.unmodifiableList(merged);
+    }
 
     private static RegisteredFeature simple(String keyword, String mapping, String dialect) {
         return new RegisteredFeature(keyword, mapping, dialect, null, null, null, null, null);

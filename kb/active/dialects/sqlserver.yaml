@@ -1,0 +1,81 @@
+name: sqlserver
+pairs:
+- sqlserver->postgresql
+- sqlserver->opengauss
+complexity_keywords:
+- top
+- getdate(
+- dateadd(
+- datediff(
+- newid()
+- rowversion
+- output inserted
+standard_whitelist:
+- ABS
+- TRIM
+- UPPER
+- LOWER
+- LENGTH
+features:
+- keyword: TOP
+  mapping: LIMIT
+  category: syntax
+  is_recipe: true
+  construct_name: SELECT TOP → LIMIT
+  few_shot_source: SELECT TOP 10 * FROM emp ORDER BY salary DESC
+  few_shot_target: SELECT * FROM emp ORDER BY salary DESC LIMIT 10
+  step_by_step: 1. 移除 TOP N 关键字。2. 在查询末尾添加 LIMIT N。3. 如果源查询有 ORDER BY，ORDER BY 在 LIMIT 之前。
+  pitfalls:
+  - TOP N PERCENT 需要转换为 LIMIT (SELECT COUNT(*) * N/100) 或使用 NTILE
+  - TOP N WITH TIES 需要转换为 FETCH FIRST N ROWS WITH TIES
+- keyword: GETDATE()
+  mapping: CURRENT_TIMESTAMP
+  category: function
+  is_recipe: false
+- keyword: DATEADD(
+  mapping: date_col + INTERVAL
+  category: function
+  is_recipe: true
+  construct_name: DATEADD → INTERVAL arithmetic
+  few_shot_source: SELECT DATEADD(day, 7, order_date) FROM orders
+  few_shot_target: SELECT order_date + INTERVAL '7 days' FROM orders
+  step_by_step: 1. 识别 DATEADD(unit, n, date_col)。2. 转换为 date_col + INTERVAL 'n unit'。3. unit 需要变为复数（day→days, month→months, year→years）。
+  pitfalls:
+  - DATEADD 的第一个参数是 unit 而非 interval 字符串
+  - 负的 n 值用 - INTERVAL 语法
+- keyword: DATEDIFF(
+  mapping: EXTRACT(EPOCH FROM (a-b)) or age()
+  category: function
+  is_recipe: false
+- keyword: ISNULL(
+  mapping: COALESCE
+  category: function
+  is_recipe: false
+- keyword: LEN(
+  mapping: LENGTH
+  category: function
+  is_recipe: false
+- keyword: CHARINDEX(
+  mapping: POSITION / STRPOS
+  category: function
+  is_recipe: false
+- keyword: NEWID()
+  mapping: gen_random_uuid()
+  category: function
+  is_recipe: false
+- keyword: IIF(
+  mapping: CASE WHEN ... THEN ... ELSE
+  category: function
+  is_recipe: false
+- keyword: '['
+  mapping: remove square brackets (use " or unquoted)
+  category: syntax
+  is_recipe: false
+- keyword: OUTPUT INSERTED
+  mapping: RETURNING clause
+  category: syntax
+  is_recipe: false
+- keyword: ROWVERSION
+  mapping: xmin system column or custom trigger
+  category: type
+  is_recipe: false

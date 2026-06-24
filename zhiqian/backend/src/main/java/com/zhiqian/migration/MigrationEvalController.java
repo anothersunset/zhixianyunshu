@@ -21,11 +21,20 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.request.async.DeferredResult;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Stream;
+
+import org.yaml.snakeyaml.Yaml;
 
 @RestController
 public class MigrationEvalController {
@@ -34,17 +43,66 @@ public class MigrationEvalController {
     private static final List<String> RETRIEVAL_CHOICES = List.of("bm25", "vector", "vector_rerank", "crag", "full");
     private static final AtomicLong TASK_ID = new AtomicLong(90_000L);
 
-    // ===== SQL 复杂度判断（轻量规则） =====
+    // ===== SQL 复杂度判断（轻量规则）—— 优先从 YAML 加载 =====
 
-    /** Oracle 特有语法关键词 */
-    private static final List<String> ORACLE_KEYWORDS = List.of(
+    @SuppressWarnings("unchecked")
+    private static Map<String, List<String>> loadComplexityFromYaml() {
+        Map<String, List<String>> result = new ConcurrentHashMap<>();
+        try {
+            Path dir = resolveDialectsDir();
+            if (Files.isDirectory(dir)) {
+                Yaml yaml = new Yaml();
+                try (Stream<Path> files = Files.list(dir)) {
+                    for (Path f : files.filter(p -> p.toString().endsWith(".yaml")).toList()) {
+                        Map<String, Object> data = yaml.load(Files.readString(f));
+                        String dialect = (String) data.get("name");
+                        List<String> keywords = (List<String>) data.get("complexity_keywords");
+                        if (dialect != null && keywords != null && !keywords.isEmpty()) {
+                            result.put(dialect, keywords);
+                            log.info("[MigrationEval] Loaded {} complexity keywords for dialect '{}'",
+                                    keywords.size(), dialect);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[MigrationEval] Failed to load complexity keywords from YAML: {}", e.getMessage());
+        }
+        return result;
+    }
+
+    private static Path resolveDialectsDir() {
+        String configured = System.getProperty("kb.yaml.path", "");
+        if (!configured.isBlank()) return Paths.get(configured, "dialects");
+        Path cwd = Paths.get(System.getProperty("user.dir", "."));
+        for (int i = 0; i < 5; i++) {
+            Path kb = cwd.resolve("kb/active/dialects");
+            if (Files.isDirectory(kb)) return kb;
+            cwd = cwd.getParent();
+            if (cwd == null) break;
+        }
+        return Paths.get("kb/active/dialects");
+    }
+
+    private static final Map<String, List<String>> DIALECT_COMPLEXITY = loadComplexityFromYaml();
+
+    /** 源方言复杂度关键词（从 YAML 加载，回退到 Oracle 硬编码） */
+    private static final List<String> ORACLE_KEYWORDS = DIALECT_COMPLEXITY.getOrDefault("oracle", List.of(
         "decode(", "rownum", "(+)", "from dual", "sysdate", "nvl(", "nvl2(", "connect by", "start with"
-    );
+    ));
 
-    /** 复杂 SQL 特征关键词 */
-    private static final List<String> COMPLEX_KEYWORDS = List.of(
-        "with ", "recursive", "connect by", "start with", "model ", "pivot(", "unpivot("
-    );
+    /** 复杂 SQL 特征关键词（通用标记 + 所有方言复杂度关键词合并） */
+    private static final List<String> COMPLEX_KEYWORDS = buildComplexKeywords();
+
+    private static List<String> buildComplexKeywords() {
+        Set<String> all = new LinkedHashSet<>();
+        all.add("with ");
+        all.add("recursive");
+        for (List<String> kws : DIALECT_COMPLEXITY.values()) {
+            all.addAll(kws);
+        }
+        return List.copyOf(all);
+    }
 
     /**
      * 判断 SQL 是否为复杂场景，决定使用 chat() 还是 reason()。
