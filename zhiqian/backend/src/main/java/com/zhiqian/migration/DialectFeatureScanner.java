@@ -31,7 +31,14 @@ public class DialectFeatureScanner {
         "WITH", "RECURSIVE", "VALUES", "DISTINCT", "AS", "FROM", "INTO", "SET", "DEFAULT",
         "TABLE", "INDEX", "VIEW", "PRIMARY", "KEY", "FOREIGN", "REFERENCES", "CONSTRAINT",
         "CHECK", "UNIQUE", "NOT_NULL", "ADD", "COLUMN", "TYPE", "RENAME", "BEGIN", "COMMIT",
-        "ROLLBACK", "GRANT", "REVOKE", "TRUNCATE", "EXPLAIN", "ANALYZE", "VACUUM"
+        "ROLLBACK", "GRANT", "REVOKE", "TRUNCATE", "EXPLAIN", "ANALYZE", "VACUUM",
+        // SQL:2003+ PG standard clauses (Phase 2 误检会导致 LLM 过度转换)
+        "FILTER", "OVER", "PARTITION", "FRAME", "ROWS", "RANGE", "FETCH", "FIRST", "NEXT", "ONLY",
+        "USING", "RETURNING", "LATERAL", "WINDOW", "ILIKE", "SIMILAR", "BETWEEN", "LIKE",
+        "ANY", "ALL", "SOME", "ASC", "DESC", "NULLS", "TRUE", "FALSE", "IF", "LOOP", "RETURN",
+        "DECLARE", "EXCEPTION", "PERFORM", "FOREACH", "ARRAY", "JSONB", "JSON", "BOOLEAN",
+        "TEXT", "VARCHAR", "INTEGER", "BIGINT", "NUMERIC", "TIMESTAMP", "TIMESTAMPTZ", "DATE",
+        "INTERVAL", "SERIAL", "BIGSERIAL", "UUID", "BYTEA", "FLOAT8", "FLOAT4", "INT2", "INT4", "INT8"
     );
 
     // 大写函数调用正则：至少 3 个字符的大写标识符后跟 (
