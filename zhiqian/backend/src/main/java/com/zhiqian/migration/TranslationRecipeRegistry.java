@@ -175,6 +175,7 @@ public class TranslationRecipeRegistry {
     private static final RegisteredFeature ORACLE_SYSTIMESTAMP = simple("SYSTIMESTAMP", "CURRENT_TIMESTAMP or clock_timestamp()", "oracle");
     private static final RegisteredFeature ORACLE_TO_TIMESTAMP = simple("TO_TIMESTAMP(", "col::timestamp or to_timestamp(col, fmt)", "oracle");
     private static final RegisteredFeature ORACLE_REGEXP_REPLACE = simple("REGEXP_REPLACE(", "REGEXP_REPLACE(col, pattern, repl, flags) — PG compatible, verify", "oracle");
+    private static final RegisteredFeature ORACLE_TIMESTAMP_TRUNC = simple("TIMESTAMP_TRUNC(", "DATE_TRUNC('day', col) — Oracle epoch conversion: use to_timestamp(epoch) instead of TO_DATE+arithmetic", "oracle");
 
     // ── MySQL features ──
 
@@ -206,7 +207,7 @@ public class TranslationRecipeRegistry {
         ORACLE_START_WITH, ORACLE_TO_CHAR, ORACLE_TO_DATE, ORACLE_INSTR,
         ORACLE_SYSDATE, ORACLE_USER, ORACLE_UID, ORACLE_INITCAP, ORACLE_PIVOT, ORACLE_UNPIVOT,
         ORACLE_REGEXP_LIKE, ORACLE_TO_NUMBER, ORACLE_SUBSTR, ORACLE_SYSTIMESTAMP,
-        ORACLE_TO_TIMESTAMP, ORACLE_REGEXP_REPLACE,
+        ORACLE_TO_TIMESTAMP, ORACLE_REGEXP_REPLACE, ORACLE_TIMESTAMP_TRUNC,
         // MySQL
         MYSQL_IFNULL, MYSQL_DATE_FORMAT, MYSQL_GROUP_CONCAT, MYSQL_AUTO_INC,
         MYSQL_ENUM, MYSQL_DUP_KEY, MYSQL_REGEXP, MYSQL_NOW,
