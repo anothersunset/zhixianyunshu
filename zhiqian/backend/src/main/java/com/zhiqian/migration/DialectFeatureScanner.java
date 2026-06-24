@@ -235,7 +235,7 @@ public class DialectFeatureScanner {
     }
 
     private static String categorize(String keyword) {
-        if (keyword.contains("(") || keyword.equalsIgnoreCase("SYSDATE")) return "function";
+        if (keyword.contains("(") || keyword.equalsIgnoreCase("SYSDATE") || keyword.equalsIgnoreCase("SYSTIMESTAMP")) return "function";
         if (keyword.equalsIgnoreCase("CONNECT BY") || keyword.equalsIgnoreCase("START WITH")
             || keyword.equalsIgnoreCase("ON DUPLICATE KEY") || keyword.equalsIgnoreCase("MERGE INTO")
             || keyword.equalsIgnoreCase("FROM DUAL") || keyword.equalsIgnoreCase("PIVOT(")

@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import glob
 import json
+import re
 import math
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -42,11 +43,11 @@ def load_dataset(path: str, pair: str) -> list[dict]:
     return cases
 
 
-def _eval_one(c, retrieval, client, judge, fast, skip_throttle=False):
+def _eval_one(c, retrieval, client, judge, fast, skip_throttle=False, mode=None):
     """评估单个 case（供并行调用）。"""
     target = _target_db(c["pair"])
     try:
-        res = client.run_migration(source_sql=c["source_sql"], pair=c["pair"], retrieval=retrieval, fast=fast, skip_throttle=skip_throttle)
+        res = client.run_migration(source_sql=c["source_sql"], pair=c["pair"], retrieval=retrieval, fast=fast, mode=mode, skip_throttle=skip_throttle)
         # 检测 LLM 解析失败（后端 parseFallback 返回 target_sql=""）
         parse_failed = not res.target_sql and res.risk_level == "high"
         if parse_failed:
@@ -62,7 +63,18 @@ def _eval_one(c, retrieval, client, judge, fast, skip_throttle=False):
             ok = sql_equivalent(res.target_sql, c["gold_target_sql"], target)
             if not ok and judge is not None:
                 ok = judge.sql_semantically_equal(res.target_sql, c["gold_target_sql"], target)
-            report_acc = report_point_hit_rate(res.report_points, c.get("gold_report_points", []), judge)
+            # 报告准确率：如果 agent 正确判断无需转换（SQL 未变 + ok=true），报告得满分
+            # 避免 token Jaccard 将 "No conversion needed" 误判为 0
+            _pred_no_conv = any(
+                kw in p.lower() for p in res.report_points
+                for kw in ["no conversion", "already target-dialect compatible", "no change needed"]
+            )
+            _source_clean = re.sub(r'\s+', ' ', c.get('source_sql', '')).strip().lower()
+            _pred_clean = re.sub(r'\s+', ' ', res.target_sql).strip().lower()
+            if _pred_no_conv and ok and _source_clean == _pred_clean:
+                report_acc = 1.0
+            else:
+                report_acc = report_point_hit_rate(res.report_points, c.get("gold_report_points", []), judge)
             recall = recall_at_k(res.retrieved_ids, c.get("gold_context_ids", []), k=5)
             if recall is not None and math.isnan(recall):
                 recall = None
@@ -90,7 +102,7 @@ def _eval_one(c, retrieval, client, judge, fast, skip_throttle=False):
 
 
 def evaluate(cases, retrieval, client, judge=None, fast=False, parallel=1,
-              on_progress=None, checkpoint_path=None, checkpoint_base_rows=None):
+              on_progress=None, checkpoint_path=None, checkpoint_base_rows=None, mode=None):
     """on_progress(done_rows): 每完成一批 case 后回调，用于增量保存 checkpoint。
     checkpoint_path: 直接写文件的路径（比 on_progress 回调更可靠）。
     checkpoint_base_rows: 断点续跑时已有的 rows，合并后写入 checkpoint。
@@ -119,7 +131,7 @@ def evaluate(cases, retrieval, client, judge=None, fast=False, parallel=1,
     if parallel <= 1:
         rows = []
         for i, c in enumerate(cases):
-            r = _eval_one(c, retrieval, client, judge, fast)
+            r = _eval_one(c, retrieval, client, judge, fast, mode=mode)
             rows.append(r)
             tag = "OK" if r["sql_ok"] else "FAIL"
             err_info = f" [{r['error'][:60]}]" if r.get("error") else ""
@@ -130,7 +142,7 @@ def evaluate(cases, retrieval, client, judge=None, fast=False, parallel=1,
         rows = [None] * n
         done = 0
         with ThreadPoolExecutor(max_workers=parallel) as ex:
-            futures = {ex.submit(_eval_one, c, retrieval, client, judge, fast): i for i, c in enumerate(cases)}
+            futures = {ex.submit(_eval_one, c, retrieval, client, judge, fast, mode=mode): i for i, c in enumerate(cases)}
             for f in as_completed(futures):
                 idx = futures[f]
                 r = f.result()
@@ -167,6 +179,8 @@ def main():
     ap.add_argument("--use-judge", action="store_true")
     ap.add_argument("--fast", action="store_true",
                     help="跳过 AgentGraph，直接用 chat-model 单次生成（大幅加速 eval 迭代）")
+    ap.add_argument("--mode", choices=["fast", "agent"], default=None,
+                    help="fast=跳过AgentGraph, agent=完整流水线（条件路由+自纠正）")
     ap.add_argument("--parallel", type=int, default=1,
                     help="并行评估的并发数（默认 1 即串行）")
     ap.add_argument("--cooldown", type=float, default=None,
@@ -177,13 +191,18 @@ def main():
     cases = load_dataset(args.dataset, args.pair)
     client = MigrationClient(cooldown=args.cooldown)
     judge = LLMJudge() if args.use_judge else None
-    if args.fast:
+    mode = args.mode
+    if args.fast and not mode:
+        mode = "fast"
+    if mode:
+        print(f"Mode: {mode}, {len(cases)} cases, parallel={args.parallel}")
+    elif args.fast:
         print(f"Fast mode: {len(cases)} cases, parallel={args.parallel}")
-    rows = evaluate(cases, args.retrieval, client, judge, fast=args.fast, parallel=args.parallel)
+    rows = evaluate(cases, args.retrieval, client, judge, fast=args.fast, parallel=args.parallel, mode=mode)
     summary = summarize(rows)
 
     Path(args.out).mkdir(parents=True, exist_ok=True)
-    suffix = "_fast" if args.fast else ""
+    suffix = "_fast" if args.fast else ("_agent" if mode == "agent" else "")
     out_file = os.path.join(args.out, "raw_" + args.retrieval + "_" + args.pair + suffix + ".json")
     with open(out_file, "w", encoding="utf-8") as fh:
         json.dump({"summary": summary, "rows": rows}, fh, ensure_ascii=False, indent=2)

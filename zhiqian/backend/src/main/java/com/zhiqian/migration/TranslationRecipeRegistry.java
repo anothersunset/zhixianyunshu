@@ -168,6 +168,13 @@ public class TranslationRecipeRegistry {
     private static final RegisteredFeature ORACLE_INITCAP  = simple("INITCAP(", "INITCAP (pg compatible, verify)", "oracle");
     private static final RegisteredFeature ORACLE_PIVOT    = simple("PIVOT(", "CROSSTAB / conditional aggregation", "oracle");
     private static final RegisteredFeature ORACLE_UNPIVOT  = simple("UNPIVOT(", "UNNEST / lateral join", "oracle");
+    // PARROT 分析新增：Oracle 函数在 PARROT 数据中出现频率高但未注册
+    private static final RegisteredFeature ORACLE_REGEXP_LIKE = simple("REGEXP_LIKE(", "col ~ pattern or REGEXP_MATCHES(col, pattern)", "oracle");
+    private static final RegisteredFeature ORACLE_TO_NUMBER = simple("TO_NUMBER(", "col::numeric or CAST(col AS numeric)", "oracle");
+    private static final RegisteredFeature ORACLE_SUBSTR = simple("SUBSTR(", "SUBSTRING(col FROM start FOR len)", "oracle");
+    private static final RegisteredFeature ORACLE_SYSTIMESTAMP = simple("SYSTIMESTAMP", "CURRENT_TIMESTAMP or clock_timestamp()", "oracle");
+    private static final RegisteredFeature ORACLE_TO_TIMESTAMP = simple("TO_TIMESTAMP(", "col::timestamp or to_timestamp(col, fmt)", "oracle");
+    private static final RegisteredFeature ORACLE_REGEXP_REPLACE = simple("REGEXP_REPLACE(", "REGEXP_REPLACE(col, pattern, repl, flags) — PG compatible, verify", "oracle");
 
     // ── MySQL features ──
 
@@ -198,6 +205,8 @@ public class TranslationRecipeRegistry {
         ORACLE_DECODE, ORACLE_NVL, ORACLE_NVL2, ORACLE_FROM_DUAL, ORACLE_OUTER_JOIN,
         ORACLE_START_WITH, ORACLE_TO_CHAR, ORACLE_TO_DATE, ORACLE_INSTR,
         ORACLE_SYSDATE, ORACLE_USER, ORACLE_UID, ORACLE_INITCAP, ORACLE_PIVOT, ORACLE_UNPIVOT,
+        ORACLE_REGEXP_LIKE, ORACLE_TO_NUMBER, ORACLE_SUBSTR, ORACLE_SYSTIMESTAMP,
+        ORACLE_TO_TIMESTAMP, ORACLE_REGEXP_REPLACE,
         // MySQL
         MYSQL_IFNULL, MYSQL_DATE_FORMAT, MYSQL_GROUP_CONCAT, MYSQL_AUTO_INC,
         MYSQL_ENUM, MYSQL_DUP_KEY, MYSQL_REGEXP, MYSQL_NOW,
