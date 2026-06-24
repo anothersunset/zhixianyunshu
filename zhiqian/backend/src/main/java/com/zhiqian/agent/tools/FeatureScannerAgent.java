@@ -4,6 +4,7 @@ import com.zhiqian.agent.AgentContext;
 import com.zhiqian.agent.AgentTool;
 import com.zhiqian.migration.DialectFeatureScanner;
 import com.zhiqian.migration.TranslationRecipeRegistry;
+import com.zhiqian.migration.TranslationRecipeRegistry.RegisteredFeature;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,8 +27,8 @@ public class FeatureScannerAgent implements AgentTool {
 
         List<DialectFeatureScanner.DetectedFeature> features =
             DialectFeatureScanner.scan(sql, sourceDialect);
-        List<TranslationRecipeRegistry.TranslationRecipe> recipes =
-            DialectFeatureScanner.getRecipes(features);
+        List<RegisteredFeature> recipes =
+            DialectFeatureScanner.getRecipes(features, sourceDialect);
         String hints = DialectFeatureScanner.toPromptHints(features, recipes);
 
         Map<String, Object> out = new LinkedHashMap<>();
