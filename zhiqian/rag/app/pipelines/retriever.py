@@ -23,7 +23,37 @@ from app.store.rrf import rrf_merge
 log = logging.getLogger(__name__)
 
 
-_DEMO_DOCS: List[Dict[str, Any]] = [
+def _load_kb_docs() -> List[Dict[str, Any]]:
+    """从统一 KB YAML 文件加载文档（替代硬编码 _DEMO_DOCS）。"""
+    import os, sys
+    # kb/ 目录在项目根（rag/app/pipelines/ 往上 4 层）
+    kb_root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..", "kb"))
+    if kb_root not in sys.path:
+        sys.path.insert(0, os.path.dirname(kb_root))
+    try:
+        from kb.kb_loader import load_all_docs
+        yaml_docs = load_all_docs()
+        # 转换为 retriever 期望格式
+        return [
+            {
+                "id": d["id"],
+                "text": d["text"],
+                "source": d.get("source", ""),
+                "meta": {
+                    "category": d.get("category", "MISC"),
+                    "source_dialect": d.get("source_dialect", ""),
+                    "target_dialect": d.get("target_dialect", ""),
+                },
+            }
+            for d in yaml_docs
+        ]
+    except Exception as e:
+        log.warning("[HybridRetriever] Cannot load unified KB YAML: %s, using built-in fallback", e)
+        return _FALLBACK_DOCS
+
+
+# 硬编码回退（当 YAML 加载失败时使用，与 ContextRetrieverAgent.java 对齐）
+_FALLBACK_DOCS: List[Dict[str, Any]] = [
     {
         "id": "kb-syntax-identifier",
         "text": "MySQL 使用反引号(`)引用标识符和保留字,openGauss/PostgreSQL 使用双引号(\"),Oracle 默认大写不需引用。迁移时需将反引号替换为双引号或去掉引用。",
@@ -229,7 +259,7 @@ class HybridRetriever:
         qdrant: Optional[QdrantStore] = None,
         collection: str = _DEMO_COLLECTION,
     ):
-        self.docs = docs if docs is not None else _DEMO_DOCS
+        self.docs = docs if docs is not None else _load_kb_docs()
         self.collection = collection
         self._tokens = [_tokenize(d["text"]) for d in self.docs]
         self._bm25 = BM25Okapi(self._tokens) if self._tokens else None
@@ -487,6 +517,16 @@ class HybridRetriever:
         if not (self._embedder and self._embedder.available and self._qdrant and self._qdrant.available):
             return
         try:
+            # 检查 Qdrant 是否已有足够文档，避免重启后覆盖 /ingest 添加的内容
+            client = self._qdrant._get_client()
+            try:
+                existing_count = client.count(self.collection).count
+                if existing_count is not None and existing_count >= len(self.docs):
+                    log.info("[HybridRetriever] Qdrant already has %d docs (>= %d in KB), skip re-seed",
+                             existing_count, len(self.docs))
+                    return
+            except Exception:
+                pass  # count 失败则继续 seed
             self._index_qdrant(self.docs)
         except Exception as e:
             log.warning("[HybridRetriever] _maybe_seed_qdrant 失败 err=%s", e)

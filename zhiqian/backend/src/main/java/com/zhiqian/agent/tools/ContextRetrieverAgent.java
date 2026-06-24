@@ -14,6 +14,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -23,6 +26,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Stream;
+
+import org.yaml.snakeyaml.Yaml;
 
 /**
  * Stage 02 - migration knowledge retrieval.
@@ -32,25 +38,90 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class ContextRetrieverAgent implements AgentTool {
     private static final Logger log = LoggerFactory.getLogger(ContextRetrieverAgent.class);
-    private static final List<KbDoc> KB = List.of(
-        doc("kb-syntax-identifier", "Identifier quoting", "backtick reserved keyword order identifier"),
-        doc("kb-func-ifnull", "IFNULL / NVL to COALESCE", "ifnull coalesce"),
-        doc("kb-type-autoincrement", "Auto increment mapping", "auto_increment autoincrement serial bigserial sequence nextval identity"),
-        doc("kb-type-enum", "Enum type mapping", "enum"),
-        doc("kb-type-decimal", "Decimal numeric mapping", "decimal numeric number precision scale"),
-        doc("kb-func-dateformat", "Date formatting functions", "date_format to_char yyyy"),
-        doc("kb-syntax-limit", "LIMIT offset syntax", "limit offset rownum"),
-        doc("kb-func-groupconcat", "GROUP_CONCAT to STRING_AGG", "group_concat string_agg separator aggregate"),
-        doc("kb-syntax-upsert", "Upsert syntax", "duplicate conflict excluded"),
-        doc("kb-func-regexp", "Regular expression operator", "regexp regex regular expression match tilde"),
-        doc("kb-func-nvl", "Oracle NVL mapping", "nvl coalesce oracle"),
-        doc("kb-func-sysdate", "Oracle sysdate mapping", "sysdate current_timestamp current date now"),
-        doc("kb-syntax-dual", "Oracle dual table", "dual"),
-        doc("kb-syntax-rownum", "Oracle rownum limit", "rownum limit"),
-        doc("kb-func-decode", "Oracle DECODE mapping", "decode case when oracle conditional"),
-        doc("kb-join-outer", "Oracle outer join", "(+) outer"),
-        doc("kb-func-substr", "SUBSTR / SUBSTRING mapping", "substr substring string slice")
-    );
+
+    // ── KB 加载：优先从统一 YAML 读取，失败回退到硬编码 ──
+    private static final Path KB_DIR = resolveKbDir();
+    private static final List<KbDoc> KB = loadKb();
+
+    private static Path resolveKbDir() {
+        String configured = System.getProperty("kb.yaml.path", "");
+        if (!configured.isBlank()) {
+            return Paths.get(configured);
+        }
+        // 默认路径：从 backend 工作目录向上找 kb/active/
+        Path cwd = Paths.get(System.getProperty("user.dir", "."));
+        for (int i = 0; i < 5; i++) {
+            Path kb = cwd.resolve("kb/active");
+            if (Files.isDirectory(kb)) {
+                return kb;
+            }
+            cwd = cwd.getParent();
+            if (cwd == null) break;
+        }
+        return Paths.get("kb/active"); // fallback for logging
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<KbDoc> loadKb() {
+        // 1. 尝试从统一 YAML 加载
+        try {
+            if (Files.isDirectory(KB_DIR)) {
+                log.info("[ContextRetriever] Loading KB from YAML: {}", KB_DIR.toAbsolutePath());
+                Yaml yaml = new Yaml();
+                List<KbDoc> docs = new ArrayList<>();
+                try (Stream<Path> files = Files.list(KB_DIR)) {
+                    List<Path> sorted = files
+                        .filter(f -> f.getFileName().toString().startsWith("kb-"))
+                        .sorted()
+                        .toList();
+                    for (Path f : sorted) {
+                        Map<String, Object> data = yaml.load(Files.readString(f));
+                        List<Map<String, Object>> docList = (List<Map<String, Object>>) data.get("docs");
+                        if (docList != null) {
+                            for (Map<String, Object> d : docList) {
+                                String id = (String) d.get("id");
+                                String text = (String) d.get("text");
+                                String title = text != null && text.length() > 80
+                                    ? text.substring(0, 80) : (text != null ? text : "");
+                                String terms = (String) d.getOrDefault("terms", "");
+                                docs.add(new KbDoc(id, title, terms));
+                            }
+                        }
+                    }
+                }
+                if (!docs.isEmpty()) {
+                    log.info("[ContextRetriever] Loaded {} KB docs from YAML", docs.size());
+                    return docs;
+                }
+            } else {
+                log.warn("[ContextRetriever] KB YAML dir not found: {}", KB_DIR.toAbsolutePath());
+            }
+        } catch (Exception e) {
+            log.warn("[ContextRetriever] Failed to load KB from YAML: {}", e.getMessage());
+        }
+
+        // 2. 回退到硬编码 KB（与 kb/active/*.yaml 保持同步）
+        log.info("[ContextRetriever] Using hardcoded fallback KB");
+        return List.of(
+            doc("kb-syntax-identifier", "Identifier quoting", "backtick reserved keyword order identifier"),
+            doc("kb-func-ifnull", "IFNULL / NVL to COALESCE", "ifnull coalesce"),
+            doc("kb-type-autoincrement", "Auto increment mapping", "auto_increment autoincrement serial bigserial sequence nextval identity"),
+            doc("kb-type-enum", "Enum type mapping", "enum"),
+            doc("kb-type-decimal", "Decimal numeric mapping", "decimal numeric number precision scale"),
+            doc("kb-func-dateformat", "Date formatting functions", "date_format to_char yyyy"),
+            doc("kb-syntax-limit", "LIMIT offset syntax", "limit offset rownum"),
+            doc("kb-func-groupconcat", "GROUP_CONCAT to STRING_AGG", "group_concat string_agg separator aggregate"),
+            doc("kb-syntax-upsert", "Upsert syntax", "duplicate conflict excluded"),
+            doc("kb-func-regexp", "Regular expression operator", "regexp regex regular expression match tilde"),
+            doc("kb-func-nvl", "Oracle NVL mapping", "nvl coalesce oracle"),
+            doc("kb-func-sysdate", "Oracle sysdate mapping", "sysdate current_timestamp current date now"),
+            doc("kb-syntax-dual", "Oracle dual table", "dual"),
+            doc("kb-syntax-rownum", "Oracle rownum limit", "rownum limit"),
+            doc("kb-func-decode", "Oracle DECODE mapping", "decode case when oracle conditional"),
+            doc("kb-join-outer", "Oracle outer join", "(+) outer"),
+            doc("kb-func-substr", "SUBSTR / SUBSTRING mapping", "substr substring string slice")
+        );
+    }
 
     private final LlmClient llm;
     private final String ragUrl;

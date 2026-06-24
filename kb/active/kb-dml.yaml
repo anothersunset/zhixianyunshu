@@ -1,0 +1,35 @@
+category: DML
+docs:
+- id: kb-mysql-pg-update-delete
+  source_dialect: mysql
+  target_dialect: postgresql
+  text: 'MySQL to PostgreSQL UPDATE and DELETE statement differences. UPDATE with JOIN: MySQL UPDATE t1 INNER JOIN t2 ON t1.id
+    = t2.ref_id SET t1.col = t2.val WHERE t2.status = 1 → PostgreSQL UPDATE t1 SET col = t2.val FROM t2 WHERE t1.id = t2.ref_id
+    AND t2.status = 1. Note: In PostgreSQL, JOIN conditions go in WHERE clause, not FROM clause. DELETE with JOIN: MySQL DELETE
+    t1 FROM t1 INNER JOIN t2 ON t1.id = t2.ref_id WHERE t2.status = 0 → PostgreSQL DELETE FROM t1 USING t2 WHERE t1.id = t2.ref_id
+    AND t2.status = 0. Note: MySQL uses DELETE alias FROM ...; PostgreSQL uses DELETE FROM ... USING .... Multi-table DELETE:
+    MySQL DELETE t1, t2 FROM t1 JOIN t2 ON ... WHERE ... → PostgreSQL requires separate DELETE statements for each table.
+    INSERT ... ON DUPLICATE KEY UPDATE: MySQL INSERT INTO t (id, val) VALUES (1, ''a'') ON DUPLICATE KEY UPDATE val = VALUES(val)
+    → PostgreSQL INSERT INTO t (id, val) VALUES (1, ''a'') ON CONFLICT (id) DO UPDATE SET val = EXCLUDED.val. Note: VALUES(col)
+    in MySQL → EXCLUDED.col in PostgreSQL. REPLACE INTO: MySQL REPLACE INTO t (id, val) VALUES (1, ''a'') → PostgreSQL INSERT
+    INTO t (id, val) VALUES (1, ''a'') ON CONFLICT (id) DO UPDATE SET val = EXCLUDED.val. INSERT IGNORE: MySQL INSERT IGNORE
+    INTO t ... → PostgreSQL INSERT INTO t ... ON CONFLICT DO NOTHING.'
+  source: kb/dml/mysql-pg-update-delete
+  terms: sql update delete join inner set where from
+- id: kb-oracle-pg-update-delete
+  source_dialect: oracle
+  target_dialect: postgresql
+  text: 'Oracle to PostgreSQL UPDATE and DELETE statement differences. UPDATE with subquery: Oracle UPDATE t1 SET col = (SELECT
+    val FROM t2 WHERE t2.id = t1.ref_id) → PostgreSQL same syntax (works in both). UPDATE with MERGE: Oracle MERGE INTO target
+    USING source ON (condition) WHEN MATCHED THEN UPDATE SET ... → PostgreSQL 15+ MERGE INTO target USING source ON (condition)
+    WHEN MATCHED THEN UPDATE SET ... (same syntax). For older PostgreSQL: INSERT ... ON CONFLICT DO UPDATE SET .... DELETE
+    with ROWNUM: Oracle DELETE FROM t WHERE ROWNUM <= 10 → PostgreSQL DELETE FROM t WHERE ctid IN (SELECT ctid FROM t LIMIT
+    10). Note: PostgreSQL doesn''t support ROWNUM; use ctid or LIMIT in subquery. TRUNCATE: Oracle TRUNCATE TABLE t → PostgreSQL
+    TRUNCATE TABLE t (same syntax). Oracle TRUNCATE TABLE t CASCADE → PostgreSQL TRUNCATE TABLE t CASCADE (same). Oracle TRUNCATE
+    TABLE t PURGE → PostgreSQL (no equivalent, PostgreSQL doesn''t have recycle bin). INSERT with sequence: Oracle INSERT
+    INTO t (id, name) VALUES (seq.NEXTVAL, ''a'') → PostgreSQL INSERT INTO t (id, name) VALUES (NEXTVAL(''seq''), ''a'').
+    INSERT with RETURNING: Oracle INSERT INTO t ... RETURNING col INTO var → PostgreSQL INSERT INTO t ... RETURNING col INTO
+    var (same in PL/pgSQL). BULK COLLECT: Oracle BULK COLLECT INTO collection → PostgreSQL use arrays or FOR loop. FORALL:
+    Oracle FORALL i IN 1..count INSERT INTO t ... → PostgreSQL use FOR loop or COPY command.'
+  source: kb/dml/oracle-pg-update-delete
+  terms: sql update delete set select from where merge

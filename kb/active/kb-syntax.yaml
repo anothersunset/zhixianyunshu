@@ -1,0 +1,193 @@
+category: SYNTAX
+docs:
+- id: kb-syntax-identifier
+  source_dialect: mysql
+  target_dialect: opengauss
+  text: 'Identifier quoting: MySQL uses backticks (`) to quote identifiers (table names, column names). openGauss and PostgreSQL
+    use double quotes ("). When migrating SQL, replace backticks with double quotes. Example: SELECT `order_id` FROM `orders`
+    → SELECT "order_id" FROM "orders". Reserved keywords that need quoting: ORDER, GROUP, SELECT, TABLE, etc.'
+  source: kb/syntax/identifier-quoting
+  terms: sql select from order group table
+- id: kb-syntax-limit
+  source_dialect: mysql
+  target_dialect: opengauss
+  text: 'LIMIT offset syntax: MySQL LIMIT offset, count and PostgreSQL LIMIT count OFFSET offset have reversed order. MySQL:
+    SELECT * FROM t LIMIT 10, 20 (skip 10, take 20). PostgreSQL: SELECT * FROM t LIMIT 20 OFFSET 10 (take 20, skip 10). Oracle
+    uses ROWNUM or ROW_NUMBER() OVER() for pagination. openGauss supports PostgreSQL-style LIMIT/OFFSET syntax.'
+  source: kb/syntax/limit-offset
+  terms: limit sql offset select from rownum row_number over
+- id: kb-syntax-upsert
+  source_dialect: mysql
+  target_dialect: opengauss
+  text: 'Upsert syntax: MySQL INSERT ... ON DUPLICATE KEY UPDATE maps to INSERT ... ON CONFLICT (key) DO UPDATE SET ... in
+    PostgreSQL/openGauss. Example: INSERT INTO t (id, val) VALUES (1, ''x'') ON DUPLICATE KEY UPDATE val=''x'' → INSERT INTO
+    t (id, val) VALUES (1, ''x'') ON CONFLICT (id) DO UPDATE SET val=''x''. The ON CONFLICT clause requires specifying the
+    conflict target (unique constraint columns). DO NOTHING is also supported to silently skip conflicts.'
+  source: kb/syntax/upsert
+  terms: sql insert duplicate key update conflict set into
+- id: kb-syntax-dual
+  source_dialect: oracle
+  target_dialect: opengauss
+  text: 'Oracle DUAL table: Oracle requires SELECT ... FROM DUAL for expressions without a table. PostgreSQL/openGauss do
+    NOT need DUAL; just use SELECT expr directly. CRITICAL: When migrating, REMOVE ''FROM DUAL'' completely. Do NOT keep it
+    in the output. Example: SELECT SYSDATE FROM DUAL → SELECT CURRENT_TIMESTAMP (no FROM clause). If SQL must be compatible
+    with both, create a DUAL view: CREATE VIEW dual AS SELECT 1;'
+  source: kb/syntax/oracle-dual
+  terms: dual select from sql not critical remove sysdate
+- id: kb-syntax-rownum
+  source_dialect: oracle
+  target_dialect: opengauss
+  text: 'Oracle ROWNUM mapping: Oracle ROWNUM pseudo-column for row numbering. For pagination: WHERE ROWNUM <= 10 → LIMIT
+    10 in PostgreSQL. For ranked results: Use ROW_NUMBER() OVER (ORDER BY ...) window function. Example: SELECT * FROM (SELECT
+    t.*, ROWNUM rn FROM t WHERE ROWNUM <= 20) WHERE rn > 10 → SELECT * FROM t LIMIT 10 OFFSET 10. CRITICAL: Do NOT use ROW_NUMBER()
+    OVER () with LIMIT — this is over-engineered. The correct pattern is simply LIMIT count OFFSET offset. Oracle ROWNUM pagination
+    subquery pattern:   SELECT * FROM (SELECT e.*, ROWNUM rn FROM emp e WHERE ROWNUM <= 20) WHERE rn > 10   → SELECT * FROM
+    emp LIMIT 10 OFFSET 10 The inner subquery with ROWNUM is Oracle-specific and should be completely replaced with LIMIT/OFFSET.'
+  source: kb/syntax/oracle-rownum
+  terms: rownum where limit sql row_number over order select
+- id: kb-join-outer
+  source_dialect: oracle
+  target_dialect: opengauss
+  text: 'Oracle outer join: Oracle uses (+) operator for outer joins: WHERE a.id = b.id(+). Standard SQL LEFT JOIN: FROM a
+    LEFT JOIN b ON a.id = b.id. The (+) is placed on the side that should have NULLs when no match. a.id = b.id(+) → LEFT
+    JOIN (b rows can be null). a.id(+) = b.id → RIGHT JOIN (a rows can be null). Always convert to explicit JOIN syntax for
+    clarity and portability.'
+  source: kb/joins/oracle-outer-join
+  terms: where sql left join from null right
+- id: kb-syntax-multidelete
+  source_dialect: mysql
+  target_dialect: opengauss
+  text: 'Multi-table DELETE mapping: MySQL DELETE t1 FROM t1 JOIN t2 ON ... WHERE ... maps to DELETE FROM t1 USING t2 WHERE
+    ... in PostgreSQL/openGauss. Key rules: 1) Remove the table name after DELETE (no alias in DELETE clause). 2) Replace
+    JOIN with USING clause. 3) Move JOIN conditions to WHERE clause. Example: DELETE t1 FROM t1 JOIN t2 ON t1.id = t2.ref_id
+    WHERE t2.status = 0 → DELETE FROM t1 USING t2 WHERE t1.id = t2.ref_id AND t2.status = 0. For multi-table delete with multiple
+    USING tables: DELETE FROM t1 USING t2, t3 WHERE t1.id = t2.ref_id AND t2.id = t3.link_id. Note: openGauss and PostgreSQL
+    both support the USING syntax.'
+  source: kb/syntax/multi-table-delete
+  terms: delete sql from join where using and
+- id: kb-syntax-hierarchy
+  source_dialect: oracle
+  target_dialect: postgresql
+  text: 'Hierarchical query mapping: Oracle CONNECT BY + START WITH → PostgreSQL WITH RECURSIVE CTE. Rules: START WITH cond
+    → non-recursive part WHERE cond. CONNECT BY PRIOR parent_id = child_id → recursive part JOIN on parent_id. LEVEL → recursive
+    level counter (start at 0, increment by 1). CONNECT_BY_ISLEAF → NOT EXISTS(SELECT 1 FROM table WHERE parent_id = current.id).
+    SYS_CONNECT_BY_PATH(col, ''/'') → array_to_string(ARRAY[path], ''/''). Example: SELECT LEVEL, name FROM emp START WITH
+    manager_id IS NULL CONNECT BY PRIOR id = manager_id → WITH RECURSIVE emp_tree AS (SELECT id, name, 0 AS lvl FROM emp WHERE
+    manager_id IS NULL UNION ALL SELECT e.id, e.name, t.lvl+1 FROM emp e JOIN emp_tree t ON e.manager_id = t.id) SELECT lvl,
+    name FROM emp_tree.'
+  source: kb/syntax/hierarchical-query
+  terms: connect start with sql recursive cte where prior
+- id: kb-syntax-merge
+  source_dialect: oracle
+  target_dialect: postgresql
+  text: 'MERGE statement mapping: Oracle MERGE INTO target USING source ON (condition) WHEN MATCHED THEN UPDATE SET ... WHEN
+    NOT MATCHED THEN INSERT ... PostgreSQL 15+ supports MERGE natively. For older versions, use INSERT ... ON CONFLICT. Example:
+    MERGE INTO emp e USING updates u ON (e.id = u.id) WHEN MATCHED THEN UPDATE SET e.salary = u.salary → INSERT INTO emp SELECT
+    * FROM updates ON CONFLICT (id) DO UPDATE SET salary = EXCLUDED.salary.'
+  source: kb/syntax/merge-upsert
+  terms: merge into using when matched then update set
+- id: kb-syntax-fulltext
+  source_dialect: mysql
+  target_dialect: postgresql
+  text: 'Full-text search mapping: MySQL MATCH(col1, col2) AGAINST(''keyword'' IN BOOLEAN MODE) → PostgreSQL use to_tsvector(''english'',
+    col1 || '' '' || col2) @@ to_tsquery(''english'', ''keyword''). For simple LIKE queries: MATCH ... AGAINST → col LIKE
+    ''%keyword%'' or use tsvector/tsquery. Create GIN index for performance: CREATE INDEX idx ON t USING GIN(to_tsvector(''english'',
+    col)). Example: SELECT * FROM articles WHERE MATCH(title, content) AGAINST(''database'' IN BOOLEAN MODE) → SELECT * FROM
+    articles WHERE to_tsvector(''english'', title || '' '' || content) @@ to_tsquery(''english'', ''database'').'
+  source: kb/syntax/fulltext-search
+  terms: sql match against boolean mode like gin create
+- id: kb-mysql-pg-syntax-differences
+  source_dialect: mysql
+  target_dialect: postgresql
+  text: 'MySQL to PostgreSQL comprehensive syntax differences reference. LIMIT clause: MySQL LIMIT offset, count → PostgreSQL
+    LIMIT count OFFSET offset (note: order is reversed). Example: LIMIT 10, 20 → LIMIT 20 OFFSET 10. UPDATE with JOIN: MySQL
+    UPDATE t1 JOIN t2 ON t1.id=t2.id SET t1.col=val → PostgreSQL UPDATE t1 SET col=val FROM t2 WHERE t1.id=t2.id. DELETE with
+    JOIN: MySQL DELETE t1 FROM t1 JOIN t2 ON ... → PostgreSQL DELETE FROM t1 USING t2 WHERE .... INSERT IGNORE: MySQL INSERT
+    IGNORE INTO t → PostgreSQL INSERT INTO t ... ON CONFLICT DO NOTHING. REPLACE INTO: MySQL REPLACE INTO t → PostgreSQL INSERT
+    INTO t ... ON CONFLICT DO UPDATE SET .... ON DUPLICATE KEY UPDATE: MySQL ON DUPLICATE KEY UPDATE col=VALUES(col) → PostgreSQL
+    ON CONFLICT (key) DO UPDATE SET col=EXCLUDED.col. Identifier quoting: MySQL backticks `col` → PostgreSQL double quotes
+    "col". String quoting: MySQL allows single quotes and double quotes for strings; PostgreSQL only uses single quotes for
+    strings, double quotes for identifiers. Boolean values: MySQL uses 0/1 or TRUE/FALSE; PostgreSQL uses true/false/NULL.
+    Auto increment: MySQL AUTO_INCREMENT → PostgreSQL GENERATED ALWAYS AS IDENTITY (PostgreSQL 10+) or SERIAL (legacy). Table
+    engine: MySQL ENGINE=InnoDB → PostgreSQL (no equivalent, remove). Character set: MySQL CHARSET=utf8 → PostgreSQL (no equivalent,
+    use UTF-8 by default). Collation: MySQL COLLATE utf8_general_ci → PostgreSQL (use COLLATE clause or set at database level).
+    Constraint naming: MySQL auto-generates constraint names; PostgreSQL may throw ''relation already exists'' error if constraint
+    name conflicts. Solution: explicitly name constraints or use IF NOT EXISTS.'
+  source: kb/syntax/mysql-pg-differences
+  terms: sql limit offset update join set from where
+- id: kb-oracle-pg-syntax-differences
+  source_dialect: oracle
+  target_dialect: postgresql
+  text: 'Oracle to PostgreSQL comprehensive syntax differences reference. Outer join: Oracle (+) operator → PostgreSQL LEFT/RIGHT
+    JOIN ... ON. Example: WHERE e.dept_id = d.dept_id(+) → FROM e LEFT JOIN d ON e.dept_id = d.dept_id. Hierarchical query:
+    Oracle CONNECT BY + START WITH → PostgreSQL WITH RECURSIVE CTE. ROWNUM: Oracle ROWNUM <= N → PostgreSQL LIMIT N. ROWNUM
+    pagination: Oracle SELECT * FROM (SELECT t.*, ROWNUM rn FROM t WHERE ROWNUM <= 20) WHERE rn > 10 → PostgreSQL SELECT *
+    FROM t LIMIT 10 OFFSET 10 (do NOT use ROW_NUMBER() OVER ()). DUAL table: Oracle SELECT expr FROM dual → PostgreSQL SELECT
+    expr (remove FROM dual). Sequences: Oracle seq.NEXTVAL → PostgreSQL NEXTVAL(''seq''), Oracle seq.CURRVAL → PostgreSQL
+    CURVAL(''seq''). Synonyms: Oracle CREATE SYNONYM → PostgreSQL (no equivalent, use schema names or views). Packages: Oracle
+    CREATE PACKAGE → PostgreSQL (no equivalent, use schemas and functions). Triggers: Oracle :NEW.col and :OLD.col → PostgreSQL
+    NEW.col and OLD.col (no colon). Cursors: Oracle SYS_REFCURSOR → PostgreSQL REFCURSOR. Exception handling: Oracle EXCEPTION
+    WHEN NO_DATA_FOUND → PostgreSQL EXCEPTION WHEN NO_DATA_FOUND (same). Oracle WHEN OTHERS → PostgreSQL WHEN OTHERS (same).
+    DBMS_OUTPUT: Oracle DBMS_OUTPUT.PUT_LINE(msg) → PostgreSQL RAISE NOTICE ''%'', msg. Autonomous transactions: Oracle PRAGMA
+    AUTONOMOUS_TRANSACTION → PostgreSQL (use dblink or pg_background). Materialized views: Oracle CREATE MATERIALIZED VIEW
+    → PostgreSQL CREATE MATERIALIZED VIEW (same syntax). Hint syntax: Oracle /*+ HINT */ → PostgreSQL (no hints, use EXPLAIN
+    and pg_hint_plan extension).'
+  source: kb/syntax/oracle-pg-differences
+  terms: sql left right join where from connect start
+- id: kb-mysql-pg-select-differences
+  source_dialect: mysql
+  target_dialect: postgresql
+  text: 'MySQL to PostgreSQL SELECT statement differences reference. LIMIT: MySQL LIMIT offset, count → PostgreSQL LIMIT count
+    OFFSET offset. Example: SELECT * FROM t LIMIT 10, 20 → SELECT * FROM t LIMIT 20 OFFSET 10. GROUP_CONCAT: MySQL GROUP_CONCAT(col
+    SEPARATOR '','') → PostgreSQL STRING_AGG(col, '',''). WITH ROLLUP: MySQL GROUP BY col WITH ROLLUP → PostgreSQL GROUP BY
+    ROLLUP(col). HAVING: MySQL HAVING can use aliases; PostgreSQL HAVING cannot use aliases (use full expression). Example:
+    MySQL SELECT COUNT(*) AS cnt ... HAVING cnt > 5 → PostgreSQL SELECT COUNT(*) AS cnt ... HAVING COUNT(*) > 5. Backticks:
+    MySQL SELECT `col` FROM `table` → PostgreSQL SELECT "col" FROM "table". String comparison: MySQL ''abc'' = ''ABC'' (case-insensitive
+    by default); PostgreSQL ''abc'' = ''abc'' (case-sensitive). Use ILIKE for case-insensitive matching in PostgreSQL. REGEXP:
+    MySQL col REGEXP ''pattern'' → PostgreSQL col ~ ''pattern'' (case-sensitive) or col ~* ''pattern'' (case-insensitive).
+    IF function: MySQL IF(cond, t, f) → PostgreSQL CASE WHEN cond THEN t ELSE f END. IFNULL: MySQL IFNULL(x, y) → PostgreSQL
+    COALESCE(x, y). NULL-safe equality: MySQL col <=> val → PostgreSQL col IS NOT DISTINCT FROM val. FORCE INDEX: MySQL FORCE
+    INDEX(idx) → PostgreSQL (no equivalent, use pg_hint_plan extension). SQL_CALC_FOUND_ROWS: MySQL SELECT SQL_CALC_FOUND_ROWS
+    ... → PostgreSQL use window function COUNT(*) OVER().'
+  source: kb/query/mysql-pg-select
+  terms: sql select limit offset from group_concat separator string_agg
+- id: kb-oracle-pg-select-differences
+  source_dialect: oracle
+  target_dialect: postgresql
+  text: 'Oracle to PostgreSQL SELECT statement differences reference. ROWNUM: Oracle SELECT * FROM t WHERE ROWNUM <= 10 →
+    PostgreSQL SELECT * FROM t LIMIT 10. ROWNUM pagination: Oracle SELECT * FROM (SELECT t.*, ROWNUM rn FROM t WHERE ROWNUM
+    <= 20) WHERE rn > 10 → PostgreSQL SELECT * FROM t LIMIT 10 OFFSET 10. Do NOT use ROW_NUMBER() OVER () for simple pagination
+    in PostgreSQL. CONNECT BY: Oracle SELECT LEVEL, name FROM emp START WITH manager_id IS NULL CONNECT BY PRIOR id = manager_id
+    → PostgreSQL WITH RECURSIVE emp_tree AS (SELECT id, name, 0 AS lvl FROM emp WHERE manager_id IS NULL UNION ALL SELECT
+    e.id, e.name, t.lvl+1 FROM emp e JOIN emp_tree t ON e.manager_id = t.id) SELECT lvl, name FROM emp_tree. DUAL table: Oracle
+    SELECT SYSDATE FROM dual → PostgreSQL SELECT CURRENT_TIMESTAMP (remove FROM dual). NVL: Oracle SELECT NVL(col, ''default'')
+    → PostgreSQL SELECT COALESCE(col, ''default''). DECODE: Oracle DECODE(col, ''a'', 1, ''b'', 2, 0) → PostgreSQL CASE col
+    WHEN ''a'' THEN 1 WHEN ''b'' THEN 2 ELSE 0 END. LISTAGG: Oracle LISTAGG(name, '','') WITHIN GROUP (ORDER BY name) → PostgreSQL
+    STRING_AGG(name, '','' ORDER BY name). REGEXP_SUBSTR: Oracle REGEXP_SUBSTR(str, ''[^@]+'') → PostgreSQL (REGEXP_MATCHES(str,
+    ''[^@]+''))[1]. Outer join (+): Oracle WHERE e.dept_id = d.dept_id(+) → PostgreSQL FROM e LEFT JOIN d ON e.dept_id = d.dept_id.
+    Minus: Oracle MINUS → PostgreSQL EXCEPT. INTERSECT: same in both. UNION: same in both. Subquery in FROM: Oracle SELECT
+    * FROM (SELECT ...) → PostgreSQL SELECT * FROM (SELECT ...) AS alias (alias required). Inline view alias: Oracle (SELECT
+    ...) alias → PostgreSQL (SELECT ...) AS alias (AS keyword required).'
+  source: kb/query/oracle-pg-select
+  terms: sql select rownum from where limit offset not
+- id: doc-1
+  source_dialect: mysql
+  target_dialect: openGauss
+  text: openGauss 不支持 MySQL 的 DATE_FORMAT 函数,需要使用 TO_CHAR 进行格式化。例如 TO_CHAR(t.created_at, 'YYYY-MM')。格式说明符也不同：%Y→YYYY, %m→MM,
+    %d→DD。
+  source: opengauss/dialect-cheatsheet.md#date-format
+  terms: sql date_format to_char yyyy 不支持 函数 需要使用 进行格式化
+- id: doc-2
+  source_dialect: mysql
+  target_dialect: openGauss
+  text: 'MySQL IFNULL(x, y) 在 openGauss 中可以等价替换为 COALESCE(x, y),两者语义一致。COALESCE 是 SQL 标准函数,支持多个参数: COALESCE(a, b, c) 返回第一个非
+    NULL 值。'
+  source: opengauss/dialect-cheatsheet.md#null-handling
+  terms: sql ifnull coalesce null 中可以等价替换为 两者语义一致 标准函数 支持多个参数
+- id: doc-5
+  source_dialect: mysql
+  target_dialect: openGauss
+  text: 建议使用 LIMIT ... OFFSET ... 并明确指定 ORDER BY,openGauss 与 MySQL 在分页语法上兼容,但顺序需明确。MySQL LIMIT 10, 20 需改写为 LIMIT 20 OFFSET
+    10 (注意参数顺序反转)。
+  source: opengauss/dialect-cheatsheet.md#pagination
+  terms: limit offset order sql 建议使用 并明确指定 在分页语法上兼容 但顺序需明确
