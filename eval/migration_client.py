@@ -67,9 +67,11 @@ class MigrationClient:
             print(f"[batch-throttle] case 间冷却 {wait:.1f}s", flush=True)
             _time.sleep(wait)
 
-    def run_migration(self, *, source_sql: str, pair: str, retrieval: str, fast: bool = False, skip_throttle: bool = False) -> MigrationResult:
+    def run_migration(self, *, source_sql: str, pair: str, retrieval: str, fast: bool = False, mode: str | None = None, skip_throttle: bool = False) -> MigrationResult:
         endpoint = self.base_url.rstrip("/") + "/migrate"
         payload = {"source_sql": source_sql, "pair": pair, "retrieval": retrieval, "fast": fast}
+        if mode:
+            payload["mode"] = mode
 
         if not skip_throttle:
             self._throttle()

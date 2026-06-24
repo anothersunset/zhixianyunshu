@@ -449,46 +449,16 @@ class HybridRetriever:
                 result = coarse[:top_k]
 
             # ── GraphRAG 增强：在 CRAG 结果后补充图关联文档 ──
+            # GraphRAG 增强已禁用：测试表明补充文档引入噪声，损害 LLM 推理
+            # Full 模式 = CRAG（纯 RRF 融合 + rerank）
             if mode == "full" and self.graph_index and self.graph_index.nodes:
                 try:
                     with tr.span("graphrag.enhance", input={"question": question}) as sp:
-                        existing_ids = {r["id"] for r in result}
-                        gr = self.graph_index.query_local(question, max_entities=5, hop=1, weight_threshold=0.15)
-                        added = 0
-                        max_supplement = 3
-                        # 补充 CRAG 没找到的邻居文档（已按边权重降序排列）
-                        for n in gr.get("neighbors", []):
-                            if added >= max_supplement:
-                                break
-                            nid = n["id"] if isinstance(n, dict) else n
-                            if nid not in existing_ids:
-                                d = self._by_id.get(nid)
-                                if d:
-                                    result.append({
-                                        "id": d["id"],
-                                        "text": d["text"],
-                                        "score": 0.3,
-                                        "source": d.get("source", "graphrag"),
-                                        "meta": d.get("meta"),
-                                        "channels": {"graphrag_supplement": 1},
-                                    })
-                                    existing_ids.add(nid)
-                                    added += 1
-                        # 追加 community reports（仅当有补充空间时）
-                        if added > 0:
-                            gr_global = self.graph_index.query_global(question, max_reports=1)
-                            global_ctx = gr_global.get("context", "")
-                            if global_ctx:
-                                result.append({
-                                    "id": "graphrag-global",
-                                    "text": global_ctx[:300],
-                                    "score": 0.2,
-                                    "source": "graphrag/community-reports",
-                                    "meta": {"graphrag": True},
-                                    "channels": {"graphrag_global": 1},
-                                })
-                        result = result[:top_k + max_supplement + 1]
-                        sp.output({"added": added, "total": len(result)})
+                        # 仅记录 GraphRAG 命中情况（用于分析），不修改结果
+                        gr = self.graph_index.query_local(question, max_entities=3, hop=1, weight_threshold=0.2)
+                        sp.output({"hits": len(gr.get("hits", [])), "total": len(result)})
+                except Exception as e:
+                    log.warning("[HybridRetriever] GraphRAG trace failed: %s", e)
                 except Exception as e:
                     log.warning("[HybridRetriever] GraphRAG enhance failed: %s", e)
 

@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from eval.judge import LLMJudge
-from eval.metrics import recall_at_k, report_point_hit_rate, sql_equivalent
+from eval.metrics import recall_at_k, report_point_hit_rate, sql_equivalent, gold_quality_check
 from eval.migration_client import MigrationClient
 
 RETRIEVAL_CHOICES = ["bm25", "vector", "vector_rerank", "crag", "full"]
@@ -88,6 +88,7 @@ def _eval_one(c, retrieval, client, judge, fast, skip_throttle=False, mode=None)
         risk_level = "error"
         pred_sql = ""
         error = str(exc)
+    gold_quality = gold_quality_check(c.get("gold_target_sql", ""))
     return {
         "id": c["id"],
         "pair": c["pair"],
@@ -98,6 +99,7 @@ def _eval_one(c, retrieval, client, judge, fast, skip_throttle=False, mode=None)
         "risk_level": risk_level,
         "pred_sql": pred_sql,
         "error": error,
+        "gold_quality": gold_quality,
     }
 
 
@@ -163,11 +165,27 @@ def summarize(rows):
     report_acc = sum(r["report_acc"] for r in rows) / n
     recs = [r["recall@5"] for r in rows if r["recall@5"] is not None]
     recall = sum(recs) / len(recs) if recs else None
+    # 金标质量统计
+    gold_ok = sum(1 for r in rows if r.get("gold_quality") == "ok")
+    gold_oracle = sum(1 for r in rows if r.get("gold_quality") == "oracle_residue")
+    gold_invalid = sum(1 for r in rows if r.get("gold_quality") == "invalid_pg")
+    gold_questionable = gold_oracle + gold_invalid
+    # 排除可疑金标后的调整修复率（仅看金标 OK 的 case）
+    if gold_ok > 0:
+        adjusted_rate = sum(1 for r in rows if r["sql_ok"] and r.get("gold_quality") == "ok") / gold_ok
+    else:
+        adjusted_rate = None
     return {
         "n": n,
         "sql_repair_rate": round(sql_rate, 4),
+        "adjusted_rate_excl_questionable_gold": round(adjusted_rate, 4) if adjusted_rate is not None else None,
         "report_accuracy": round(report_acc, 4),
         "recall@5": round(recall, 4) if recall is not None else None,
+        "gold_quality": {
+            "ok": gold_ok,
+            "oracle_residue": gold_oracle,
+            "invalid_pg": gold_invalid,
+        },
     }
 
 

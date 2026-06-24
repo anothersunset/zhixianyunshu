@@ -289,8 +289,7 @@ public class MigrationEvalController {
                         %s
                         """.formatted(retrieval, retrievedKnowledge, featureHints, critique, pair, sourceSql);
                     try {
-                        boolean isComplex = isComplexSql(sourceSql, pair);
-                        String reply = isComplex ? llm.reason(critiquePrompt) : llm.chat(critiquePrompt);
+                        String reply = llm.chat(critiquePrompt); // 修正也用 chat-model
                         Map<String, Object> corrected = parseJsonObject(reply);
                         if (!stringValue(corrected.get("target_sql")).isBlank()) {
                             targetSql = fixupStubbornPatterns(stringValue(corrected.get("target_sql")), sourceSql);
@@ -374,10 +373,10 @@ public class MigrationEvalController {
             %s
             """.formatted(retrieval, retrievedKnowledge, pair, sourceSql, retrievedIds, toJson(stages));
         boolean complex = isComplexSql(sourceSql, pair);
-        log.info("[AdaptiveLLM] complex={}, pair={}, sql={}", complex, pair, sourceSql.length() > 80 ? sourceSql.substring(0, 80) + "..." : sourceSql);
+        log.info("[AdaptiveLLM] pair={}, sql={}", pair, sourceSql.length() > 80 ? sourceSql.substring(0, 80) + "..." : sourceSql);
         String reply;
         try {
-            reply = complex ? llm.reason(prompt) : llm.chat(prompt);
+            reply = llm.chat(prompt); // 永远用 chat-model 生成，reasoner 留给 Critic 做跨模型评审
         } catch (Exception e) {
             log.error("[generateMigrationJson] LLM 调用失败, 返回 parseFallback: {}", e.getMessage());
             return parseFallback("LLM 调用失败: " + e.getMessage(), "", e.getMessage());
@@ -419,11 +418,11 @@ public class MigrationEvalController {
             Source SQL:
             %s
             """.formatted(retrieval, retrievedKnowledge, hintsSection, pair, sourceSql);
-        boolean complex = isComplexSql(sourceSql, pair);
-        log.info("[AdaptiveLLM] complex={}, pair={}, sql={}", complex, pair, sourceSql.length() > 80 ? sourceSql.substring(0, 80) + "..." : sourceSql);
+        log.info("[AdaptiveLLM] pair={}, sql={}", pair, sourceSql.length() > 80 ? sourceSql.substring(0, 80) + "..." : sourceSql);
         String reply;
         try {
-            reply = complex ? llm.reason(prompt) : llm.chat(prompt);
+            // 永远用 chat-model 生成，reasoner 留给 SqlCriticAgent 做跨模型评审
+            reply = llm.chat(prompt);
         } catch (Exception e) {
             log.error("[generateMigrationJsonFast] LLM 调用失败, 返回 parseFallback: {}", e.getMessage());
             return parseFallback("LLM 调用失败: " + e.getMessage(), "", e.getMessage());

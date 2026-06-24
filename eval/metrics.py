@@ -21,6 +21,14 @@ _SOURCE_DIALECT = {
 }
 
 
+def _normalize_fetch_first(sql: str) -> str:
+    """FETCH FIRST n ROWS ONLY → LIMIT n，两者都是合法 PG 语法。"""
+    return re.sub(
+        r'\bFETCH\s+(?:FIRST|NEXT)\s+(\d+)\s+ROWS?\s+ONLY\b',
+        r'LIMIT \1', sql, flags=re.IGNORECASE
+    )
+
+
 def _normalize(sql: str, dialect: str) -> str | None:
     try:
         tree = sqlglot.parse_one(sql, read=dialect)
@@ -48,6 +56,9 @@ def _fuzzy_normalize(s: str) -> str:
     # 时间类型统一
     s = re.sub(r"\btimestamp without time zone\b", "timestamp", s)
     s = re.sub(r"\btimestamp with time zone\b", "timestamptz", s)
+    # CAST(CURRENT_DATE AS DATE) → CURRENT_DATE（冗余 CAST，CURRENT_DATE 本身就是 DATE）
+    s = re.sub(r"\bcast\s*\(\s*current_date\s+as\s+date\s*\)", "current_date", s, flags=re.IGNORECASE)
+    s = re.sub(r"\binterval\s+'(\d+)\s+(\w+?)s'", r"interval '\1 \2'", s, flags=re.IGNORECASE)
     # DEFAULT current_timestamp → DEFAULT now()（语义等价）
     s = re.sub(r"\bdefault\s+current_timestamp\b", "default now()", s)
     # cast(expr as TYPE) → expr（sqlglot 把 ::int 转成 cast(... as int)）
@@ -100,6 +111,10 @@ def sql_equivalent(pred: str, gold: str, target: str) -> bool:
     """多级等价判断：严格 → 跨方言 → 模糊 → CTE归一化 → token 相似度。"""
     d = DIALECT_MAP.get(target, "postgres")
     src = _SOURCE_DIALECT.get(target, d)
+
+    # FETCH FIRST n ROWS ONLY → LIMIT n 归一化（两者都是合法 PG）
+    pred = _normalize_fetch_first(pred)
+    gold = _normalize_fetch_first(gold)
 
     # 多语句处理：用分号拆分后逐句比较（用于 ENUM CREATE TYPE + CREATE TABLE）
     # 先对完整 SQL 做 enum 类型名归一化，避免 CREATE TYPE 和 CREATE TABLE 中类型名不一致
@@ -189,6 +204,63 @@ def _token_jaccard(a: set[str], b: set[str]) -> float:
     if not a or not b:
         return 0.0
     return len(a & b) / len(a | b)
+
+
+# Oracle 专有构造 — 这些在 PG 中不存在，若金标包含它们说明金标假设有 UDF 兼容层
+_ORACLE_ONLY_PATTERNS = [
+    re.compile(r'\bDBMS_LOB\.', re.IGNORECASE),
+    re.compile(r'\bSTATS_MODE\s*\(', re.IGNORECASE),
+    re.compile(r'\bCONNECT\s+BY\b', re.IGNORECASE),
+    re.compile(r'\bSTART\s+WITH\b', re.IGNORECASE),
+    re.compile(r'\bFROM\s+DUAL\b', re.IGNORECASE),
+    re.compile(r'\bALL_TAB_COLUMNS\b', re.IGNORECASE),
+    re.compile(r'\bNVL2\s*\(', re.IGNORECASE),
+    re.compile(r'\bUSER_TABLES\b', re.IGNORECASE),
+    re.compile(r'\bDBA_\w+', re.IGNORECASE),
+    re.compile(r'\bV\$[\w#]+\b'),  # V$SESSION etc
+    re.compile(r'\bREGEXP_SUBSTR\s*\(', re.IGNORECASE),
+    re.compile(r'\bTO_CHAR\s*\(', re.IGNORECASE),
+    re.compile(r'\bTO_DATE\s*\(', re.IGNORECASE),
+    re.compile(r'\bADD_MONTHS\s*\(', re.IGNORECASE),
+    re.compile(r'\bMONTHS_BETWEEN\s*\(', re.IGNORECASE),
+    re.compile(r'\bLISTAGG\s*\(', re.IGNORECASE),
+    re.compile(r'\bDECODE\s*\(', re.IGNORECASE),
+    re.compile(r'\(\+\)'),  # Oracle outer join
+]
+
+
+def is_valid_pg(sql: str) -> bool:
+    """检查 SQL 能否被 PostgreSQL 方言成功解析。"""
+    if not sql or not sql.strip():
+        return False
+    try:
+        for stmt in sql.split(';'):
+            stmt = stmt.strip()
+            if stmt:
+                sqlglot.parse_one(stmt, read='postgres')
+        return True
+    except Exception:
+        return False
+
+
+def has_oracle_only_constructs(sql: str) -> bool:
+    """检测 SQL 中是否包含 Oracle 专有构造（这些在纯 PG 中不存在）。"""
+    if not sql:
+        return False
+    return any(p.search(sql) for p in _ORACLE_ONLY_PATTERNS)
+
+
+def gold_quality_check(gold_sql: str) -> str:
+    """检查金标质量：
+    - 'ok': 金标是合法 PG 且不含 Oracle 专有构造
+    - 'oracle_residue': 金标可解析但包含 Oracle 专有函数/语法
+    - 'invalid_pg': 金标无法被 PG 方言解析
+    """
+    if not is_valid_pg(gold_sql):
+        return 'invalid_pg'
+    if has_oracle_only_constructs(gold_sql):
+        return 'oracle_residue'
+    return 'ok'
 
 
 def recall_at_k(retrieved_ids: list[str], gold_ids: list[str], k: int = 5) -> float:
