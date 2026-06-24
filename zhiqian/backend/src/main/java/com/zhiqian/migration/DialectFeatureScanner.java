@@ -39,17 +39,21 @@ public class DialectFeatureScanner {
 
     /**
      * 双阶段扫描 SQL，返回检测到的特征。
+     * P2: 先剥离注释和字符串字面量，避免评论/字面量中的关键词导致误检。
      */
     public static List<DetectedFeature> scan(String sql, String sourceDialect) {
         if (sql == null || sql.isBlank()) return List.of();
-        String lower = sql.toLowerCase(Locale.ROOT);
         String dial = sourceDialect.toLowerCase(Locale.ROOT);
         List<RegisteredFeature> registry = TranslationRecipeRegistry.allFor(dial);
         if (registry.isEmpty()) return List.of();
 
+        // P2: 剥离注释和字符串字面量后再做匹配
+        String clean = stripCommentsAndStrings(sql);
+        String lower = clean.toLowerCase(Locale.ROOT);
+
         List<DetectedFeature> found = new ArrayList<>();
 
-        // ── Phase 1: 已注册特征的精确关键词匹配 ──
+        // ── Phase 1: 已注册特征的精确关键词匹配（基于清洁后的 SQL）──
         for (RegisteredFeature f : registry) {
             String keyword = f.sourceKeyword().toLowerCase(Locale.ROOT);
             if (matches(keyword, lower)) {
@@ -62,13 +66,13 @@ public class DialectFeatureScanner {
             }
         }
 
-        // ── Phase 2: 启发式宽筛 — 检测大写函数调用中的未注册项 ──
+        // ── Phase 2: 启发式宽筛 — 检测大写函数调用中的未注册项（基于清洁后的 SQL）──
         Set<String> phase1Keywords = found.stream()
             .map(f -> f.sourceFeature().toUpperCase(Locale.ROOT))
             .collect(Collectors.toSet());
 
         Set<String> seen = new LinkedHashSet<>();
-        java.util.regex.Matcher m = CAP_FUNC.matcher(sql);
+        java.util.regex.Matcher m = CAP_FUNC.matcher(clean);
         while (m.find()) {
             String func = m.group(1).toUpperCase(Locale.ROOT);
             // 跳过 PG 标准函数、SQL 关键字、已注册特征
@@ -140,6 +144,70 @@ public class DialectFeatureScanner {
             sb.append(recipeText);
         }
         return sb.toString();
+    }
+
+    // ── P2: 注释/字面量剥离 ──
+
+    /**
+     * 剥离 SQL 中的注释和字符串字面量，用空格替换被剥离的内容。
+     * 消除以下误检场景：
+     *   - 注释中的关键词：-- Use CONNECT BY for hierarchy
+     *   - 字符串中的关键词：SELECT 'ROWNUM is not supported' FROM dual
+     *   - 多行注释中的函数名：/&#42; NVL() is deprecated &#42;/
+     */
+    private static String stripCommentsAndStrings(String sql) {
+        StringBuilder out = new StringBuilder(sql.length());
+        int i = 0;
+        int len = sql.length();
+        while (i < len) {
+            char c = sql.charAt(i);
+            // 单行注释 --
+            if (c == '-' && i + 1 < len && sql.charAt(i + 1) == '-') {
+                out.append(' '); // replace first -
+                out.append(' '); // replace second -
+                i += 2;
+                while (i < len && sql.charAt(i) != '\n') {
+                    out.append(' ');
+                    i++;
+                }
+                if (i < len) { out.append('\n'); i++; }
+                continue;
+            }
+            // 多行注释 /* */
+            if (c == '/' && i + 1 < len && sql.charAt(i + 1) == '*') {
+                out.append(' '); // replace /
+                out.append(' '); // replace *
+                i += 2;
+                while (i + 1 < len && !(sql.charAt(i) == '*' && sql.charAt(i + 1) == '/')) {
+                    out.append(sql.charAt(i) == '\n' ? '\n' : ' ');
+                    i++;
+                }
+                if (i + 1 < len) { out.append("  "); i += 2; } // replace */
+                continue;
+            }
+            // 字符串字面量 '...'（处理转义 '' → 两个单引号）
+            if (c == '\'') {
+                out.append(' '); // replace opening '
+                i++;
+                while (i < len) {
+                    if (sql.charAt(i) == '\'' && i + 1 < len && sql.charAt(i + 1) == '\'') {
+                        out.append("  "); // escaped quote ''
+                        i += 2;
+                    } else if (sql.charAt(i) == '\'') {
+                        out.append(' '); // replace closing '
+                        i++;
+                        break;
+                    } else {
+                        out.append(sql.charAt(i) == '\n' ? '\n' : ' ');
+                        i++;
+                    }
+                }
+                continue;
+            }
+            out.append(c);
+            i++;
+        }
+        return out.toString();
     }
 
     // ── 关键词匹配 ──
