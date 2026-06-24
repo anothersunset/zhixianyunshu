@@ -1,0 +1,21 @@
+[
+  {
+    "timestamp": "20260624-195645",
+    "deployed_kb_docs": [
+      "kb-auto-auto-increment.yaml",
+      "kb-auto-bit-.yaml",
+      "kb-auto-connect-by.yaml",
+      "kb-auto-enum-.yaml",
+      "kb-auto-months-between-.yaml",
+      "kb-auto-regexp-substr-.yaml",
+      "kb-auto-start-with.yaml",
+      "kb-auto-user.yaml"
+    ],
+    "deployed_recipes": [
+      "recipe-connect-by.yaml",
+      "recipe-months-between-.yaml",
+      "recipe-start-with.yaml"
+    ],
+    "backup_path": "C:\\Users\\anoth\\Documents\\myproject\\zhixianyunshu\\kb\\backups\\20260624-195645"
+  }
+]
