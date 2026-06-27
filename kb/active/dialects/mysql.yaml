@@ -3,72 +3,159 @@ pairs:
 - mysql->postgresql
 - mysql->opengauss
 complexity_keywords:
-- on duplicate key
-- group_concat(
 - auto_increment
 - enum(
+- json
+- delete
+- tinyint
+- bit(
+- unsigned
+- character set
+- engine=
+- on duplicate key
+- group_concat(
+- zerofill
+- collate
 standard_whitelist: []
 features:
+# ── Recipes (complex conversions with few-shot) ──
+
+- keyword: AUTO_INCREMENT
+  mapping: SERIAL (INT) / BIGSERIAL (BIGINT)
+  category: type
+  is_recipe: true
+  construct_name: AUTO_INCREMENT to SERIAL/BIGSERIAL
+  few_shot_source: "CREATE TABLE t(id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100))"
+  few_shot_target: "CREATE TABLE t(id SERIAL PRIMARY KEY, name VARCHAR(100))"
+  step_by_step: |
+    1. 如果列是 INT AUTO_INCREMENT，将整个列定义替换为 SERIAL。
+    2. 如果列是 BIGINT AUTO_INCREMENT，将整个列定义替换为 BIGSERIAL。
+    3. SERIAL/BIGSERIAL 是独立类型，已隐含 NOT NULL 和自增默认值。
+    4. 绝对不要写 "INT SERIAL" 或 "BIGINT SERIAL" — SERIAL 已包含整数类型。
+    5. 删除 AUTO_INCREMENT 关键字，不要在 PostgreSQL 中保留。
+  pitfalls:
+  - NEVER write "INT SERIAL" — SERIAL already includes the integer type. Use SERIAL alone.
+  - NEVER write "BIGINT SERIAL" — use BIGSERIAL instead.
+  - Remove AUTO_INCREMENT entirely after conversion.
+
+- keyword: JSON
+  mapping: JSONB
+  category: type
+  is_recipe: true
+  construct_name: JSON to JSONB
+  few_shot_source: "CREATE TABLE t(config JSON)"
+  few_shot_target: "CREATE TABLE t(config JSONB)"
+  step_by_step: |
+    1. MySQL 的 JSON 类型在 PostgreSQL/openGauss 中应转为 JSONB。
+    2. JSONB 是推荐的二进制 JSON 类型，支持索引和更高效的查询。
+    3. 直接将列定义中的 JSON 替换为 JSONB。
+  pitfalls:
+  - Do NOT keep JSON as-is — use JSONB for better performance and index support.
+  - JSONB is the PostgreSQL recommended JSON type, not plain JSON.
+
+- keyword: ENUM(
+  mapping: CREATE TYPE ... AS ENUM
+  category: type
+  is_recipe: true
+  construct_name: MySQL ENUM to PostgreSQL ENUM type
+  few_shot_source: "CREATE TABLE orders(id INT AUTO_INCREMENT PRIMARY KEY, status ENUM('pending','shipped','done'))"
+  few_shot_target: "CREATE TYPE order_status AS ENUM('pending','shipped','done');\nCREATE TABLE orders(id SERIAL PRIMARY KEY, status order_status)"
+  step_by_step: |
+    1. 每个 ENUM 列需要在 CREATE TABLE 之前创建一个独立的 CREATE TYPE 语句。
+    2. 类型命名规则：<表名>_<列名>（如 orders 表的 status 列 → order_status 类型）。
+    3. 将列定义中的 ENUM('a','b','c') 替换为新的类型名。
+    4. 如果有多个 ENUM 列，每个列创建独立的类型。
+    5. CREATE TYPE 语句必须放在 CREATE TABLE 之前。
+  pitfalls:
+  - Do NOT use VARCHAR + CHECK as a shortcut — PostgreSQL has native ENUM support via CREATE TYPE.
+  - Each ENUM column needs its own CREATE TYPE statement.
+  - Type names must be unique within the schema.
+
+- keyword: DELETE
+  mapping: DELETE FROM ... USING (multi-table)
+  category: syntax
+  is_recipe: true
+  construct_name: MySQL Multi-table DELETE
+  few_shot_source: "DELETE t1 FROM t1 JOIN t2 ON t1.id = t2.ref_id WHERE t2.status = 0"
+  few_shot_target: "DELETE FROM t1 USING t2 WHERE t1.id = t2.ref_id AND t2.status = 0"
+  step_by_step: |
+    1. 仅当 DELETE 语句包含 JOIN 时才应用此转换。单表 DELETE 无需修改。
+    2. 将 "DELETE alias FROM t1 JOIN t2 ON join_cond" 改为 "DELETE FROM t1 USING t2"。
+    3. 将 JOIN 的 ON 条件移到 WHERE 子句，用 AND 连接。
+    4. USING 子句中列出除目标表外的所有参与 JOIN 的表。
+    5. 不要在 USING 子句中包含目标表本身。
+  pitfalls:
+  - Do NOT keep JOIN syntax in DELETE — PostgreSQL uses USING for multi-table deletes.
+  - The ON condition from JOIN must be moved to WHERE with AND.
+  - Do NOT include the target table in the USING clause.
+
+# ── Simple entries (keyword → mapping) ──
+
 - keyword: IFNULL(
   mapping: COALESCE
   category: function
   is_recipe: false
+
 - keyword: DATE_FORMAT(
   mapping: TO_CHAR
   category: function
   is_recipe: false
+
 - keyword: GROUP_CONCAT(
   mapping: STRING_AGG
   category: function
   is_recipe: false
-- keyword: AUTO_INCREMENT
-  mapping: SERIAL / SEQUENCE
-  category: type
-  is_recipe: false
-- keyword: ENUM(
-  mapping: VARCHAR + CHECK or CREATE TYPE
-  category: type
-  is_recipe: false
+
 - keyword: ON DUPLICATE KEY
   mapping: ON CONFLICT ... DO UPDATE
   category: syntax
   is_recipe: false
+
 - keyword: REGEXP
   mapping: ~ (or SIMILAR TO / regexp_matches)
-  category: function
+  category: operator
   is_recipe: false
+
 - keyword: NOW()
   mapping: CURRENT_TIMESTAMP
   category: function
   is_recipe: false
+
 - keyword: TINYINT
   mapping: SMALLINT
   category: type
   is_recipe: false
+
 - keyword: BIT(
   mapping: BOOLEAN
   category: type
   is_recipe: false
+
 - keyword: '`'
-  mapping: remove backticks
+  mapping: remove backticks (use " or unquoted)
   category: syntax
   is_recipe: false
+
 - keyword: ENGINE=
   mapping: omit ENGINE clause
-  category: ddl
+  category: syntax
   is_recipe: false
+
 - keyword: CHARACTER SET
   mapping: omit or adjust charset
-  category: ddl
+  category: syntax
   is_recipe: false
+
 - keyword: COLLATE
   mapping: omit collation
-  category: ddl
+  category: syntax
   is_recipe: false
+
 - keyword: UNSIGNED
   mapping: use CHECK constraint instead
   category: type
   is_recipe: false
+
 - keyword: ZEROFILL
   mapping: LPAD or format
   category: type
