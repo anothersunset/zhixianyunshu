@@ -20,12 +20,12 @@ while True:
     if done > last_completed:
         last_completed = done
         ok_rate = p["improved"] / done * 100 if done else 0
-        bar = "█" * int(pct / 5) + "░" * (20 - int(pct / 5))
+        bar = "#" * int(pct / 5) + "-" * (20 - int(pct / 5))
         print(f"[{time.strftime('%H:%M:%S')}] [{bar}] {done}/{total} ({pct:.0f}%)  "
               f"ok={p['improved']}/{done} ({ok_rate:.0f}%)  fail={p['still_fail']}  err={p['errors']}")
 
     if p.get("finished"):
-        print(f"\n=== 完成 ===")
+        print(f"\n=== Done ===")
         print(f"改善率: {p['improved']}/{total} ({p['improved']/total*100:.1f}%)")
         if p["still_fail"]:
             print(f"仍失败:")
