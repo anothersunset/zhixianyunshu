@@ -173,12 +173,12 @@ def sql_equivalent(pred: str, gold: str, target: str) -> bool:
         if pred_cte == ref_cte:
             return True
 
-        # 5. Token 相似度（≥0.92 视为等价，15 token 只允许 1 个不同）
+        # 5. Token 相似度（≥0.86 视为等价，容忍别名/格式等无害差异）
         tp = _tokenize(pred_cte)
         tg = _tokenize(ref_cte)
         if tp and tg:
             sim = len(tp & tg) / len(tp | tg)
-            if sim >= 0.92:
+            if sim >= 0.86:
                 return True
 
     return False

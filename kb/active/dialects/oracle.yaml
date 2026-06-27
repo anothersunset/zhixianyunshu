@@ -15,6 +15,11 @@ complexity_keywords:
 - merge into
 - pivot(
 - unpivot(
+- add_months(
+- listagg(
+- months_between(
+- regexp_substr(
+- trunc(
 standard_whitelist: []
 features:
 - keyword: ROWNUM
@@ -32,32 +37,75 @@ features:
   mapping: WITH RECURSIVE
   category: syntax
   is_recipe: true
-  construct_name: CONNECT BY Hierarchy
-  few_shot_source: SELECT CONNECT_BY_ISLEAF AS is_leaf, LEVEL AS lvl, name FROM emp START WITH manager_id IS NULL CONNECT
-    BY PRIOR id = manager_id
-  few_shot_target: WITH RECURSIVE emp_tree AS (SELECT id, name, manager_id, 0 AS lvl, false AS is_leaf FROM emp WHERE manager_id
-    IS NULL UNION ALL SELECT e.id, e.name, e.manager_id, t.lvl+1, NOT EXISTS(SELECT 1 FROM emp WHERE manager_id=e.id) FROM
-    emp e JOIN emp_tree t ON e.manager_id = t.id) SELECT is_leaf, lvl, name FROM emp_tree
-  step_by_step: 1. START WITH -> CTE anchor WHERE。2. CONNECT BY PRIOR -> 递归 JOIN。3. LEVEL 从 0 开始。4. CONNECT_BY_ISLEAF 在 CTE
-    内计算为 boolean。5. 用 WITH RECURSIVE 包装。
+  construct_name: CONNECT BY to WITH RECURSIVE Hierarchical Query
+  few_shot_source: "SELECT CONNECT_BY_ISLEAF AS is_leaf, LEVEL AS lvl, name \nFROM emp \nSTART WITH manager_id IS NULL \n\
+    CONNECT BY PRIOR id = manager_id\n"
+  few_shot_target: "WITH RECURSIVE emp_tree AS (\n  SELECT id, name, manager_id, 0 AS lvl, false AS is_leaf\n  FROM emp\n\
+    \  WHERE manager_id IS NULL\n  UNION ALL\n  SELECT e.id, e.name, e.manager_id, t.lvl + 1,\n         NOT EXISTS(SELECT\
+    \ 1 FROM emp WHERE manager_id = e.id) AS is_leaf\n  FROM emp e\n  JOIN emp_tree t ON e.manager_id = t.id\n)\nSELECT is_leaf,\
+    \ lvl, name FROM emp_tree\n"
+  step_by_step: '1. Replace START WITH with the anchor member: SELECT base columns, 0 AS lvl, false AS is_leaf FROM table
+    WHERE root_condition.
+
+    2. Replace CONNECT BY PRIOR with the recursive member: SELECT child columns, parent.lvl + 1, NOT EXISTS(SELECT 1 FROM
+    table WHERE manager_id = child.id) AS is_leaf FROM table child JOIN recursive_cte parent ON child.manager_id = parent.id.
+
+    3. Set LEVEL to start at 0 (not 1) in the anchor, then increment by 1 in the recursive member.
+
+    4. Compute CONNECT_BY_ISLEAF using NOT EXISTS in the recursive member (check if child has no children), not with a separate
+    LEFT JOIN or CASE in the final SELECT.
+
+    5. Wrap the entire query in WITH RECURSIVE cte_name AS (...) and select the final columns from the CTE.
+
+    '
   pitfalls:
-  - LEVEL must start at 0 in anchor
-  - CONNECT_BY_ISLEAF must be computed INSIDE CTE as boolean
-  - Do NOT forget parent_id column in CTE column list
+  - DO NOT start LEVEL at 1 in the anchor; it must be 0 to match Oracle's LEVEL behavior (root = 1 in Oracle, but PostgreSQL
+    convention uses 0-based start).
+  - DO NOT compute is_leaf using a LEFT JOIN or subquery in the final SELECT; it must be computed per row in the recursive
+    member using NOT EXISTS to ensure correctness for all nodes.
+  - DO NOT use CASE WHEN EXISTS to determine is_leaf; use NOT EXISTS directly as a boolean expression in the recursive member.
+  - DO NOT forget to include the is_leaf column in both the anchor and recursive member of the CTE; omitting it from the anchor
+    causes NULL values for root nodes.
 - keyword: MERGE INTO
-  mapping: INSERT ... ON CONFLICT
+  mapping: INSERT INTO ... SELECT ... ON CONFLICT
   category: syntax
   is_recipe: true
-  construct_name: MERGE INTO Upsert
-  few_shot_source: MERGE INTO target t USING source s ON (t.id = s.id) WHEN MATCHED THEN UPDATE SET t.name = s.name WHEN NOT
-    MATCHED THEN INSERT (id, name) VALUES (s.id, s.name)
-  few_shot_target: INSERT INTO target (id, name) SELECT id, name FROM source ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name
-  step_by_step: 1. USING 数据源 -> INSERT ... SELECT FROM。2. ON 条件 -> ON CONFLICT 目标列。3. WHEN MATCHED UPDATE -> DO UPDATE SET,
-    用 EXCLUDED。4. WHEN NOT MATCHED INSERT -> INSERT/SELECT 列表。5. 移除 Oracle 表别名前缀。
+  construct_name: MERGE INTO to INSERT ON CONFLICT Upsert
+  few_shot_source: 'MERGE INTO target t USING source s ON (t.id = s.id)
+
+    WHEN MATCHED THEN UPDATE SET t.name = s.name, t.updated = s.ts
+
+    WHEN NOT MATCHED THEN INSERT (id, name) VALUES (s.id, s.name)
+
+    '
+  few_shot_target: "INSERT INTO target (id, name, updated)\nSELECT id, name, ts FROM source\nON CONFLICT (id) DO UPDATE SET\n\
+    \  name = EXCLUDED.name,\n  updated = EXCLUDED.updated\n"
+  step_by_step: '1. 将 MERGE INTO target [alias] 改为 INSERT INTO target (col1, col2, ...) — 不要保留 MERGE INTO
+
+    2. 将 USING source [alias] ON (条件) 改为 SELECT col1, col2, ... FROM source — 不需要表别名，直接用列名
+
+    3. ON 条件中的等值列必须作为 ON CONFLICT 的目标列（需有 UNIQUE 约束）
+
+    4. WHEN MATCHED THEN UPDATE SET col = val → DO UPDATE SET col = EXCLUDED.col，所有 SET 列值用 EXCLUDED. 前缀
+
+    5. WHEN NOT MATCHED THEN INSERT (cols) VALUES (vals) → 列已在 INSERT 列表中，值来自 SELECT 列表
+
+    6. 移除所有 Oracle 表别名（t.col → col），目标列不加前缀，源表值不加别名
+
+    7. 绝对不要保留 MERGE INTO 语法 — PostgreSQL 完全不支持它
+
+    '
   pitfalls:
-  - CONFLICT target must have UNIQUE constraint
-  - Use EXCLUDED.column_name
-  - WHEN NOT MATCHED INSERT columns go into INSERT/SELECT, not VALUES
+  - DO NOT keep MERGE INTO syntax in the output — PostgreSQL has no MERGE INTO, the correct conversion is INSERT ... ON CONFLICT
+  - DO NOT put VALUES clause after INSERT ... SELECT — INSERT ... SELECT does not take VALUES, the SELECT provides all row
+    data
+  - DO NOT use Oracle table alias (t.) in the ON CONFLICT ... DO UPDATE SET clause — use EXCLUDED. to reference incoming row
+    values
+  - DO NOT forget the UNIQUE constraint on the ON CONFLICT column — if the source table lacks a UNIQUE index on the join key,
+    ON CONFLICT will fail
+  - DO NOT include columns that are only in the UPDATE in the INSERT column list — INSERT columns should cover both INSERT
+    and UPDATE scenarios
+  - DO NOT use WHEN NOT MATCHED columns outside of the INSERT/SELECT — they are the same as the INSERT column values
 - keyword: TRUNC(
   mapping: TRUNC (numbers same) / DATE_TRUNC (dates)
   category: function
@@ -73,12 +121,34 @@ features:
   mapping: EXTRACT(YEAR FROM age(a,b))*12 + EXTRACT(MONTH FROM age(a,b))
   category: function
   is_recipe: true
-  construct_name: MONTHS_BETWEEN
-  few_shot_source: SELECT MONTHS_BETWEEN(date1, date2) FROM t
-  few_shot_target: SELECT EXTRACT(YEAR FROM age(date1, date2)) * 12 + EXTRACT(MONTH FROM age(date1, date2)) FROM t
-  step_by_step: COPY the Target example output character-by-character. Do NOT add EXTRACT(DAY ...) fraction.
+  construct_name: MONTHS_BETWEEN Date Difference
+  few_shot_source: 'SELECT MONTHS_BETWEEN(end_date, start_date) AS month_diff FROM project_schedule;
+
+    '
+  few_shot_target: 'SELECT EXTRACT(YEAR FROM age(end_date, start_date)) * 12 + EXTRACT(MONTH FROM age(end_date, start_date))
+    AS month_diff FROM project_schedule;
+
+    '
+  step_by_step: '1. Replace MONTHS_BETWEEN(date1, date2) with EXTRACT(YEAR FROM age(date1, date2)) * 12 + EXTRACT(MONTH FROM
+    age(date1, date2)).
+
+    2. Use the PostgreSQL age() function to compute the interval between the two dates (age(date1, date2) returns years, months,
+    days).
+
+    3. Extract the YEAR component from the interval and multiply by 12 to convert years to months.
+
+    4. Extract the MONTH component from the interval and add it to the result.
+
+    5. Do NOT add any fractional day calculation (e.g., + EXTRACT(DAY FROM ...)/30.0) — this is not part of the standard conversion
+    and will produce incorrect results.
+
+    '
   pitfalls:
-  - NEVER add + EXTRACT(DAY FROM ...) / N to the formula
+  - DO NOT add a fractional day component like + (EXTRACT(DAY FROM AGE(date1, date2)) / 30.0). This overcomplicates the result
+    and does not match Oracle's integer month behavior.
+  - DO NOT use direct year/month subtraction like (EXTRACT(YEAR FROM date1) - EXTRACT(YEAR FROM date2)) * 12 + (EXTRACT(MONTH
+    FROM date1) - EXTRACT(MONTH FROM date2)). This ignores day-level carryover and produces wrong results when day-of-month
+    differs.
 - keyword: ADD_MONTHS(
   mapping: date + INTERVAL 'n months'
   category: function
@@ -138,7 +208,41 @@ features:
 - keyword: START WITH
   mapping: WITH RECURSIVE anchor clause
   category: syntax
-  is_recipe: false
+  is_recipe: true
+  few_shot_source: "SELECT CONNECT_BY_ISLEAF AS is_leaf, LEVEL AS lvl, name \nFROM emp \nSTART WITH manager_id IS NULL \n\
+    CONNECT BY PRIOR id = manager_id\n"
+  few_shot_target: "WITH RECURSIVE emp_tree AS (\n  SELECT id, name, manager_id, 0 AS lvl, false AS is_leaf\n  FROM emp\n\
+    \  WHERE manager_id IS NULL\n  UNION ALL\n  SELECT e.id, e.name, e.manager_id, t.lvl + 1,\n         NOT EXISTS (SELECT\
+    \ 1 FROM emp WHERE manager_id = e.id) AS is_leaf\n  FROM emp e\n  JOIN emp_tree t ON e.manager_id = t.id\n)\nSELECT is_leaf,\
+    \ lvl, name FROM emp_tree\n"
+  step_by_step: '1. Replace START WITH with the anchor SELECT in the WITH RECURSIVE CTE. The anchor must use the same condition
+    (e.g., WHERE manager_id IS NULL) and set lvl = 0 (not 1) to match Oracle''s LEVEL starting at 1.
+
+    2. Replace CONNECT BY PRIOR with the recursive UNION ALL join: FROM child_table JOIN cte ON child.parent_id = cte.id.
+    Increment lvl by 1 in the recursive branch.
+
+    3. For CONNECT_BY_ISLEAF, compute is_leaf in the recursive branch using NOT EXISTS (SELECT 1 FROM table WHERE parent_id
+    = child.id). In the anchor, set is_leaf = false (since root nodes are never leaves in a tree unless they are the only
+    node).
+
+    4. In the final SELECT, output the is_leaf, lvl, and other columns directly from the CTE. Do NOT attempt to compute is_leaf
+    after the CTE using a LEFT JOIN or subquery—this is error-prone and duplicates logic.
+
+    5. Ensure the CTE column order matches between anchor and recursive branches, and that all columns used in the final SELECT
+    are present in both branches.
+
+    '
+  pitfalls:
+  - DO NOT set lvl = 1 in the anchor. Oracle's LEVEL starts at 1, but in PostgreSQL the anchor is level 0; increment to 1
+    in the recursive branch. Setting lvl = 1 in the anchor will cause off-by-one errors.
+  - DO NOT compute is_leaf outside the CTE using a LEFT JOIN or CASE on child.manager_id IS NULL. This often fails because
+    it does not correctly identify leaf nodes (nodes with no children). Always compute is_leaf inside the recursive branch
+    using NOT EXISTS.
+  - DO NOT omit is_leaf from the anchor branch. The anchor must include a placeholder (e.g., false) so the column exists in
+    the CTE. Omitting it will cause a column mismatch error in the UNION ALL.
+  - DO NOT use a separate subquery or join to determine is_leaf after the CTE. This duplicates logic and can produce incorrect
+    results for nodes that appear at multiple levels.
+  construct_name: CONNECT_BY_ISLEAF and LEVEL in Hierarchical Queries
 - keyword: TO_CHAR(
   mapping: TO_CHAR (format review needed)
   category: function

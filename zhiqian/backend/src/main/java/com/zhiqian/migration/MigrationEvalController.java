@@ -200,7 +200,13 @@ public class MigrationEvalController {
             Object retrievedRaw = new ContextRetrieverAgent(llm).run(fastCtx, Map.of()).get("retrieved");
             List<String> fastRetrievedIds = extractRetrievedIds(retrievedRaw);
             String retrievedKnowledge = extractRetrievedText(retrievedRaw);
-            Map<String, Object> generated = generateMigrationJsonFast(sourceSql, pair, retrieval, retrievedKnowledge, "");
+            // Fast path 也扫描特征+注入配方（与 agent path 一致）
+            String srcDialect = sourceDialect(pair);
+            List<DialectFeatureScanner.DetectedFeature> fastFeatures =
+                DialectFeatureScanner.scan(sourceSql, srcDialect);
+            String featureHints = DialectFeatureScanner.toPromptHints(fastFeatures,
+                DialectFeatureScanner.getRecipes(fastFeatures, srcDialect));
+            Map<String, Object> generated = generateMigrationJsonFast(sourceSql, pair, retrieval, retrievedKnowledge, featureHints);
             return ResponseEntity.ok(new MigrateResponse(
                 stringValue(generated.get("target_sql")),
                 stringList(generated.get("report_points")),
