@@ -2,7 +2,7 @@
   <div class="src-citation">
     <el-icon><Link /></el-icon>
     <span class="path" v-text="chunk.source" />
-    <el-tag size="small" effect="plain" v-text="`score \${chunk.score.toFixed(3)}`" />
+    <el-tag size="small" effect="plain">score {{ chunk.score.toFixed(3) }}</el-tag>
   </div>
   <div class="text" v-text="chunk.text" />
 </template>

@@ -20,7 +20,7 @@
         </el-table-column>
         <el-table-column label="操作" width="160">
           <template #default="{ row }">
-            <el-button link type="primary" @click="router.push(`/projects/\${row.id}`)">详情</el-button>
+            <el-button link type="primary" @click="router.push(`/projects/${row.id}`)">详情</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -32,6 +32,7 @@
 import { onMounted, ref } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { listProjects, type Project } from '@/api/project'
 
 const router = useRouter()
@@ -40,7 +41,7 @@ const loading = ref(false)
 
 onMounted(async () => {
   loading.value = true
-  try { items.value = await listProjects() } finally { loading.value = false }
+  try { items.value = await listProjects() } catch (e: any) { ElMessage.error(e?.message || '加载项目列表失败') } finally { loading.value = false }
 })
 </script>
 

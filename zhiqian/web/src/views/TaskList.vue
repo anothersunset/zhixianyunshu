@@ -18,7 +18,7 @@
         <el-table-column prop="reviewRequired" label="需人工复核" width="120" />
         <el-table-column label="操作" width="160">
           <template #default="{ row }">
-            <el-button link type="primary" @click="router.push(`/tasks/\${row.id}`)">详情 / SSE</el-button>
+            <el-button link type="primary" @click="router.push(`/tasks/${row.id}`)">详情 / SSE</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -29,6 +29,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { useTaskStore } from '@/stores/task'
 
 const router = useRouter()
@@ -44,7 +45,7 @@ function statusType(s: string) {
 
 onMounted(async () => {
   loading.value = true
-  try { await store.refreshAll() } finally { loading.value = false }
+  try { await store.refreshAll() } catch (e: any) { ElMessage.error(e?.message || '加载任务列表失败') } finally { loading.value = false }
 })
 </script>
 

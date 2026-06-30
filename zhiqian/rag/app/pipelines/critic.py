@@ -10,6 +10,11 @@ class SelfRagCritic:
     实际生产环境可接入 LLM 调用 (e.g. GLM-4-Plus) 完成 self-reflection。
     """
 
+    def evaluate(self, question: str, chunks: List[Dict[str, Any]],
+                 llm: Optional[Any] = None) -> Dict[str, Any]:
+        """与 query API 兼容的评估接口"""
+        return self.critique(question, chunks, llm)
+
     def critique(self, question: str, chunks: List[Dict[str, Any]],
                  llm: Optional[Any] = None) -> Dict[str, Any]:
         if not chunks:

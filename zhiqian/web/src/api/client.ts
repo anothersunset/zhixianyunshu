@@ -27,9 +27,11 @@ http.interceptors.response.use(
   (err) => {
     if (err.response?.status === 401) {
       localStorage.removeItem("zq_token")
-      window.location.href = "/login"
+      ElMessage.warning("登录已过期，请重新登录")
+      window.location.hash = "#/login"
+    } else {
+      ElMessage.error(err.message ?? "网络错误")
     }
-    ElMessage.error(err.message ?? "网络错误")
     return Promise.reject(err)
   }
 )

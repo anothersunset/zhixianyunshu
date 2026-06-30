@@ -17,10 +17,10 @@
           <el-progress :percentage="store.progress" :stroke-width="14" status="success" />
           <el-timeline style="margin-top:16px">
             <el-timeline-item v-for="(s, i) in store.steps" :key="i"
-                              :timestamp="`\${s.stage} · \${s.agentName}`"
+                              :timestamp="s.stage + ' · ' + s.agentName"
                               :type="timelineType(s.status)">
               <div>
-                <b>耗时</b> <span v-text="`\${s.elapsedMs ?? 0}ms`" />
+                <b>耗时</b> <span v-text="(s.elapsedMs ?? 0) + 'ms'" />
                 <template v-if="s.confidence != null">
                   · <b>置信度</b> <span v-text="s.confidence" />
                 </template>

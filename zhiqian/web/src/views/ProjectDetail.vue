@@ -19,7 +19,7 @@
         </el-table-column>
         <el-table-column label="操作" width="160">
           <template #default="{ row }">
-            <el-button link type="primary" @click="router.push(`/tasks/\${row.id}`)">查看</el-button>
+            <el-button link type="primary" @click="router.push(`/tasks/${row.id}`)">查看</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -30,6 +30,7 @@
 <script setup lang="ts">
 import { onMounted, ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { getProject, type Project } from '@/api/project'
 import { useTaskStore } from '@/stores/task'
 
@@ -40,8 +41,12 @@ const project = ref<Project | null>(null)
 const taskStore = useTaskStore()
 
 onMounted(async () => {
-  project.value = await getProject(id.value)
-  if (!taskStore.tasks.length) await taskStore.refreshAll()
+  try {
+    project.value = await getProject(id.value)
+    if (!taskStore.tasks.length) await taskStore.refreshAll()
+  } catch (e: any) {
+    ElMessage.error(e?.message || '加载项目失败')
+  }
 })
 </script>
 

@@ -19,7 +19,7 @@
         <el-card shadow="never">
           <template #header>
             <span>检索结果</span>
-            <span v-text="`（\${result?.chunks?.length || 0}）`" />
+            <span>（{{ result?.chunks?.length || 0 }}）</span>
           </template>
           <div v-if="result?.rewritten" class="rew">
             <span>查询重写：</span><code v-text="result.rewritten" />
@@ -51,6 +51,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { Search } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import SourceCitation from '@/components/SourceCitation.vue'
 
@@ -72,6 +73,9 @@ async function doSearch() {
       question: q.value, top_k: 5, rewrite: rewrite.value, critic: critic.value,
     })
     result.value = resp.data
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || e?.message || '检索失败，请检查 RAG 服务')
+    result.value = null
   } finally { loading.value = false }
 }
 </script>

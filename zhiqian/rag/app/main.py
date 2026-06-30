@@ -15,6 +15,7 @@ from app.api import (
     tts as tts_api, reports as reports_api,
 )
 from app.pipelines.retriever import HybridRetriever
+from app.pipelines.critic import SelfRagCritic
 from app.graphs.graphrag import GraphRagIndex
 from app.graphs.kb_graph_builder import build_graph_from_docs
 
@@ -72,6 +73,11 @@ async def lifespan(app: FastAPI):
         retriever.collection = "zhiqian-default"
     app.state.retriever = retriever
 
+    # 初始化 SelfRAG critic
+    critic = SelfRagCritic()
+    log.info("[lifespan] SelfRagCritic initialized")
+    app.state.critic = critic
+
     # v2-step-13: 初始化 GraphRAG 索引（从 KB 文档提取实体与关系）
     try:
         graph_index = GraphRagIndex(max_community_size=20)
@@ -91,6 +97,8 @@ async def lifespan(app: FastAPI):
     # 使用 FastAPI 的 dependency_overrides 机制注入
     app.dependency_overrides[retrieve._retriever] = lambda: retriever
     app.dependency_overrides[ingest._retriever] = lambda: retriever
+    app.dependency_overrides[query_api._retriever] = lambda: retriever
+    app.dependency_overrides[query_api._critic] = lambda: critic
     # 注入 GraphRAG index 到 graphrag API
     app.dependency_overrides[graphrag._index_dep] = lambda: graph_index if retriever.graph_index and retriever.graph_index.nodes else None
 
