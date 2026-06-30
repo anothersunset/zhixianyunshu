@@ -281,6 +281,7 @@ public class DialectFeatureScanner {
         return switch (keyword) {
             case "(+)" -> lowerSql.contains("(+)");
             case "`" -> lowerSql.indexOf('`') >= 0;
+            case "[" -> lowerSql.indexOf('[') >= 0;
             case "from dual" ->
                 lowerSql.replaceAll("\\s+", " ").contains("from dual");
             case "character set" -> lowerSql.contains("character set");

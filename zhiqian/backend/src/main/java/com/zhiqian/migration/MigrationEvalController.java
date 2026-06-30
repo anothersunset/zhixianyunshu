@@ -135,11 +135,15 @@ public class MigrationEvalController {
             if (lower.contains(kw)) score += 2;
         }
 
-        // 5. Oracle 特有语法（pair 含 oracle 时加分更高）
-        boolean isOracle = pair != null && pair.contains("oracle");
-        for (String kw : ORACLE_KEYWORDS) {
-            if (lower.contains(kw)) {
-                score += isOracle ? 2 : 1;
+        // 5. 方言特有语法（源方言匹配时加分更高）
+        String sourceDialect = pair != null && pair.contains("->") ? pair.split("->")[0].trim() : null;
+        String matchedDialect = sourceDialect;
+        for (Map.Entry<String, List<String>> entry : DIALECT_COMPLEXITY.entrySet()) {
+            boolean isSource = entry.getKey().equals(matchedDialect);
+            for (String kw : entry.getValue()) {
+                if (lower.contains(kw)) {
+                    score += isSource ? 2 : 1;
+                }
             }
         }
 

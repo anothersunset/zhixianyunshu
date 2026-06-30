@@ -1,5 +1,14 @@
 category: FUNCTIONS
 docs:
+- id: kb-func-getdate
+  source_dialect: sqlserver
+  target_dialect: opengauss
+  text: 'SQL Server GETDATE() → openGauss/PostgreSQL CURRENT_TIMESTAMP: GETDATE() returns current datetime. In openGauss/PostgreSQL,
+    use CURRENT_TIMESTAMP (with timezone) or LOCALTIMESTAMP (without timezone). Example: SELECT GETDATE() AS now → SELECT
+    CURRENT_TIMESTAMP AS now. Note: openGauss has Oracle compatibility with SYSDATE, but CURRENT_TIMESTAMP is the recommended
+    standard PostgreSQL function. NEVER use SYSDATE unless Oracle compatibility is required.'
+  source: kb/functions/sqlserver-getdate
+  terms: getdate current_timestamp localtimestamp now sysdate datetime sql select
 - id: kb-func-ifnull
   source_dialect: mysql
   target_dialect: opengauss

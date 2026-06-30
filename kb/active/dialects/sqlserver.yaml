@@ -31,7 +31,18 @@ features:
 - keyword: GETDATE()
   mapping: CURRENT_TIMESTAMP
   category: function
-  is_recipe: false
+  is_recipe: true
+  construct_name: GETDATE → CURRENT_TIMESTAMP
+  few_shot_source: SELECT GETDATE() AS now
+  few_shot_target: SELECT CURRENT_TIMESTAMP AS now
+  step_by_step: |
+    1. 将 GETDATE() 直接替换为 CURRENT_TIMESTAMP。
+    2. CURRENT_TIMESTAMP 返回带时区的 timestamp with time zone，与 GETDATE 返回的 datetime 语义最接近。
+    3. 如需仅日期部分，使用 CURRENT_DATE 替代 CAST(GETDATE() AS DATE)。
+    4. 绝对不要在目标 SQL 中保留 GETDATE()。
+  pitfalls:
+  - NEVER keep GETDATE() in the target SQL — it does not exist in PostgreSQL/openGauss.
+  - Do NOT use SYSDATE or NOW() as a shortcut — CURRENT_TIMESTAMP is the standard equivalent.
 - keyword: DATEADD(
   mapping: date_col + INTERVAL
   category: function

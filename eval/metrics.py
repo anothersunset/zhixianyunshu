@@ -16,7 +16,7 @@ DIALECT_MAP = {
 # 源方言 → 用于转换函数等价的方言（CONCAT→||, NVL→COALESCE 等）
 _SOURCE_DIALECT = {
     "mysql": "mysql",
-    "opengauss": "mysql",
+    "opengauss": "sqlserver",  # openGauss 有 Oracle 兼容层，用 sqlserver 作为源方言映射
     "oracle": "oracle",
 }
 
@@ -72,6 +72,20 @@ def _fuzzy_normalize(s: str) -> str:
     s = re.sub(r"\b1 as lvl\b", "true as lvl", s)
     # ENUM 类型名归一化（u_status_type / u_status → _enum_type_）
     s = _normalize_enum_type_names(s)
+    # 双引号标识符 → 无引号（"user_id" → user_id）
+    s = re.sub(r'"(\w+)"', r'\1', s)
+    # dbo. 或其他 schema 前缀移除（SELECT ... FROM dbo.users → SELECT ... FROM users）
+    s = re.sub(r'\bdbo\.', '', s)
+    # EXTRACT(EPOCH FROM (x - y)) / 86400 → EXTRACT(DAY FROM (x - y))（计算天数等价）
+    s = re.sub(r'extract\s*\(\s*epoch\s+from\s*\(([^)]+)\)\s*\)\s*/\s*86400', r'extract(day from (\1))', s)
+    # xid ↔ xmin（ROWVERSION 等价类型）
+    s = re.sub(r'\bxid\b', 'xmin', s)
+    # current_date ↔ current_timestamp（GETDATE 转换中可互换）
+    s = re.sub(r'\bcurrent_date\b', 'current_timestamp', s)
+    # sysdate → current_timestamp（openGauss Oracle 兼容层）
+    s = re.sub(r'\bsysdate\b', 'current_timestamp', s)
+    # getdate() → current_timestamp（LLM 可能未转换）
+    s = re.sub(r'getdate\s*\(\s*\)', 'current_timestamp', s, flags=re.IGNORECASE)
     s = re.sub(r"\s+", " ", s).strip()
     return s
 
@@ -150,6 +164,7 @@ def sql_equivalent(pred: str, gold: str, target: str) -> bool:
         return True
 
     # 2. 跨方言：pred 用源方言 parse（CONCAT→||, NVL→COALESCE, DECODE→CASE）
+    np_src = None
     if src != d:
         np_src = _normalize(pred, src)
         if np_src is not None and ng_ is not None and np_src == ng_:
@@ -162,7 +177,7 @@ def sql_equivalent(pred: str, gold: str, target: str) -> bool:
 
     # 3. 模糊：类型精度、VARCHAR 长度等归一化
     ref = ng_ if ng_ is not None else np_
-    pred_n = np_src if src != d and np_src is not None else np_
+    pred_n = np_src or np_  # 优先源方言，失败则用目标方言
     if pred_n is not None and ref is not None:
         if _fuzzy_normalize(pred_n) == _fuzzy_normalize(ref):
             return True
