@@ -10,7 +10,7 @@
               <el-option v-for="t in taskStore.tasks" :key="t.id" :label="`#${t.id} ${t.name}`" :value="t.id" />
             </el-select>
             <el-button type="primary" :disabled="!hasData" @click="generatePdf" :loading="generating">
-              导出 PDF
+              {{ typstReady ? '导出 PDF' : '导出 JSON' }}
             </el-button>
           </div>
         </div>
@@ -47,7 +47,7 @@
           </el-col>
           <el-col :span="4">
             <div class="stat-card">
-              <div class="stat-value" v-text="(avgConf * 100).toFixed(0) + '%'" />
+              <div class="stat-value" v-text="(stats.avgConf * 100).toFixed(0) + '%'" />
               <div class="stat-label">平均置信度</div>
             </div>
           </el-col>
@@ -102,20 +102,21 @@ import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import VChart from 'vue-echarts'
 import { useTaskStore } from '@/stores/task'
-import { generatePdf as generatePdfApi, type ReportPayload } from '@/api/reports'
+import { generatePdf as generatePdfApi, getReportStatus, type ReportPayload } from '@/api/reports'
 import RiskBadge from '@/components/RiskBadge.vue'
 
 const taskStore = useTaskStore()
 const selectedTaskId = ref<number | null>(null)
 const loading = ref(false)
 const generating = ref(false)
+const typstReady = ref(false)
 
 const hasData = computed(() => taskStore.suggestions.length > 0)
 
 const stats = computed(() => {
   const list = taskStore.suggestions
   const highRisk = list.filter(s => s.riskLevel === 'HIGH' || s.riskLevel === '高').length
-  const needReview = list.filter(s => s.reviewStatus !== 'PASSED').length
+  const needReview = list.filter(s => s.reviewStatus === 'PENDING' || s.reviewStatus === 'REJECTED').length
   const confs = list.map(s => s.confidence || 0).filter(c => c > 0)
   const avgConf = confs.length ? confs.reduce((a, b) => a + b, 0) / confs.length : 0
   return {
@@ -182,14 +183,33 @@ async function generatePdf() {
         explanation: s.rationale || '',
       })),
     }
-    const blob = await generatePdfApi(payload)
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `migration-report-${task.name}.pdf`
-    a.click()
-    URL.revokeObjectURL(url)
-    ElMessage.success('PDF 报告已生成')
+
+    // 先检查 typst 是否可用
+    if (!typstReady.value) {
+      try { const st = await getReportStatus(); typstReady.value = !!st.typst_available } catch { typstReady.value = false }
+    }
+
+    if (typstReady.value) {
+      const blob = await generatePdfApi(payload)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `migration-report-${task.name}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+      ElMessage.success('PDF 报告已生成')
+    } else {
+      // typst 不可用，降级为 JSON 下载
+      const json = JSON.stringify(payload, null, 2)
+      const blob = new Blob([json], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `migration-report-${task.name}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      ElMessage.info('typst 未安装，已导出 JSON 报告（可本地用 typst compile 转为 PDF）')
+    }
   } catch (e: any) {
     ElMessage.error(e?.message || '报告生成失败，请确认 RAG 服务可用')
   } finally {
@@ -197,8 +217,9 @@ async function generatePdf() {
   }
 }
 
-// 初始化加载任务列表
+// 初始化加载任务列表 + 检查 typst
 taskStore.refreshAll().catch(() => {})
+getReportStatus().then(st => { typstReady.value = !!st.typst_available }).catch(() => {})
 </script>
 
 <style scoped>

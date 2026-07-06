@@ -25,7 +25,7 @@ http.interceptors.response.use(
     return body
   },
   (err) => {
-    if (err.response?.status === 401) {
+    if (err.response?.status === 401 || err.response?.status === 403) {
       localStorage.removeItem("zq_token")
       ElMessage.warning("登录已过期，请重新登录")
       window.location.hash = "#/login"
