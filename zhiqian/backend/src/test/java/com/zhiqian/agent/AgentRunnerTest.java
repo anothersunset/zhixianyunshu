@@ -342,6 +342,119 @@ class AgentRunnerTest {
         }
     }
 
+    // ========== 条件路由与反思回环 ==========
+
+    @Nested
+    @DisplayName("条件路由反思回环")
+    class ReflectionLoop {
+
+        /** patcher→critic→(回环或 reporter)，与 TaskExecutionService.buildGraph 的 05-critic 路由同构 */
+        private AgentGraph loopGraph(AgentTool critic, int maxRounds) {
+            return new AgentGraph()
+                .addNode("patcher", fixedOutputTool("patcher", Map.of("patch_preview", "sql")))
+                .addNode("critic", critic)
+                .addNode("reporter", fixedOutputTool("reporter", Map.of("done", true)))
+                .addEdge("patcher", ctx -> "critic")
+                .addEdge("critic", ctx -> {
+                    boolean needsFix = Boolean.TRUE.equals(ctx.state().get("needs_correction"));
+                    int round = ctx.state().get("refine_round") instanceof Number n ? n.intValue() : 0;
+                    if (needsFix && round < maxRounds) {
+                        ctx.state().put("refine_round", round + 1);
+                        return "patcher";
+                    }
+                    return "reporter";
+                })
+                .entry("patcher");
+        }
+
+        @Test
+        @DisplayName("critic 判 NEEDS_FIX 时回到 patcher 重修一轮后终止")
+        void needsFixRoutesBackToPatcherOnce() {
+            AgentTool critic = fixedOutputTool("critic", Map.of("needs_correction", true));
+            AgentContext ctx = new AgentContext(1L, 100L);
+            List<AgentStep> steps = new ArrayList<>();
+
+            runner.run(loopGraph(critic, 1), ctx, steps::add);
+
+            List<String> stages = steps.stream().map(AgentStep::stage).toList();
+            assertEquals(List.of("patcher", "critic", "patcher", "critic", "reporter"), stages);
+        }
+
+        @Test
+        @DisplayName("critic 判 CORRECT 时直接进入 reporter，不回环")
+        void correctGoesStraightToReporter() {
+            AgentTool critic = fixedOutputTool("critic", Map.of("needs_correction", false));
+            AgentContext ctx = new AgentContext(1L, 100L);
+            List<AgentStep> steps = new ArrayList<>();
+
+            runner.run(loopGraph(critic, 1), ctx, steps::add);
+
+            List<String> stages = steps.stream().map(AgentStep::stage).toList();
+            assertEquals(List.of("patcher", "critic", "reporter"), stages);
+        }
+
+        @Test
+        @DisplayName("轮数上限兜底：critic 永远不满意也不会死循环")
+        void roundCapPreventsInfiniteLoop() {
+            AgentTool critic = fixedOutputTool("critic", Map.of("needs_correction", true));
+            AgentContext ctx = new AgentContext(1L, 100L);
+            List<AgentStep> steps = new ArrayList<>();
+
+            runner.run(loopGraph(critic, 2), ctx, steps::add);
+
+            long patcherRuns = steps.stream().filter(s -> s.stage().equals("patcher")).count();
+            assertEquals(3, patcherRuns); // 初跑 1 轮 + 重修 2 轮
+            assertEquals("reporter", steps.get(steps.size() - 1).stage());
+        }
+    }
+
+    // ========== 运行时守卫（非法路由 / 死循环） ==========
+
+    @Nested
+    @DisplayName("运行时守卫")
+    class RuntimeGuards {
+
+        @Test
+        @DisplayName("路由到不存在的节点时以 FAIL 终止，不抛 NPE")
+        void routingToUnknownNodeFailsGracefully() {
+            AgentTool tool = fixedOutputTool("real", Map.of());
+            AgentGraph graph = new AgentGraph()
+                .addNode("real", tool)
+                .addEdge("real", ctx -> "ghost") // 指向未注册的节点
+                .entry("real");
+
+            AgentContext ctx = new AgentContext(1L, 100L);
+            List<AgentStep> steps = new ArrayList<>();
+
+            assertDoesNotThrow(() -> runner.run(graph, ctx, steps::add));
+
+            AgentStep last = steps.get(steps.size() - 1);
+            assertEquals("FAIL", last.status());
+            assertTrue(String.valueOf(last.output().get("error")).contains("ghost"));
+        }
+
+        @Test
+        @DisplayName("路由自环时 MAX_STEPS 兜底，不死循环")
+        void selfLoopHitsMaxStepsCap() {
+            AgentTool tool = fixedOutputTool("spin", Map.of());
+            AgentGraph graph = new AgentGraph()
+                .addNode("spin", tool)
+                .addEdge("spin", ctx -> "spin") // 无条件自环
+                .entry("spin");
+
+            AgentContext ctx = new AgentContext(1L, 100L);
+            List<AgentStep> steps = new ArrayList<>();
+
+            assertDoesNotThrow(() -> runner.run(graph, ctx, steps::add));
+
+            AgentStep last = steps.get(steps.size() - 1);
+            assertEquals("FAIL", last.status());
+            assertTrue(String.valueOf(last.output().get("error")).contains("MAX_STEPS"));
+            // 上限之内执行，不会无限膨胀
+            assertTrue(steps.size() <= AgentRunner.MAX_STEPS + 1);
+        }
+    }
+
     // ========== AgentStep record 字段验证 ==========
 
     @Nested

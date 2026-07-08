@@ -30,6 +30,9 @@ import java.util.function.Consumer;
 @Component
 public class AgentRunner {
 
+    /** 全局步数上限：路由配置错误（回环无出口）时的最后保险，正常图 + 反思回环远达不到。 */
+    static final int MAX_STEPS = 32;
+
     /** 原 3 参重载 - 向后兼容。 */
     public void run(AgentGraph graph, AgentContext ctx, Consumer<AgentStep> onStep) {
         run(graph, ctx, onStep, null);
@@ -38,10 +41,20 @@ public class AgentRunner {
     /** v2-step-08 新增 4 参重载 - 接受 parentTrace。 */
     public void run(AgentGraph graph, AgentContext ctx, Consumer<AgentStep> onStep, TraceHandle parentTrace) {
         String cur = graph.entryNode();
+        int executed = 0;
         while (cur != null) {
+            if (executed++ >= MAX_STEPS) {
+                onStep.accept(abortStep(cur, "graph aborted: exceeded MAX_STEPS=" + MAX_STEPS
+                        + " (router likely forms a loop with no exit)"));
+                break;
+            }
+            var tool = graph.node(cur);
+            if (tool == null) {
+                onStep.accept(abortStep(cur, "graph aborted: router returned unknown node '" + cur + "'"));
+                break;
+            }
             long t0 = System.currentTimeMillis();
             Instant startInstant = Instant.now();
-            var tool = graph.node(cur);
             Map<String, Object> input = new HashMap<>(ctx.state());
             Map<String, Object> output;
             String status = "OK";
@@ -88,5 +101,12 @@ public class AgentRunner {
             if ("FAIL".equals(status)) break;
             cur = graph.next(cur, ctx);
         }
+    }
+
+    /** 运行时守卫触发的终止步骤：以 FAIL step 的形式透出，调用方无需感知新协议。 */
+    private static AgentStep abortStep(String stage, String error) {
+        Map<String, Object> output = new HashMap<>();
+        output.put("error", error);
+        return new AgentStep(stage, "runner-guard", Map.of(), output, null, null, 0L, null, null, "FAIL");
     }
 }
