@@ -27,7 +27,7 @@
         <!-- v2-step-14: Temporal durable workflow -->
         <temporal.version>1.27.0</temporal.version>
         <!-- v2-step-17: Testcontainers + JaCoCo -->
-        <testcontainers.version>1.20.1</testcontainers.version>
+        <testcontainers.version>2.0.5</testcontainers.version>
         <jacoco.version>0.8.12</jacoco.version>
         <springdoc.version>2.5.0</springdoc.version>
     </properties>
