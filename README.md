@@ -27,9 +27,13 @@ zhixianyunshu/
 
 ## 三个“一句话”选型
 
-- **不只是迁移工具**: 6 Agent + CRAG + GraphRAG 支撑跨方言复杂语句的可解释迁移分析。
+- **不只是迁移工具**: 6 Agent + 反思回环 + CRAG + GraphRAG 支撑跨方言复杂语句的可解释迁移分析。
 - **不锁定一个生态**: pgloader / Ora2Pg / Debezium / ZhiQian Native 同位调度。
 - **双协议互联**: MCP server + A2A peer, 能被 Claude Desktop / Cursor 调, 也能与其他 Agent 交互。
+
+## 设计方法论
+
+本项目同时是一份**垂直领域 Agent 的参考实现**：领域知识三层模型（KB 文档 / 转换配方 / 特征触发器）、状态机编排 + critic→patcher 反思回环、方言感知的校正式检索、评测驱动开发（LLM judge 经 Cohen's κ 人工校准）、失败学习闭环（评测失败 → LLM 生成知识 → 人工门禁 → 回注验证，38/38 修复）。完整论述见 [docs/AGENT_DESIGN.md](docs/AGENT_DESIGN.md)，评测体系见 [eval/README.md](eval/README.md)。
 
 > **口径说明**: 当前实现口径以 `zhiqian/` 为准。向量检索使用 **Qdrant + BGE-M3 + RRF**；图检索使用 **CKG / GraphRAG 轻量图实现**。旧文档里出现过的 ChromaDB / Neo4j / 7 Agent 属于早期规划口径，不作为当前实现证明。Demo seed 中的 confidence / 综合分仅用于 UI 和报告流程演示，真实效果以后续独立评测集与人工复核为准。
 

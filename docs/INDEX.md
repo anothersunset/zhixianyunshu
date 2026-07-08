@@ -15,9 +15,11 @@
 
 ## 📐 设计与架构
 
+- [**垂直领域 Agent 设计方法论**](./AGENT_DESIGN.md) — 五支柱框架 + 设计取舍 + 文献锚点（推荐首读）
 - [总架构图](./architecture/00-overall.md)
 - [Agent DAG](./architecture/01-agent-pipeline.md)
 - [RAG 检索路](./architecture/02-rag-retrieval.md)
+- [评测驱动开发体系](../eval/README.md)
 - [同类产品对比](./comparison.md)
 - [8 大创新点](./innovations.md)
 
