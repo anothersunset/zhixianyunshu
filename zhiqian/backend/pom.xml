@@ -22,7 +22,7 @@
         <java.version>17</java.version>
         <jjwt.version>0.12.5</jjwt.version>
         <javaparser.version>3.25.10</javaparser.version>
-        <jgrapht.version>1.5.2</jgrapht.version>
+        <jgrapht.version>1.5.3</jgrapht.version>
         <maven-model.version>3.9.6</maven-model.version>
         <!-- v2-step-14: Temporal durable workflow -->
         <temporal.version>1.27.0</temporal.version>
