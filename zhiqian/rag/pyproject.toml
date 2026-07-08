@@ -1,12 +1,13 @@
 [project]
 name = "zhiqian-rag"
 version = "0.1.0"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.13"
 dependencies = [
   "fastapi>=0.111",
+  "starlette>=0.37,<0.38",
   "uvicorn[standard]>=0.30",
-  "pydantic>=2.7",
-  "pydantic-settings>=2.3",
+  "pydantic>=2.9,<3",
+  "pydantic-settings>=2.6,<3",
   "chromadb>=0.5",
   "sentence-transformers>=3.0",
   "FlagEmbedding>=1.2.10",

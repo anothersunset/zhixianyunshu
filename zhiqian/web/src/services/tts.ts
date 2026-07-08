@@ -1,7 +1,7 @@
 // v2-step-26: TTS 前端服务 — 调 RAG /tts/speak (edge-tts 代理), 返 audio blob
 import axios from 'axios'
 
-const RAG_BASE = (import.meta.env.VITE_RAG_BASE_URL as string) || 'http://localhost:8001'
+const RAG_BASE = (import.meta.env.VITE_RAG_BASE_URL as string) || '/rag'
 
 export interface SpeakOptions {
   text: string

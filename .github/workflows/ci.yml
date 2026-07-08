@@ -87,12 +87,14 @@ jobs:
         run: ruff check app --select E,F,W --ignore E501 --quiet
 
       - name: Import chain verification
-        run: python -c "
-          import importlib;
-          for m in ['app.main', 'app.api.health', 'app.pipelines.retriever']:
-              importlib.import_module(m);
-              print(f'  ✔ {m}')
-          "
+        run: |
+          python - <<'PY'
+          import importlib
+
+          for module in ["app.main", "app.api.health", "app.pipelines.retriever"]:
+              importlib.import_module(module)
+              print(f"  OK {module}")
+          PY
 
   labeler:
     runs-on: ubuntu-latest

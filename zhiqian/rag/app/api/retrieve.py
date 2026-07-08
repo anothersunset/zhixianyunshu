@@ -62,5 +62,8 @@ async def retrieve(req: RetrieveReq, r=Depends(_retriever)) -> RetrieveResp:
         return RetrieveResp(items=items, capabilities=r.capabilities())
     except Exception as e:
         log.error("[retrieve] 请求处理失败: %s\n%s", e, traceback.format_exc())
-        # 返回空结果而非崩溃，让调用方降级到 BM25
-        return RetrieveResp(items=[], capabilities=r.capabilities() if hasattr(r, "capabilities") else {})
+        # fail-loud: 返回 500 让调用方显式感知失败并自行降级（backend 侧会 fallback 到本地 mock）
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "retrieve_failed", "message": str(e)[:200]},
+        )

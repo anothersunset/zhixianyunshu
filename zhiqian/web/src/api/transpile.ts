@@ -1,14 +1,13 @@
 /**
  * v2-step-10: rag /transpile API 包装。
  *
- * 直接打 rag service (默认 http://localhost:8001), 不走 backend 代理, 避免额外路由。
- * 靠 rag main.py 的 CORS allow_origins=['*'] 走通。
- * 生产环境可用 nginx /transpile -> http://rag:8001/transpile 。
+ * 默认走同源 /rag 代理 (生产 nginx 已配置 /rag -> http://rag:8001/)。
+ * VITE_RAG_BASE 仅在本地直连 RAG 调试时设置。
  */
 import axios from 'axios'
 
 const ragHttp = axios.create({
-  baseURL: import.meta.env.VITE_RAG_BASE || 'http://localhost:8001',
+  baseURL: import.meta.env.VITE_RAG_BASE || '/rag',
   timeout: 15000,
 })
 

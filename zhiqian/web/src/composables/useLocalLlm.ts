@@ -19,9 +19,10 @@ export function useLocalLlm() {
     try {
       // dynamic import 避免初始 bundle 肥肿
       // @ts-ignore - 包由者自装
-      const { pipeline, env } = await import('@xenova/transformers')
+      const { pipeline, env } = await import('@huggingface/transformers')
       env.allowLocalModels = false  // CDN 拉
-      env.backends.onnx.wasm.numThreads = navigator.hardwareConcurrency || 4
+      const wasmBackend = (env as any).backends?.onnx?.wasm
+      if (wasmBackend) wasmBackend.numThreads = navigator.hardwareConcurrency || 4
 
       const device = (navigator as any).gpu ? 'webgpu' : 'wasm'
       generator = await pipeline('text-generation', modelId, {

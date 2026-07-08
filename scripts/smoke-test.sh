@@ -31,16 +31,16 @@ if [[ "${SMOKE_SKIP_WEB:-0}" == "1" ]]; then
   echo "  skipped (SMOKE_SKIP_WEB=1)"
 else
   if [[ ! -d zhiqian/web ]]; then fail "未找到 zhiqian/web"; fi
-  if ! command -v pnpm >/dev/null 2>&1 && ! command -v npm >/dev/null 2>&1; then
-    fail "需 pnpm 或 npm"
+  if ! command -v npm >/dev/null 2>&1; then
+    fail "需 npm"
   fi
   cd zhiqian/web
   if [[ ! -d node_modules ]]; then
     echo "  装依赖…"
-    if command -v pnpm >/dev/null 2>&1; then pnpm install --frozen-lockfile || pnpm install; else npm install; fi
+    npm ci || npm install
   fi
   echo "  vue-tsc 类型检查…"
-  if command -v pnpm >/dev/null 2>&1; then pnpm exec vue-tsc --noEmit; else npx vue-tsc --noEmit; fi
+  npm exec vue-tsc -- --noEmit
   pass "web 类型检通过"
   cd "$ROOT"
 fi
@@ -57,6 +57,11 @@ else
   if ! command -v python3 >/dev/null 2>&1; then
     if command -v python >/dev/null 2>&1; then PYTHON=python; else fail "需 python3"; fi
   fi
+
+  $PYTHON - <<'PY' || fail "RAG 需要 Python >=3.11,<3.13"
+import sys
+raise SystemExit(0 if (3, 11) <= sys.version_info[:2] < (3, 13) else 1)
+PY
 
   # 2a: 静态编译检查
   echo "  compileall 语法检查…"

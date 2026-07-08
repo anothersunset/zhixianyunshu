@@ -6,7 +6,7 @@
 
 ```bash
 cd zhiqian/web
-pnpm add @xenova/transformers
+npm install @huggingface/transformers
 ```
 
 package.json 已在 README 里列出, 该依赖可选: 不装时 useLocalLlm 返 error 但不崩。

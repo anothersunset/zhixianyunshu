@@ -1,10 +1,11 @@
-# 轻依赖(默认 docker compose 使用)。构建时间 ~30s, 镜像 ≤ 200MB。
+# Lightweight RAG runtime dependencies used by Docker Compose and local smoke tests.
 fastapi==0.111.0
+starlette==0.37.2
 uvicorn[standard]==0.30.1
-pydantic==2.7.1
-pydantic-settings==2.2.1
+pydantic==2.9.2
+pydantic-settings==2.6.1
 jinja2==3.1.4
-httpx==0.27.0
+httpx==0.27.2
 numpy==1.26.4
 scikit-learn==1.4.2
 rank-bm25==0.2.2
@@ -12,33 +13,11 @@ jieba==0.42.1
 chromadb==0.5.4
 orjson==3.10.3
 python-multipart==0.0.9
-pytest==8.2.0
-pytest-asyncio==0.23.6
-
-# v2-step-07: Langfuse 全链观测 (轻量 ~3MB, 无 ML 依赖, 可选)
-# 不配 LANGFUSE_PUBLIC_KEY/SECRET_KEY 时自动 disabled, 行为不变
 langfuse==2.50.0
-
-# v2-step-09: sqlglot SQL AST 方言转译 (~2MB 纯 Python 零依赖)
-# 替代 Jinja2 字符串拼接, 走 MySQL → openGauss/PostgreSQL AST 重写
 sqlglot==25.16.1
-
-# v2-step-12: CRAG web_search 补充检索 (零 key, ~200KB 纯 Python)
-# 不装也能跑: CRAG 降级为仅本地 doc, web_search 节点返 []
 duckduckgo-search==6.2.10
-
-# 稳定性：进程内存监控
 psutil>=5.9.0
-
-# v2-step-15: JSON Schema 验证 (轻量 ~80KB 纯 Python)
-# StructuredOutputClient 下游可用 jsonschema 验证 LLM JSON 输出
 jsonschema==4.23.0
-# 可选: outlines 在采样层强制 JSON Schema 合法 (LogitsProcessor)
-# 需 transformers 重依赖 (~500MB 上), 默认不装。启用方式:
-#   pip install outlines==0.0.46 transformers==4.44.2 torch  # 额外装
-#   export RAG_OUTLINES_ENABLED=true RAG_OUTLINES_MODEL=microsoft/Phi-3.5-mini-instruct
-# 不装时自动降级到 DeepSeek JSON mode
 
-# v2-step-04: 要启用 "真 BGE-M3 + bge-reranker-v2-m3" 才装 ML 重依赖。
-# 安装方式:  pip install -r requirements-ml.txt  或  docker build --build-arg BUILD_ML=1
-# 不装也能跑, 退化到 1024 维 hash 向量 + BM25 顺序。
+# Optional heavy ML stack lives in requirements-ml.txt.
+# Optional structured-output local model stack is intentionally not installed by default.
