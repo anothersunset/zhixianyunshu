@@ -329,10 +329,11 @@ public class MigrationEvalController {
                         + llmCritique;
                     needsCorrection = syntaxFailed || ruleFailed || llmNeedsFix;
                 } catch (Exception e) {
-                    log.warn("[AgentGraph] Critic 执行失败，跳过评审: {}", e.getMessage());
+                    log.warn("[AgentGraph] Critic 执行失败，跳过 LLM 评审: {}", e.getMessage());
+                    // 不谎报 CORRECT——syntax/rule 两层仍在 needsCorrection 里生效，LLM 层未能评审如实标 UNKNOWN
                     critique = (syntaxFailed ? "SYNTAX_ERROR: " + syntaxError + "\n" : "")
                         + (ruleFailed ? "LAYER1_FAIL: residual source-dialect features detected in target SQL.\n" : "")
-                        + "STATUS: CORRECT\nDETAIL: Critic 执行异常，跳过评审。";
+                        + "STATUS: UNKNOWN\nDETAIL: Critic LLM 执行异常，仅规则/语法层评审生效。";
                 }
                 log.info("[AgentGraph] Critic: needsCorrection={}, critique={}",
                         needsCorrection, critique.length() > 100 ? critique.substring(0, 100) + "..." : critique);

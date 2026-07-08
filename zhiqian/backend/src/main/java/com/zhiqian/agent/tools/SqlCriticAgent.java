@@ -65,13 +65,17 @@ public class SqlCriticAgent implements AgentTool {
                 }
                 out.put("critique", reply);
                 out.put("needs_correction", needsCorrection);
+                out.put("critic_status", "ok");
                 out.put("_confidence", 0.92);
                 out.put("_real", true);
                 out.put("_model", llm.providerName() + ":reasoner");
             } catch (Exception e) {
-                // LLM 调用失败时，乐观假设 CORRECT（避免因 API 故障触发无意义修正）
-                out.put("critique", "STATUS: CORRECT\nDETAIL: Critic LLM 调用失败，跳过评审。");
+                // LLM 调用失败时，不谎报 CORRECT——那会让报告把"评审没跑成"显示成"评审通过"。
+                // 如实标记 UNKNOWN + critic_status=error；不触发自纠正（没有真实评审意见的重生成
+                // 只是白烧一次 LLM 调用，且可能越改越糟），把"评审未完成"这个事实透传给下游决策。
+                out.put("critique", "STATUS: UNKNOWN\nDETAIL: Critic LLM 调用失败，本次未能完成评审（不触发自纠正）。");
                 out.put("needs_correction", false);
+                out.put("critic_status", "error");
                 out.put("_confidence", 0.5);
                 out.put("_real", true);
                 out.put("_model", llm.providerName() + ":error");
@@ -79,6 +83,7 @@ public class SqlCriticAgent implements AgentTool {
         } else {
             out.put("critique", "STATUS: CORRECT\nDETAIL: 补丁语法正确，AUTO_INCREMENT 转 SEQUENCE 正确。");
             out.put("needs_correction", false);
+            out.put("critic_status", "mock");
             out.put("_confidence", 0.91);
             out.put("_real", false);
             out.put("_model", "mock");
