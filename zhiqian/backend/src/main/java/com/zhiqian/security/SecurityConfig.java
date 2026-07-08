@@ -15,10 +15,12 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
 import java.util.List;
 
 @Configuration
@@ -28,6 +30,21 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtFilter;
     private final UserDetailsService userDetailsService;
+
+    /**
+     * CORS 允许来源白名单。默认 localhost 开发端口；生产用 APP_CORS_ORIGINS 环境变量
+     * （逗号分隔）显式配置。此前是通配 "*" + allowCredentials=true，会反射任意 Origin
+     * 并放行携带凭证的跨域请求，属 CSRF/凭证泄漏面。
+     */
+    @Value("${app.cors.allowed-origins:http://localhost:5173,http://localhost:3000,http://localhost:8080}")
+    private String allowedOrigins;
+
+    /**
+     * 是否放行 eval / 集成用的免鉴权端点（/migrate、/judge、/chat）。默认 true 保证评测
+     * 框架无 token 可跑；生产部署应设 app.security.eval-endpoints-open=false 收紧。
+     */
+    @Value("${app.security.eval-endpoints-open:true}")
+    private boolean evalEndpointsOpen;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -50,7 +67,9 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsSource() {
         CorsConfiguration c = new CorsConfiguration();
-        c.setAllowedOriginPatterns(List.of("*"));
+        List<String> origins = Arrays.stream(allowedOrigins.split(","))
+            .map(String::trim).filter(s -> !s.isBlank()).toList();
+        c.setAllowedOrigins(origins);
         c.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         c.setAllowedHeaders(List.of("*"));
         c.setAllowCredentials(true);
@@ -65,17 +84,20 @@ public class SecurityConfig {
             .csrf(c -> c.disable())
             .cors(c -> c.configurationSource(corsSource()))
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(a -> a
-                .requestMatchers("/api/auth/**").permitAll()
+            .authorizeHttpRequests(a -> {
+                a.requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/actuator/**").permitAll()
-                .requestMatchers(HttpMethod.POST, "/migrate", "/api/migrate", "/judge", "/api/judge", "/chat", "/api/chat").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/tasks/*/stream").permitAll()
                 .requestMatchers("/.well-known/**").permitAll()  // A2A Agent Card
                 .requestMatchers("/a2a/**").permitAll()  // A2A Task endpoints
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()  // Swagger UI
-                .requestMatchers("/error").permitAll()
-                .anyRequest().authenticated()
-            )
+                .requestMatchers("/error").permitAll();
+                // eval/集成端点：默认放行（评测框架无 token），生产设 app.security.eval-endpoints-open=false 收紧
+                if (evalEndpointsOpen) {
+                    a.requestMatchers(HttpMethod.POST, "/migrate", "/api/migrate", "/judge", "/api/judge", "/chat", "/api/chat").permitAll();
+                }
+                a.anyRequest().authenticated();
+            })
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
