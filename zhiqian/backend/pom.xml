@@ -25,7 +25,7 @@
         <jgrapht.version>1.5.2</jgrapht.version>
         <maven-model.version>3.9.6</maven-model.version>
         <!-- v2-step-14: Temporal durable workflow -->
-        <temporal.version>1.27.0</temporal.version>
+        <temporal.version>1.36.1</temporal.version>
         <!-- v2-step-17: Testcontainers + JaCoCo -->
         <testcontainers.version>1.20.1</testcontainers.version>
         <jacoco.version>0.8.12</jacoco.version>
