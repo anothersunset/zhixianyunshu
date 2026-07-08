@@ -17,17 +17,21 @@
     <el-container>
       <el-header class="hdr">
         <div v-text="title" />
-        <el-dropdown>
-          <el-button text>
-            <span v-text="roleLabel" />
-            <el-icon><CaretBottom /></el-icon>
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item @click="logout">退出登录</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+        <div class="hdr-actions">
+          <LocaleSwitcher />
+          <ThemeSwitcher />
+          <el-dropdown>
+            <el-button text>
+              <span v-text="roleLabel" />
+              <el-icon><CaretBottom /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item @click="logout">退出登录</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
       </el-header>
       <el-main><router-view /></el-main>
     </el-container>
@@ -39,6 +43,8 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   Odometer, FolderOpened, Operation, Reading, Document, Setting, CaretBottom, Edit, Connection,
 } from '@element-plus/icons-vue'
+import ThemeSwitcher from '@/components/ThemeSwitcher.vue'
+import LocaleSwitcher from '@/components/LocaleSwitcher.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -53,4 +59,5 @@ function logout() { localStorage.removeItem('zq_token'); router.push('/login') }
 .side{background:#0f172a;color:#cbd5e1}
 .logo{height:56px;display:flex;align-items:center;justify-content:center;color:#38bdf8;font-weight:700;font-size:18px;letter-spacing:2px}
 .hdr{display:flex;justify-content:space-between;align-items:center;background:#fff;border-bottom:1px solid #ebeef5;padding:0 16px;font-weight:600;color:#303133}
+.hdr-actions{display:flex;align-items:center;gap:12px}
 </style>
