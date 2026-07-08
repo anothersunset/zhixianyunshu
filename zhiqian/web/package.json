@@ -15,7 +15,7 @@
     "cytoscape-fcose": "^2.2.0",
     "echarts": "^6.1.0",
     "element-plus": "^2.7.5",
-    "monaco-editor": "^0.50.0",
+    "monaco-editor": "^0.55.1",
     "pinia": "^2.1.7",
     "vue": "^3.4.27",
     "vue-echarts": "^8.0.1",
