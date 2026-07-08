@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 from contextlib import ExitStack
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -259,6 +260,9 @@ class HybridRetriever:
         qdrant: Optional[QdrantStore] = None,
         collection: str = _DEMO_COLLECTION,
     ):
+        # 保护 docs/_by_id/_tokens/_bm25 的一致性：add() 写、search() 读，FastAPI 同步端点
+        # 走线程池会并发，无锁时 zip(self.docs, bm25_scores) 会在 add 改写中途长度错位。
+        self._lock = threading.RLock()
         self.docs = docs if docs is not None else _load_kb_docs()
         self.collection = collection
         self._tokens = [_tokenize(d["text"]) for d in self.docs]
@@ -302,15 +306,17 @@ class HybridRetriever:
             return 0
         new_count = 0
         new_docs: List[Dict[str, Any]] = []
-        for d in docs:
-            if d.get("id") in self._by_id:
-                continue
-            self.docs.append(d)
-            self._by_id[d["id"]] = d
-            new_docs.append(d)
-            new_count += 1
-        self._tokens = [_tokenize(x["text"]) for x in self.docs]
-        self._bm25 = BM25Okapi(self._tokens) if self._tokens else None
+        with self._lock:
+            for d in docs:
+                if d.get("id") in self._by_id:
+                    continue
+                self.docs.append(d)
+                self._by_id[d["id"]] = d
+                new_docs.append(d)
+                new_count += 1
+            self._tokens = [_tokenize(x["text"]) for x in self.docs]
+            self._bm25 = BM25Okapi(self._tokens) if self._tokens else None
+        # Qdrant 写入是 IO，放锁外，避免长时间持锁阻塞检索
         self._index_qdrant(new_docs)
         return new_count
 
@@ -357,9 +363,13 @@ class HybridRetriever:
             bm25_ranked: List[Tuple[str, float]] = []
             if use_bm25:
                 with tr.span("bm25.search", input={"coarse_k": coarse_k}) as sp:
-                    bm25_scores = self._bm25.get_scores(_tokenize(question))
+                    # 持锁取一致快照：bm25 与 docs 必须同版本，否则 add() 改写中途 zip 会错位
+                    with self._lock:
+                        bm25 = self._bm25
+                        doc_ids = [d["id"] for d in self.docs]
+                    bm25_scores = bm25.get_scores(_tokenize(question))
                     bm25_ranked = sorted(
-                        zip([d["id"] for d in self.docs], bm25_scores),
+                        zip(doc_ids, bm25_scores),
                         key=lambda x: x[1], reverse=True,
                     )[:coarse_k]
                     sp.output({"hits": len(bm25_ranked), "top_id": bm25_ranked[0][0] if bm25_ranked else None})
