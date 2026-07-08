@@ -28,5 +28,13 @@ RUN if [ "$BUILD_ML" = "1" ]; then \
 COPY . .
 RUN pip install -e .
 
+# 非 root 运行 + 健康检查。appuser 需可写 HF_HOME(/data/.hf_cache) 与工作目录。
+RUN useradd -m -u 10001 appuser \
+    && mkdir -p /data/.hf_cache \
+    && chown -R appuser:appuser /app /data
+USER appuser
+
 EXPOSE 8001
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+    CMD curl -fsS http://localhost:8001/health || exit 1
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
