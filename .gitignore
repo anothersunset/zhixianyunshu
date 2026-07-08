@@ -49,3 +49,10 @@ zhiqian/backend/logs/
 
 # Qdrant init marker
 zhiqian/rag/.qdrant-initialized
+
+# Runtime artifacts
+*.pid
+*.tsbuildinfo
+
+# Claude Code local settings (per-machine)
+.claude/settings.local.json
