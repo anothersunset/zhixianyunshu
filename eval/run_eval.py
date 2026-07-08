@@ -67,6 +67,7 @@ def _eval_one(c, retrieval, client, judge, fast, skip_throttle=False, mode=None)
         parse_failed = not res.target_sql and res.risk_level == "high"
         if parse_failed:
             ok = False
+            verdict_source = "parse_failed"
             report_acc = 0.0
             recall = recall_at_k(res.retrieved_ids, c.get("gold_context_ids", []), k=5)
             if recall is not None and math.isnan(recall):
@@ -80,8 +81,17 @@ def _eval_one(c, retrieval, client, judge, fast, skip_throttle=False, mode=None)
             error = "LLM returned non-JSON output"
         else:
             ok = sql_equivalent(res.target_sql, c["gold_target_sql"], target)
+            # verdict_source 标记这个 sql_ok 判定是靠什么定的：
+            # "deterministic" = sqlglot AST 比对直接判定；"judge" = AST 判否但 LLM judge
+            # 判定语义等价而翻转为 True（judge 意见真正改变结论的边界样本）；"fail" = 两者
+            # 都判否（或没配 judge）。人工校准要优先抽 "judge" 样本，而不是均匀随机抽样——
+            # 那样才是 judge 真正可能出错、值得花人工去验证的地方。
+            verdict_source = "deterministic" if ok else "fail"
             if not ok and judge is not None:
-                ok = judge.sql_semantically_equal(res.target_sql, c["gold_target_sql"], target)
+                judge_ok = judge.sql_semantically_equal(res.target_sql, c["gold_target_sql"], target)
+                if judge_ok:
+                    ok = True
+                    verdict_source = "judge"
             # 报告准确率：如果 agent 正确判断无需转换（SQL 未变 + ok=true），报告得满分
             # 避免 token Jaccard 将 "No conversion needed" 误判为 0
             _pred_no_conv = any(
@@ -106,6 +116,7 @@ def _eval_one(c, retrieval, client, judge, fast, skip_throttle=False, mode=None)
             error = None
     except Exception as exc:
         ok = False
+        verdict_source = "error"
         report_acc = 0.0 if c.get("gold_report_points") else 1.0
         recall = None
         mrr = None
@@ -119,6 +130,7 @@ def _eval_one(c, retrieval, client, judge, fast, skip_throttle=False, mode=None)
         "pair": c["pair"],
         "difficulty": c.get("difficulty"),
         "sql_ok": bool(ok),
+        "verdict_source": verdict_source,
         "report_acc": report_acc,
         "recall@5": recall,
         "mrr@10": mrr,
@@ -197,6 +209,8 @@ def summarize(rows):
     # 实验有效性统计：系统错误（超时等）与 mock 检索污染必须显式可见
     system_errors = sum(1 for r in rows if r.get("risk_level") == "error")
     mock_retrieval = sum(1 for r in rows if r.get("retrieval_real") is False)
+    # judge 真正翻转结论的样本数——这批是人工校准最该覆盖的边界样本（见 verdict_source）
+    judge_decided = sum(1 for r in rows if r.get("verdict_source") == "judge")
     valid_rows = [r for r in rows if r.get("risk_level") != "error"]
     sql_rate_excl_errors = (
         sum(1 for r in valid_rows if r["sql_ok"]) / len(valid_rows) if valid_rows else None
@@ -221,6 +235,7 @@ def summarize(rows):
         "system_errors": system_errors,
         "sql_repair_rate_excl_system_errors": round(sql_rate_excl_errors, 4) if sql_rate_excl_errors is not None else None,
         "mock_retrieval_cases": mock_retrieval,
+        "judge_decided_cases": judge_decided,
         "gold_quality": {
             "ok": gold_ok,
             "oracle_residue": gold_oracle,

@@ -1,4 +1,4 @@
-﻿"""LLM judge（真实模型）+ 人工抽检校准。
+"""LLM judge（真实模型）+ 人工抽检校准。
 
 支持两种模式：
 1. 直连 DeepSeek API（默认）
@@ -133,6 +133,28 @@ def cohen_kappa(judge_labels: list[int], human_labels: list[int]) -> float:
 
 
 def sample_for_human_review(rows: list[dict], ratio: float = 0.2, seed: int = 42) -> list[dict]:
+    """分层抽样：judge 裁决过的 case 优先全部纳入，而不是均匀随机抽样。
+
+    为什么：均匀随机抽样下，judge 大概率在"简单、明显对/错"的 case 上和人类一致，
+    真正容易分歧的是"AST 比对判否、judge 判语义等价"这批边界样本（见 run_eval.py 的
+    verdict_source 字段）。随机抽样会把这批边界样本稀释进大多数一致样本里——kappa
+    照样能算得很好看，却根本没验证到 judge 真正可能出错的地方。
+
+    策略：verdict_source == "judge" 的样本全部纳入（数量超过配额时按 ratio 再抽一批做
+    上限控制）；配额剩余部分从其余样本随机抽，保留对"大多数情况"的基线覆盖。旧结果
+    文件没有 verdict_source 字段时，judge_decided 为空，退化为纯随机抽样，向后兼容。
+    """
     rng = random.Random(seed)
     k = max(1, int(len(rows) * ratio))
-    return rng.sample(rows, k)
+
+    judge_decided = [r for r in rows if r.get("verdict_source") == "judge"]
+    rest = [r for r in rows if r.get("verdict_source") != "judge"]
+
+    if len(judge_decided) > k:
+        # 边界样本本身已经超过配额：全按边界样本抽，跑不了基线对照也没关系——
+        # 这种情况下人工审核的重点就该是这批样本
+        return rng.sample(judge_decided, k)
+
+    remaining = k - len(judge_decided)
+    baseline = rng.sample(rest, min(remaining, len(rest))) if rest else []
+    return judge_decided + baseline

@@ -12,6 +12,7 @@ from pathlib import Path
 import requests
 
 from eval.judge import LLMJudge
+from eval.metrics import discrimination_stats
 from eval.migration_client import MigrationClient
 from eval.run_eval import RETRIEVAL_CHOICES, _eval_one, evaluate, load_dataset, summarize
 
@@ -191,10 +192,12 @@ def _print_interim(checkpoint: dict, done: int, total: int, t_start: float):
     print(f"| {'组别':20s} | Recall@5 | MRR@10 | SQL修复率 | 报告准确率 | n | mock检索 |")
     print(f"|{'-'*22}|{'-'*10}|{'-'*8}|{'-'*10}|{'-'*10}|{'-'*4}|{'-'*10}|")
     dirty_total = 0
+    rows_by_mode: dict[str, list] = {}
     for mode in RETRIEVAL_CHOICES:
         rows = [checkpoint[cid].get(mode, {}) for cid in checkpoint if mode in checkpoint.get(cid, {})]
         if not rows:
             continue
+        rows_by_mode[mode] = rows
         s = summarize(rows)
         dirty = s.get("mock_retrieval_cases", 0)
         dirty_total += dirty
@@ -203,6 +206,20 @@ def _print_interim(checkpoint: dict, done: int, total: int, t_start: float):
               f"{str(s.get('n', 'N/A')):>2s} | {str(dirty):>8s} |")
     if dirty_total:
         print(f"  [WARN] {dirty_total} 个 case 检索降级到后端 mock，本轮梯度不可采信——先修 RAG（见 preflight 能力探针）。")
+
+    # 判别力检查：相邻两组的 recall@5/mrr@10 有多少 case 完全相同。占比过高说明均值差异
+    # 大概率是少数 case 在拉动，这批指标在多数 case 上根本没测出该组件的区别（指标饱和）。
+    present_modes = [m for m in RETRIEVAL_CHOICES if m in rows_by_mode]
+    if len(present_modes) >= 2:
+        print(f"\n  判别力检查（相邻组 recall@5 / mrr@10 有多少 case 完全相同）：")
+        for a, b in zip(present_modes, present_modes[1:]):
+            rec = discrimination_stats(rows_by_mode[a], rows_by_mode[b], "recall@5")
+            mrr = discrimination_stats(rows_by_mode[a], rows_by_mode[b], "mrr@10")
+            rec_pct = f"{rec['identical_pct']*100:.0f}%" if rec["identical_pct"] is not None else "N/A"
+            mrr_pct = f"{mrr['identical_pct']*100:.0f}%" if mrr["identical_pct"] is not None else "N/A"
+            flag = "  <- 该对指标可能饱和" if (rec["identical_pct"] or 0) > 0.85 and (mrr["identical_pct"] or 0) > 0.85 else ""
+            print(f"    {GROUP_LABEL[a]} vs {GROUP_LABEL[b]}: recall 相同 {rec_pct} ({rec['n']} case), "
+                  f"mrr 相同 {mrr_pct}{flag}")
     print(f"{'─' * 72}\n", flush=True)
 
 

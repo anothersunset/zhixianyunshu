@@ -298,3 +298,25 @@ def mrr_at_k(retrieved_ids: list[str], gold_ids: list[str], k: int = 10) -> floa
         if rid in gold:
             return 1.0 / i
     return 0.0
+
+
+def discrimination_stats(rows_a: list[dict], rows_b: list[dict], metric_key: str) -> dict:
+    """两组结果按 id 匹配后，比较 metric_key 的判别力：有多少 case 的值完全相同。
+
+    为什么需要这个：消融对比只看均值差异会被"多数 case 无差异、少数 case 拉开"的
+    情况骗过——均值上的一点点差异，可能全部来自个位数的 case，其余 case 该指标
+    根本测不出这两组的区别。identical_pct 越接近 1，说明这个指标在这批数据上对
+    这两组已经饱和/退化，均值差异更可能是噪声而非真实信号，需要换指标或换数据。
+    """
+    by_id_a = {r["id"]: r.get(metric_key) for r in rows_a if "id" in r}
+    by_id_b = {r["id"]: r.get(metric_key) for r in rows_b if "id" in r}
+    common_ids = set(by_id_a) & set(by_id_b)
+    if not common_ids:
+        return {"n": 0, "identical": 0, "identical_pct": None}
+    identical = sum(1 for cid in common_ids if by_id_a[cid] == by_id_b[cid])
+    return {
+        "n": len(common_ids),
+        "identical": identical,
+        "identical_pct": round(identical / len(common_ids), 4),
+    }
+    return 0.0
