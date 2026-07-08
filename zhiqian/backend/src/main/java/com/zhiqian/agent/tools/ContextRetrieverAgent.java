@@ -83,8 +83,10 @@ public class ContextRetrieverAgent implements AgentTool {
                                 String text = (String) d.get("text");
                                 String title = text != null && text.length() > 80
                                     ? text.substring(0, 80) : (text != null ? text : "");
-                                String terms = (String) d.getOrDefault("terms", "");
-                                docs.add(new KbDoc(id, title, terms));
+                                String terms = normalizeTerms(d.get("terms"));
+                                String sourceDialect = normalizeDialect(d.get("source_dialect"));
+                                String targetDialect = normalizeDialect(d.get("target_dialect"));
+                                docs.add(new KbDoc(id, title, terms.toLowerCase(Locale.ROOT), sourceDialect, targetDialect));
                             }
                         }
                     }
@@ -164,10 +166,11 @@ public class ContextRetrieverAgent implements AgentTool {
         // 尝试 RAG 服务真实检索
         log.info("[ContextRetriever] ragUrl={}, retrieval={}, query={}", ragUrl, retrieval, query.length() > 60 ? query.substring(0, 60) + "..." : query);
         List<Map<String, Object>> docs = tryRagRetrieve(query, retrieval);
+        boolean realRetrieval = docs != null && !docs.isEmpty();
         log.info("[ContextRetriever] RAG returned: {}", docs == null ? "null (fallback to mock)" : docs.size() + " docs");
 
         String model;
-        if (docs != null && !docs.isEmpty()) {
+        if (realRetrieval) {
             model = "rag-" + retrieval;
         } else {
             // RAG 不可用,降级到本地 mock
@@ -191,8 +194,31 @@ public class ContextRetrieverAgent implements AgentTool {
         out.put("retrieved", docs);
         out.put("_confidence", 0.82);
         out.put("_model", model);
-        out.put("_real", docs != null && !docs.isEmpty());
+        out.put("_real", realRetrieval);
         return out;
+    }
+
+    private static String normalizeTerms(Object value) {
+        if (value == null) return "";
+        if (value instanceof String s) return s;
+        if (value instanceof Iterable<?> items) {
+            List<String> parts = new ArrayList<>();
+            for (Object item : items) {
+                if (item != null) parts.add(String.valueOf(item));
+            }
+            return String.join(" ", parts);
+        }
+        return String.valueOf(value);
+    }
+
+    private static String normalizeDialect(Object value) {
+        if (value == null) return "";
+        String dialect = String.valueOf(value).trim().toLowerCase(Locale.ROOT);
+        return switch (dialect) {
+            case "postgres", "postgresql" -> "postgresql";
+            case "open_gauss", "open-gauss", "opengauss" -> "opengauss";
+            default -> dialect;
+        };
     }
 
     /**
@@ -272,16 +298,83 @@ public class ContextRetrieverAgent implements AgentTool {
 
     private static Map<String, Object> scored(KbDoc doc, String query, Set<String> tokens, String retrieval) {
         double score = 0.0;
+        double dialectBoost = dialectBoost(doc, query);
+        if (dialectBoost < 0.0) {
+            return scoredRow(doc, 0.0);
+        }
         for (String term : doc.terms().split(" ")) {
             if (!term.isBlank() && matches(term, query, tokens)) {
-                score += retrievalWeight(retrieval, term);
+                double weight = retrievalWeight(retrieval, term);
+                if (isBroadSqlTerm(term)) {
+                    weight *= 0.25;
+                }
+                score += weight;
+                if (isDistinctiveTerm(term) && normalizedKey(doc.id()).contains(normalizedKey(term))) {
+                    score += 1.5;
+                }
             }
         }
+        if (score > 0.0) {
+            score += dialectBoost;
+        }
+        return scoredRow(doc, Math.min(0.99, score));
+    }
+
+    private static Map<String, Object> scoredRow(KbDoc doc, double score) {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("id", doc.id());
-        row.put("score", Math.min(0.99, score));
+        row.put("score", score);
         row.put("title", doc.title());
         return row;
+    }
+
+    private static double dialectBoost(KbDoc doc, String query) {
+        DialectPair pair = parseDialectPair(query);
+        if (pair == null) {
+            return 0.0;
+        }
+        double boost = 0.0;
+        if (!doc.sourceDialect().isBlank()) {
+            if (!doc.sourceDialect().equals(pair.source())) {
+                return -1.0;
+            }
+            boost += 0.25;
+        }
+        if (!doc.targetDialect().isBlank()) {
+            if (!compatibleTarget(pair.target(), doc.targetDialect())) {
+                return -1.0;
+            }
+            boost += doc.targetDialect().equals(pair.target()) ? 0.25 : 0.1;
+        }
+        return boost;
+    }
+
+    private static DialectPair parseDialectPair(String query) {
+        int arrow = query.indexOf("->");
+        if (arrow < 0) {
+            return null;
+        }
+        String before = query.substring(0, arrow).trim();
+        String after = query.substring(arrow + 2).trim();
+        String[] sourceParts = before.split("[^a-z0-9_]+");
+        String[] targetParts = after.split("[^a-z0-9_]+");
+        if (sourceParts.length == 0 || targetParts.length == 0) {
+            return null;
+        }
+        String source = normalizeDialect(sourceParts[sourceParts.length - 1]);
+        String target = normalizeDialect(targetParts[0]);
+        if (source.isBlank() || target.isBlank()) {
+            return null;
+        }
+        return new DialectPair(source, target);
+    }
+
+    private static boolean compatibleTarget(String expected, String actual) {
+        if (expected.equals(actual)) {
+            return true;
+        }
+        return (expected.equals("opengauss") && actual.equals("postgresql"))
+            || (expected.equals("postgresql") && actual.equals("opengauss"));
     }
 
     private static Set<String> tokenize(String query) {
@@ -314,6 +407,30 @@ public class ContextRetrieverAgent implements AgentTool {
         };
     }
 
+    private static boolean isDistinctiveTerm(String term) {
+        String normalized = normalizedKey(term);
+        if (normalized.length() < 6) {
+            return false;
+        }
+        return !Set.of(
+            "select", "where", "table", "create", "update", "delete", "insert",
+            "values", "primary", "foreign", "constraint", "integer", "bigint",
+            "varchar", "timestamp", "postgresql", "opengauss", "mysql", "oracle"
+        ).contains(normalized);
+    }
+
+    private static boolean isBroadSqlTerm(String term) {
+        return Set.of(
+            "sql", "select", "from", "where", "table", "create", "update", "delete",
+            "insert", "values", "primary", "key", "int", "integer", "bigint",
+            "varchar", "timestamp"
+        ).contains(normalizedKey(term));
+    }
+
+    private static String normalizedKey(String value) {
+        return value == null ? "" : value.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+    }
+
     private static List<Map<String, Object>> fallbackDocs(String retrieval) {
         List<Map<String, Object>> docs = new ArrayList<>();
         Set<String> fallbackTokens = tokenize("auto_increment serial ifnull coalesce on duplicate key update");
@@ -324,8 +441,10 @@ public class ContextRetrieverAgent implements AgentTool {
     }
 
     private static KbDoc doc(String id, String title, String terms) {
-        return new KbDoc(id, title, terms);
+        return new KbDoc(id, title, terms, "", "");
     }
 
-    private record KbDoc(String id, String title, String terms) {}
+    private record KbDoc(String id, String title, String terms, String sourceDialect, String targetDialect) {}
+
+    private record DialectPair(String source, String target) {}
 }

@@ -1,4 +1,4 @@
-﻿"""指标：SQL 修复成功率、迁移报告准确率、Recall@k。"""
+"""指标：SQL 修复成功率、迁移报告准确率、Recall@k。"""
 from __future__ import annotations
 
 import re
@@ -283,3 +283,18 @@ def recall_at_k(retrieved_ids: list[str], gold_ids: list[str], k: int = 5) -> fl
         return float("nan")
     topk = set(retrieved_ids[:k])
     return len(topk & set(gold_ids)) / len(set(gold_ids))
+
+
+def mrr_at_k(retrieved_ids: list[str], gold_ids: list[str], k: int = 10) -> float:
+    """排序敏感指标：首个命中金标文档的倒数排名（Mean Reciprocal Rank）。
+
+    集合型 Recall 在文档池小的场景会饱和（各模式 top-k 集合相同 → 无差异），
+    而 rerank/CRAG 改变的正是排序——没有排序敏感指标，消融测不出它们的贡献。
+    """
+    if not gold_ids:
+        return float("nan")
+    gold = set(gold_ids)
+    for i, rid in enumerate(retrieved_ids[:k], start=1):
+        if rid in gold:
+            return 1.0 / i
+    return 0.0

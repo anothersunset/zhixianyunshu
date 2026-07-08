@@ -182,27 +182,28 @@ def _save_per_case_checkpoint(ckpt_file, checkpoint):
 def _print_interim(checkpoint: dict, done: int, total: int, t_start: float):
     """每 N 个 case 输出中间汇总表。"""
     elapsed = time.time() - t_start
-    print(f"\n{'─' * 60}")
+    def _fmt(v):
+        return f"{v:.4f}" if isinstance(v, (int, float)) else "N/A"
+
+    print(f"\n{'─' * 72}")
     print(f"[interim] {done}/{total} cases ({elapsed/60:.1f}m elapsed)")
-    print(f"| {'组别':20s} | Recall@5 | SQL修复率 | 报告准确率 | n |")
-    print(f"|{'-'*22}|{'-'*10}|{'-'*10}|{'-'*10}|{'-'*4}|")
+    # MRR@10 是排序敏感指标：rerank/CRAG 只改排序不改命中集合，Recall 会饱和看不出梯度，MRR 才能。
+    print(f"| {'组别':20s} | Recall@5 | MRR@10 | SQL修复率 | 报告准确率 | n | mock检索 |")
+    print(f"|{'-'*22}|{'-'*10}|{'-'*8}|{'-'*10}|{'-'*10}|{'-'*4}|{'-'*10}|")
+    dirty_total = 0
     for mode in RETRIEVAL_CHOICES:
         rows = [checkpoint[cid].get(mode, {}) for cid in checkpoint if mode in checkpoint.get(cid, {})]
         if not rows:
             continue
         s = summarize(rows)
-        rec = s.get("recall@5")
-        if rec is not None:
-            rec_str = f"{rec:.4f}"
-        else:
-            rec_str = "N/A"
-        sql = s.get('sql_repair_rate', 'N/A')
-        sql_str = f"{sql:.4f}" if isinstance(sql, (int, float)) else str(sql)
-        acc = s.get('report_accuracy', 'N/A')
-        acc_str = f"{acc:.4f}" if isinstance(acc, (int, float)) else str(acc)
-        n_str = str(s.get('n', 'N/A'))
-        print(f"| {GROUP_LABEL[mode]:20s} | {rec_str:>8s} | {sql_str:>8s} | {acc_str:>8s} | {n_str:>2s} |")
-    print(f"{'─' * 60}\n", flush=True)
+        dirty = s.get("mock_retrieval_cases", 0)
+        dirty_total += dirty
+        print(f"| {GROUP_LABEL[mode]:20s} | {_fmt(s.get('recall@5')):>8s} | {_fmt(s.get('mrr@10')):>6s} | "
+              f"{_fmt(s.get('sql_repair_rate')):>8s} | {_fmt(s.get('report_accuracy')):>8s} | "
+              f"{str(s.get('n', 'N/A')):>2s} | {str(dirty):>8s} |")
+    if dirty_total:
+        print(f"  [WARN] {dirty_total} 个 case 检索降级到后端 mock，本轮梯度不可采信——先修 RAG（见 preflight 能力探针）。")
+    print(f"{'─' * 72}\n", flush=True)
 
 
 def run_all_per_case(dataset="eval/datasets", pair="all", use_judge=True, fast=False, cooldown=None,

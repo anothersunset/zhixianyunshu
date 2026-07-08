@@ -201,7 +201,9 @@ public class MigrationEvalController {
             fastCtx.state().put("source_sql", sourceSql);
             fastCtx.state().put("pair", pair);
             fastCtx.state().put("retrieval", retrieval);
-            Object retrievedRaw = new ContextRetrieverAgent(llm).run(fastCtx, Map.of()).get("retrieved");
+            Map<String, Object> retrieverOut = new ContextRetrieverAgent(llm).run(fastCtx, Map.of());
+            Object retrievedRaw = retrieverOut.get("retrieved");
+            boolean retrievalReal = Boolean.TRUE.equals(retrieverOut.get("_real"));
             List<String> fastRetrievedIds = extractRetrievedIds(retrievedRaw);
             String retrievedKnowledge = extractRetrievedText(retrievedRaw);
             // Fast path 也扫描特征+注入配方（与 agent path 一致）
@@ -220,6 +222,7 @@ public class MigrationEvalController {
                 Map.of(
                     "real", llm.isReal(),
                     "retrieval", retrieval,
+                    "retrieval_real", retrievalReal,
                     "pair", pair,
                     "fast", true,
                     "llm_output", generated
@@ -260,6 +263,7 @@ public class MigrationEvalController {
                 Map.of(
                     "real", false,
                     "retrieval", retrieval,
+                    "retrieval_real", Boolean.TRUE.equals(ctx.state().get("_real")),
                     "pair", pair,
                     "stages", stages,
                     "warning", "Configure a real app.llm.api-key before using this endpoint for metrics."
@@ -383,6 +387,8 @@ public class MigrationEvalController {
         Map<String, Object> meta = new LinkedHashMap<>();
         meta.put("real", true);
         meta.put("retrieval", retrieval);
+        // 检索是否走了真实 RAG（false = 降级到本地 mock 检索，消融结果不可采信）
+        meta.put("retrieval_real", Boolean.TRUE.equals(ctx.state().get("_real")));
         meta.put("pair", pair);
         meta.put("agent", agentMode);
         meta.put("feature_count", scannedFeatures.size());

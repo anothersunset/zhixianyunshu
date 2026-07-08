@@ -24,6 +24,7 @@ class MigrationResult:
     risk_level: str | None = None
     confidence: float | None = None  # 仅记录，绝不作为指标
     retrieved_ids: list[str] = field(default_factory=list)  # 用于 Recall@k
+    retrieval_real: bool | None = None  # 检索是否走真实 RAG；None = 旧后端未上报
     raw: dict[str, Any] = field(default_factory=dict)
 
 
@@ -42,6 +43,7 @@ class MigrationClient:
         )
         self.timeout_seconds = float(os.environ.get("ZHIQIAN_MIGRATE_TIMEOUT", "120"))
         self.allow_mock = os.environ.get("ZHIQIAN_ALLOW_MOCK_EVAL", "").lower() in {"1", "true", "yes"}
+        self.allow_mock_retrieval = os.environ.get("ZHIQIAN_ALLOW_MOCK_RETRIEVAL", "").lower() in {"1", "true", "yes"}
         # 冷却时间（秒）：两次请求之间的最小间隔，防止后端过载
         self.cooldown = cooldown if cooldown is not None else float(os.environ.get("ZHIQIAN_MIGRATE_COOLDOWN", "3"))
         # 复用 TCP 连接（HTTP keep-alive）
@@ -101,11 +103,20 @@ class MigrationClient:
             MigrationClient._last_request_end = time.time()
             raise RuntimeError(f"migration 调用最终失败: {last_exc}")
 
-        if data.get("raw", {}).get("real") is False and not self.allow_mock:
+        raw_meta = data.get("raw") or {}
+        if raw_meta.get("real") is False and not self.allow_mock:
             raise RuntimeError(
                 "Migration service is running with mock LLM output. "
                 "Set LLM_API_KEY in zhiqian/deploy/.env and restart backend before real eval. "
                 "For smoke tests only, set ZHIQIAN_ALLOW_MOCK_EVAL=1."
+            )
+        retrieval_real = raw_meta.get("retrieval_real")
+        # 消融污染守卫：检索降级到后端 mock 时，recall/mode 对比全部失真，宁可中止
+        if retrieval_real is False and not self.allow_mock_retrieval:
+            raise RuntimeError(
+                "Retrieval fell back to backend mock (RAG unreachable or returned 0 docs). "
+                "Ablation gradients would be contaminated — fix the RAG service first. "
+                "For smoke tests only, set ZHIQIAN_ALLOW_MOCK_RETRIEVAL=1."
             )
         return MigrationResult(
             target_sql=data.get("target_sql", ""),
@@ -113,5 +124,6 @@ class MigrationClient:
             risk_level=data.get("risk_level"),
             confidence=data.get("confidence"),
             retrieved_ids=data.get("retrieved_ids", []),
+            retrieval_real=retrieval_real,
             raw=data,
         )

@@ -16,11 +16,26 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+import requests
+
 from eval.judge import LLMJudge
-from eval.metrics import recall_at_k, report_point_hit_rate, sql_equivalent, gold_quality_check
+from eval.metrics import recall_at_k, mrr_at_k, report_point_hit_rate, sql_equivalent, gold_quality_check
 from eval.migration_client import MigrationClient
 
 RETRIEVAL_CHOICES = ["bm25", "vector", "vector_rerank", "crag", "full"]
+
+
+def preflight_migration_service(base_url: str, timeout: float = 5.0) -> None:
+    """Fail fast before spending minutes retrying every eval case."""
+    url = base_url.rstrip("/") + "/actuator/health"
+    try:
+        resp = requests.get(url, timeout=timeout)
+        resp.raise_for_status()
+    except Exception as exc:
+        raise RuntimeError(
+            f"Migration backend preflight failed: {url} is not reachable ({exc}). "
+            "Start the backend first or pass --skip-preflight for intentionally offline tests."
+        ) from exc
 
 
 def _target_db(pair: str) -> str:
@@ -56,6 +71,10 @@ def _eval_one(c, retrieval, client, judge, fast, skip_throttle=False, mode=None)
             recall = recall_at_k(res.retrieved_ids, c.get("gold_context_ids", []), k=5)
             if recall is not None and math.isnan(recall):
                 recall = None
+            mrr = mrr_at_k(res.retrieved_ids, c.get("gold_context_ids", []), k=10)
+            if mrr is not None and math.isnan(mrr):
+                mrr = None
+            retrieval_real = res.retrieval_real
             risk_level = "parse_failed"
             pred_sql = ""
             error = "LLM returned non-JSON output"
@@ -78,6 +97,10 @@ def _eval_one(c, retrieval, client, judge, fast, skip_throttle=False, mode=None)
             recall = recall_at_k(res.retrieved_ids, c.get("gold_context_ids", []), k=5)
             if recall is not None and math.isnan(recall):
                 recall = None
+            mrr = mrr_at_k(res.retrieved_ids, c.get("gold_context_ids", []), k=10)
+            if mrr is not None and math.isnan(mrr):
+                mrr = None
+            retrieval_real = res.retrieval_real
             risk_level = res.risk_level
             pred_sql = res.target_sql
             error = None
@@ -85,6 +108,8 @@ def _eval_one(c, retrieval, client, judge, fast, skip_throttle=False, mode=None)
         ok = False
         report_acc = 0.0 if c.get("gold_report_points") else 1.0
         recall = None
+        mrr = None
+        retrieval_real = None
         risk_level = "error"
         pred_sql = ""
         error = str(exc)
@@ -96,6 +121,8 @@ def _eval_one(c, retrieval, client, judge, fast, skip_throttle=False, mode=None)
         "sql_ok": bool(ok),
         "report_acc": report_acc,
         "recall@5": recall,
+        "mrr@10": mrr,
+        "retrieval_real": retrieval_real,
         "risk_level": risk_level,
         "pred_sql": pred_sql,
         "error": error,
@@ -165,6 +192,15 @@ def summarize(rows):
     report_acc = sum(r["report_acc"] for r in rows) / n
     recs = [r["recall@5"] for r in rows if r["recall@5"] is not None]
     recall = sum(recs) / len(recs) if recs else None
+    mrrs = [r.get("mrr@10") for r in rows if r.get("mrr@10") is not None]
+    mrr = sum(mrrs) / len(mrrs) if mrrs else None
+    # 实验有效性统计：系统错误（超时等）与 mock 检索污染必须显式可见
+    system_errors = sum(1 for r in rows if r.get("risk_level") == "error")
+    mock_retrieval = sum(1 for r in rows if r.get("retrieval_real") is False)
+    valid_rows = [r for r in rows if r.get("risk_level") != "error"]
+    sql_rate_excl_errors = (
+        sum(1 for r in valid_rows if r["sql_ok"]) / len(valid_rows) if valid_rows else None
+    )
     # 金标质量统计
     gold_ok = sum(1 for r in rows if r.get("gold_quality") == "ok")
     gold_oracle = sum(1 for r in rows if r.get("gold_quality") == "oracle_residue")
@@ -181,6 +217,10 @@ def summarize(rows):
         "adjusted_rate_excl_questionable_gold": round(adjusted_rate, 4) if adjusted_rate is not None else None,
         "report_accuracy": round(report_acc, 4),
         "recall@5": round(recall, 4) if recall is not None else None,
+        "mrr@10": round(mrr, 4) if mrr is not None else None,
+        "system_errors": system_errors,
+        "sql_repair_rate_excl_system_errors": round(sql_rate_excl_errors, 4) if sql_rate_excl_errors is not None else None,
+        "mock_retrieval_cases": mock_retrieval,
         "gold_quality": {
             "ok": gold_ok,
             "oracle_residue": gold_oracle,
@@ -204,10 +244,16 @@ def main():
     ap.add_argument("--cooldown", type=float, default=None,
                     help="两次请求之间的最小间隔秒数（防后端过载，默认 3）")
     ap.add_argument("--out", default="eval/results")
+    ap.add_argument("--skip-preflight", action="store_true",
+                    help="Skip backend /actuator/health check before eval.")
+    ap.add_argument("--preflight-timeout", type=float, default=5.0,
+                    help="Seconds to wait for backend health before failing fast.")
     args = ap.parse_args()
 
     cases = load_dataset(args.dataset, args.pair)
     client = MigrationClient(cooldown=args.cooldown)
+    if not args.skip_preflight:
+        preflight_migration_service(client.base_url, args.preflight_timeout)
     judge = LLMJudge() if args.use_judge else None
     mode = args.mode
     if args.fast and not mode:
