@@ -9,7 +9,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-router = APIRouter()
+# prefix="/crag"：此前无 prefix 导致 crag 也注册 POST /query，与 query.py 冲突并被其屏蔽。
+# 加 prefix 后端点为 /crag/query，与模块文档一致。
+router = APIRouter(prefix="/crag", tags=["crag"])
 
 
 class CragReq(BaseModel):

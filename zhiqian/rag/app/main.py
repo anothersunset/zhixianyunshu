@@ -17,7 +17,9 @@ from app.api import (
 from app.pipelines.retriever import HybridRetriever
 from app.pipelines.critic import SelfRagCritic
 from app.graphs.graphrag import GraphRagIndex
+from app.graphs.crag import CragRunner
 from app.graphs.kb_graph_builder import build_graph_from_docs
+from app.core.structured_output import StructuredOutputClient
 
 # ─── 日志持久化 ───
 _LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
@@ -91,6 +93,16 @@ async def lifespan(app: FastAPI):
                     e, traceback.format_exc())
         retriever.graph_index = None
 
+    # CRAG runner 复用同一个 retriever（不重复建索引）
+    crag_runner = CragRunner(retriever)
+    app.state.crag_runner = crag_runner
+    log.info("[lifespan] CragRunner initialized")
+
+    # 结构化输出 client（无参构造，内部读环境变量决定后端）
+    structured_client = StructuredOutputClient()
+    app.state.structured_client = structured_client
+    log.info("[lifespan] StructuredOutputClient initialized, backend=%s", structured_client.current_backend())
+
     gc.collect()
     log.info("[lifespan] 初始化完成, 最终内存: %.1fMB", _get_memory_mb())
 
@@ -101,6 +113,9 @@ async def lifespan(app: FastAPI):
     app.dependency_overrides[query_api._critic] = lambda: critic
     # 注入 GraphRAG index 到 graphrag API
     app.dependency_overrides[graphrag._index_dep] = lambda: graph_index if retriever.graph_index and retriever.graph_index.nodes else None
+    # 注入 CragRunner / StructuredOutputClient——此前遗漏导致 /crag/query 与结构化端点 500
+    app.dependency_overrides[crag._runner_dep] = lambda: crag_runner
+    app.dependency_overrides[structured._client_dep] = lambda: structured_client
 
     yield
 
