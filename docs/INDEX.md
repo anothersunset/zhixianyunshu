@@ -42,6 +42,9 @@
 
 - [`UPGRADE_PLAN.md`](../UPGRADE_PLAN.md) — 70 项状态 + Polish round 表 + 50 条决策日志
 - [`CHANGELOG.md`](../CHANGELOG.md) — 50+ 提交明细 (包子 SHA · message · 动机)
+- [P0/P1 遗留问题核实与修复](./devlog-2026-07-09-p0-p1-audit.md) — 10 项外部审查逐条核实（3 处描述有出入）+ 修复记录
+- [SQL Server 方言支持](./devlog-2026-06-30-sqlserver-support.md)
+- [失败学习闭环](./devlog-2026-06-24-failure-learning-loop.md)
 
 ## ⚖️ 社区
 
