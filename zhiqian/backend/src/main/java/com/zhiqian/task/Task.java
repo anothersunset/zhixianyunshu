@@ -26,4 +26,12 @@ public class Task {
     private Instant createdAt;
     @Column("finished_at")
     private Instant finishedAt;
+    @Column("source_sql")
+    private String sourceSql;
+    @Column("result_sql")
+    private String resultSql;
+    @Column("error_message")
+    private String errorMessage;
+    @Column("run_id")
+    private String runId;
 }

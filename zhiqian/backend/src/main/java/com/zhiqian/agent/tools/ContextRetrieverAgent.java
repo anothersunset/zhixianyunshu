@@ -86,7 +86,14 @@ public class ContextRetrieverAgent implements AgentTool {
                                 String terms = normalizeTerms(d.get("terms"));
                                 String sourceDialect = normalizeDialect(d.get("source_dialect"));
                                 String targetDialect = normalizeDialect(d.get("target_dialect"));
-                                docs.add(new KbDoc(id, title, terms.toLowerCase(Locale.ROOT), sourceDialect, targetDialect));
+                                docs.add(new KbDoc(
+                                    id,
+                                    title,
+                                    text == null ? "" : text,
+                                    terms.toLowerCase(Locale.ROOT),
+                                    sourceDialect,
+                                    targetDialect
+                                ));
                             }
                         }
                     }
@@ -164,7 +171,7 @@ public class ContextRetrieverAgent implements AgentTool {
         String query = (sourceSql + " " + pair).toLowerCase(Locale.ROOT);
 
         // 尝试 RAG 服务真实检索
-        log.info("[ContextRetriever] ragUrl={}, retrieval={}, query={}", ragUrl, retrieval, query.length() > 60 ? query.substring(0, 60) + "..." : query);
+        log.info("[ContextRetriever] ragUrl={}, retrieval={}, queryLength={}", ragUrl, retrieval, query.length());
         List<Map<String, Object>> docs = tryRagRetrieve(query, retrieval);
         boolean realRetrieval = docs != null && !docs.isEmpty();
         log.info("[ContextRetriever] RAG returned: {}", docs == null ? "null (fallback to mock)" : docs.size() + " docs");
@@ -231,7 +238,7 @@ public class ContextRetrieverAgent implements AgentTool {
         String cacheKey = query + "|" + mode;
         CacheEntry cached = RAG_CACHE.get(cacheKey);
         if (cached != null && !cached.expired()) {
-            log.info("[ContextRetriever] cache hit for key={}", cacheKey.length() > 60 ? cacheKey.substring(0, 60) + "..." : cacheKey);
+            log.info("[ContextRetriever] cache hit for queryLength={}, mode={}", query.length(), mode);
             return cached.docs();
         }
 
@@ -239,12 +246,11 @@ public class ContextRetrieverAgent implements AgentTool {
         int maxAttempts = 2;
         for (int attempt = 0; attempt < maxAttempts; attempt++) {
         try {
-            String jsonBody = String.format(
-                Locale.ROOT,
-                "{\"query\":\"%s\",\"top_k\":5,\"mode\":\"%s\"}",
-                query.replace("\"", "\\\""), mode
-            );
-            log.info("[ContextRetriever] RAG request body: {}", jsonBody);
+            String jsonBody = MAPPER.writeValueAsString(Map.of(
+                "query", query,
+                "top_k", 5,
+                "mode", mode
+            ));
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -273,7 +279,10 @@ public class ContextRetrieverAgent implements AgentTool {
                 Map<String, Object> doc = new LinkedHashMap<>();
                 doc.put("id", id);
                 doc.put("score", score);
-                if (text != null) doc.put("title", text.length() > 80 ? text.substring(0, 80) + "..." : text);
+                if (text != null) {
+                    doc.put("text", text);
+                    doc.put("title", text.length() > 80 ? text.substring(0, 80) + "..." : text);
+                }
                 docs.add(doc);
             }
             List<Map<String, Object>> result = docs.isEmpty() ? null : docs;
@@ -325,6 +334,7 @@ public class ContextRetrieverAgent implements AgentTool {
         row.put("id", doc.id());
         row.put("score", score);
         row.put("title", doc.title());
+        row.put("text", doc.text());
         return row;
     }
 
@@ -441,10 +451,17 @@ public class ContextRetrieverAgent implements AgentTool {
     }
 
     private static KbDoc doc(String id, String title, String terms) {
-        return new KbDoc(id, title, terms, "", "");
+        return new KbDoc(id, title, title, terms, "", "");
     }
 
-    private record KbDoc(String id, String title, String terms, String sourceDialect, String targetDialect) {}
+    private record KbDoc(
+        String id,
+        String title,
+        String text,
+        String terms,
+        String sourceDialect,
+        String targetDialect
+    ) {}
 
     private record DialectPair(String source, String target) {}
 }

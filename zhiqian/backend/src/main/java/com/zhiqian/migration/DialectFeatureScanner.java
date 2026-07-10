@@ -33,7 +33,7 @@ public class DialectFeatureScanner {
         "ABS", "TRIM", "UPPER", "LOWER", "LENGTH", "COUNT", "SUM", "AVG", "MAX", "MIN",
         "COALESCE", "CAST", "EXTRACT", "SUBSTRING", "POSITION", "NULLIF",
         "ROW_NUMBER", "RANK", "DENSE_RANK", "LEAD", "LAG", "FIRST_VALUE", "LAST_VALUE",
-        "STRING_AGG", "ARRAY_AGG", "NOW", "CURRENT_DATE", "CURRENT_TIMESTAMP",
+        "STRING_AGG", "ARRAY_AGG", "NOW", "NEXTVAL", "CURRVAL", "CURRENT_DATE", "CURRENT_TIMESTAMP",
         "EXISTS", "SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "ALTER", "DROP",
         "CASE", "WHEN", "THEN", "ELSE", "END", "IN", "NOT", "AND", "OR", "IS", "NULL",
         "LEFT", "RIGHT", "INNER", "OUTER", "JOIN", "CROSS", "FULL", "ON", "WHERE",

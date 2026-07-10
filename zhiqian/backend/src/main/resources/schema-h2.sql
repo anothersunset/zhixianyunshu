@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS project (
     framework VARCHAR(128),
     description TEXT,
     status VARCHAR(32) NOT NULL DEFAULT 'NEW',
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    owner_id BIGINT REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS migration_task (
@@ -28,7 +29,11 @@ CREATE TABLE IF NOT EXISTS migration_task (
     total_units INTEGER,
     review_required INTEGER,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    finished_at TIMESTAMP
+    finished_at TIMESTAMP,
+    source_sql TEXT,
+    result_sql TEXT,
+    error_message TEXT,
+    run_id VARCHAR(64)
 );
 
 CREATE TABLE IF NOT EXISTS agent_step (
@@ -71,6 +76,7 @@ CREATE TABLE IF NOT EXISTS report (
     title VARCHAR(256) NOT NULL,
     summary TEXT,
     artifact_url VARCHAR(512),
+    content_md TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -87,3 +93,5 @@ CREATE INDEX IF NOT EXISTS idx_task_project ON migration_task(project_id);
 CREATE INDEX IF NOT EXISTS idx_suggestion_task ON suggestion(task_id);
 CREATE INDEX IF NOT EXISTS idx_agent_step_task ON agent_step(task_id);
 CREATE INDEX IF NOT EXISTS idx_report_task ON report(task_id);
+CREATE INDEX IF NOT EXISTS idx_project_owner ON project(owner_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_task_run_id ON migration_task(run_id);

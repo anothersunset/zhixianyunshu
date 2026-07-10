@@ -7,36 +7,56 @@ import com.zhiqian.llm.LlmClient;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/**
- * Stage 06 — 报告总结。输出迁移报告 markdown。
- */
+/** Stage 06: produce a Markdown report from the actual task context. */
 public class ReportSummarizerAgent implements AgentTool {
     private final LlmClient llm;
-    public ReportSummarizerAgent(LlmClient llm) { this.llm = llm; }
-    @Override public String name() { return "Report Summarizer"; }
-    @Override public String description() { return "输出交付物：迁移报告 markdown"; }
-    @Override public Map<String, Object> run(AgentContext ctx, Map<String, Object> input) {
+
+    public ReportSummarizerAgent(LlmClient llm) {
+        this.llm = llm;
+    }
+
+    @Override
+    public String name() {
+        return "Report Summarizer";
+    }
+
+    @Override
+    public String description() {
+        return "Generate the persisted migration report";
+    }
+
+    @Override
+    public Map<String, Object> run(AgentContext ctx, Map<String, Object> input) {
         Object summary = input.getOrDefault("summary", "");
         Object critique = input.getOrDefault("critique", "");
         String sourceSql = String.valueOf(ctx.state().getOrDefault("source_sql", ""));
+        String targetSql = String.valueOf(ctx.state().getOrDefault("patch_preview", ""));
         String pair = String.valueOf(ctx.state().getOrDefault("pair", "mysql->opengauss"));
-        String prompt = "生成一份 " + pair + " 迁移报告（markdown，中文，含概述/风险/修改/验证建议四节）：\n\n"
-            + "原始 SQL：" + sourceSql + "\n\n"
-            + "分析结果：" + summary + "\n\n"
-            + "评审意见：" + critique;
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("report_url", "/api/reports/task-" + ctx.taskId() + ".md");
+        String prompt = "Generate a Chinese Markdown SQL migration report with overview, risks, "
+            + "changes and validation recommendations. Use only the supplied task data.\n\n"
+            + "Dialect pair: " + pair + "\n\n"
+            + "Source SQL:\n" + sourceSql + "\n\n"
+            + "Target SQL:\n" + targetSql + "\n\n"
+            + "Analysis:\n" + summary + "\n\n"
+            + "Review:\n" + critique;
+
+        Map<String, Object> output = new LinkedHashMap<>();
+        output.put("report_url", "/api/tasks/" + ctx.taskId() + "/report/download");
         if (llm.isReal()) {
-            String reply = llm.chat(prompt);
-            out.put("report_md", reply);
-            out.put("_confidence", 0.94);
-            out.put("_real", true);
+            output.put("report_md", llm.chat(prompt));
+            output.put("_confidence", 0.94);
+            output.put("_real", true);
         } else {
-            out.put("report_md", "# 迁移报告\n## 概述\n本次从 MySQL 到 openGauss 的迁移覆盖 312 个文件、共 78 条 SQL。\n\n## 风险\nAUTO_INCREMENT / DATETIME / JSON 三类不兼容点。\n\n## 修改\n生成 12 份补丁，2 份需人工复查。\n\n## 验证建议\n18 脚本全量回庒。");
-            out.put("_confidence", 0.93);
-            out.put("_real", false);
+            output.put("report_md", "# Migration report\n\n"
+                + "## Dialect pair\n" + pair + "\n\n"
+                + "## Source SQL\n```sql\n" + sourceSql + "\n```\n\n"
+                + "## Target SQL\n" + targetSql + "\n\n"
+                + "## Analysis\n" + summary + "\n\n"
+                + "## Review\n" + critique + "\n");
+            output.put("_confidence", 0.75);
+            output.put("_real", false);
         }
-        out.put("_model", llm.providerName());
-        return out;
+        output.put("_model", llm.providerName());
+        return output;
     }
 }

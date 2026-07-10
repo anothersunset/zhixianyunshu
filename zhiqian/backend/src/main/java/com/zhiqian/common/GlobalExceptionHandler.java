@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 @Slf4j
 @RestControllerAdvice
@@ -19,6 +20,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Result<Void>> denied(AccessDeniedException e) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Result.fail(403, "无权限"));
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<Result<Void>> status(ResponseStatusException e) {
+        return ResponseEntity.status(e.getStatusCode())
+            .body(Result.fail(e.getStatusCode().value(), e.getReason()));
     }
 
     @ExceptionHandler(Exception.class)

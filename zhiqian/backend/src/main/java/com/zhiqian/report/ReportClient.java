@@ -15,7 +15,7 @@ public class ReportClient {
 
     private final RestClient rest;
 
-    public ReportClient(@Value("${zhiqian.rag.base-url:http://localhost:8001}") String ragUrl) {
+    public ReportClient(@Value("${app.rag.base-url:http://localhost:8001}") String ragUrl) {
         this.rest = RestClient.builder().baseUrl(ragUrl).build();
     }
 

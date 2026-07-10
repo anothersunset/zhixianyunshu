@@ -3,6 +3,8 @@ package com.zhiqian.agent.tools;
 import com.zhiqian.agent.AgentContext;
 import com.zhiqian.agent.AgentTool;
 import com.zhiqian.llm.LlmClient;
+import com.zhiqian.migration.DialectFeatureScanner;
+import com.zhiqian.migration.SqlSyntaxValidator;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -22,6 +24,10 @@ public class SqlCriticAgent implements AgentTool {
         String[] dialects = pair.split("->", 2);
         String sourceDialect = dialects[0].trim();
         String targetDialect = dialects.length > 1 ? dialects[1].trim() : "postgresql";
+        String targetSql = stripFence(String.valueOf(patch));
+        SqlSyntaxValidator.ValidationResult syntax = SqlSyntaxValidator.validate(targetSql, targetDialect);
+        var remainingSourceFeatures = DialectFeatureScanner.scan(targetSql, sourceDialect);
+        boolean deterministicNeedsCorrection = !syntax.valid() || !remainingSourceFeatures.isEmpty();
         String prompt = """
             You are a SQL migration reviewer. Your task is to find errors in a %s-to-%s migration.
 
@@ -53,11 +59,15 @@ public class SqlCriticAgent implements AgentTool {
                           targetDialect);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("scripts", 18);
+        out.put("syntax_valid", syntax.valid());
+        out.put("syntax_error", syntax.error() == null ? "" : syntax.error());
+        out.put("remaining_source_features", remainingSourceFeatures);
         if (llm.isReal()) {
             try {
                 String reply = llm.reason(prompt);
                 String upperReply = reply.toUpperCase();
-                boolean needsCorrection = upperReply.contains("STATUS: NEEDS_FIX")
+                boolean needsCorrection = deterministicNeedsCorrection
+                    || upperReply.contains("STATUS: NEEDS_FIX")
                     || upperReply.contains("NEEDS_FIX");
                 // 额外检查：是否有编号的 ISSUE + ERROR 模式
                 if (!needsCorrection) {
@@ -82,12 +92,21 @@ public class SqlCriticAgent implements AgentTool {
             }
         } else {
             out.put("critique", "STATUS: CORRECT\nDETAIL: 补丁语法正确，AUTO_INCREMENT 转 SEQUENCE 正确。");
-            out.put("needs_correction", false);
-            out.put("critic_status", "mock");
+            out.put("needs_correction", deterministicNeedsCorrection);
+            out.put("critic_status", deterministicNeedsCorrection ? "needs_fix" : "mock");
             out.put("_confidence", 0.91);
             out.put("_real", false);
             out.put("_model", "mock");
         }
         return out;
+    }
+
+    private static String stripFence(String value) {
+        String sql = value == null ? "" : value.trim();
+        if (sql.startsWith("```")) {
+            sql = sql.replaceFirst("^```(?:sql)?\\s*", "");
+            sql = sql.replaceFirst("\\s*```$", "");
+        }
+        return sql.trim();
     }
 }

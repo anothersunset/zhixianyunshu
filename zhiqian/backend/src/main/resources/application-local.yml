@@ -13,6 +13,9 @@ spring:
       schema-locations: classpath:schema-h2.sql
 
 app:
+  security:
+    eval-endpoints-open: true
+    integration-endpoints-open: true
   jwt:
     secret: local-dev-secret-key-must-be-long-enough-32+
     ttl-minutes: 60

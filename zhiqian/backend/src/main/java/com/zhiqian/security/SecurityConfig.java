@@ -43,8 +43,11 @@ public class SecurityConfig {
      * 是否放行 eval / 集成用的免鉴权端点（/migrate、/judge、/chat）。默认 true 保证评测
      * 框架无 token 可跑；生产部署应设 app.security.eval-endpoints-open=false 收紧。
      */
-    @Value("${app.security.eval-endpoints-open:true}")
+    @Value("${app.security.eval-endpoints-open:false}")
     private boolean evalEndpointsOpen;
+
+    @Value("${app.security.integration-endpoints-open:false}")
+    private boolean integrationEndpointsOpen;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -84,17 +87,21 @@ public class SecurityConfig {
             .csrf(c -> c.disable())
             .cors(c -> c.configurationSource(corsSource()))
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .exceptionHandling(e -> e
+                .authenticationEntryPoint((req, resp, ex) -> resp.sendError(401, "authentication required"))
+                .accessDeniedHandler((req, resp, ex) -> resp.sendError(403, "access denied")))
             .authorizeHttpRequests(a -> {
                 a.requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/actuator/**").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/tasks/*/stream").permitAll()
                 .requestMatchers("/.well-known/**").permitAll()  // A2A Agent Card
-                .requestMatchers("/a2a/**").permitAll()  // A2A Task endpoints
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()  // Swagger UI
                 .requestMatchers("/error").permitAll();
                 // eval/集成端点：默认放行（评测框架无 token），生产设 app.security.eval-endpoints-open=false 收紧
                 if (evalEndpointsOpen) {
                     a.requestMatchers(HttpMethod.POST, "/migrate", "/api/migrate", "/judge", "/api/judge", "/chat", "/api/chat").permitAll();
+                }
+                if (integrationEndpointsOpen) {
+                    a.requestMatchers("/a2a/**").permitAll();
                 }
                 a.anyRequest().authenticated();
             })

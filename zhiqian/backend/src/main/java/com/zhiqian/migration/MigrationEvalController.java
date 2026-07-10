@@ -13,6 +13,7 @@ import com.zhiqian.agent.tools.ContextRetrieverAgent;
 import com.zhiqian.agent.tools.FeatureScannerAgent;
 import com.zhiqian.agent.tools.SqlCriticAgent;
 import com.zhiqian.llm.LlmClient;
+import com.zhiqian.task.MigrationPipelineService;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
@@ -164,13 +165,16 @@ public class MigrationEvalController {
     private final AgentRunner runner;
     private final ObjectMapper mapper;
     private final ThreadPoolTaskExecutor migrateExecutor;
+    private final MigrationPipelineService pipelineService;
 
     public MigrationEvalController(LlmClient llm, AgentRunner runner, ObjectMapper mapper,
-                                   @Qualifier("migrateExecutor") ThreadPoolTaskExecutor migrateExecutor) {
+                                   @Qualifier("migrateExecutor") ThreadPoolTaskExecutor migrateExecutor,
+                                   MigrationPipelineService pipelineService) {
         this.llm = llm;
         this.runner = runner;
         this.mapper = mapper;
         this.migrateExecutor = migrateExecutor;
+        this.pipelineService = pipelineService;
     }
 
     @PostMapping({"/migrate", "/api/migrate"})
@@ -192,8 +196,15 @@ public class MigrationEvalController {
         String retrieval = normalizeRetrieval(req.retrieval());
         String pair = req.pair() == null || req.pair().isBlank() ? "mysql->opengauss" : req.pair();
         String sourceSql = req.source_sql() == null ? "" : req.source_sql();
+        if (sourceSql.isBlank()) {
+            throw new IllegalArgumentException("source_sql must not be blank");
+        }
         boolean fast = req.fast();
         boolean agentMode = req.isAgentMode();
+
+        if (!fast || agentMode) {
+            return migrateWithCanonicalPipeline(sourceSql, pair, retrieval);
+        }
 
         // Fast path: 跳过 AgentGraph，直接 chat 生成，但保留轻量检索用于 recall 评估
         if (fast && !agentMode) {
@@ -398,6 +409,61 @@ public class MigrationEvalController {
             targetSql,
             reportPoints,
             riskLevel,
+            confidence,
+            retrievedIds,
+            meta
+        ));
+    }
+
+    private ResponseEntity<MigrateResponse> migrateWithCanonicalPipeline(
+        String sourceSql,
+        String pair,
+        String retrieval
+    ) {
+        long taskId = TASK_ID.incrementAndGet();
+        List<Map<String, Object>> stages = new ArrayList<>();
+        var result = pipelineService.execute(
+            new MigrationPipelineService.MigrationInput(
+                taskId,
+                1L,
+                sourceSql,
+                sourceDialect(pair),
+                targetDialect(pair),
+                retrieval
+            ),
+            step -> stages.add(stageSnapshot(step))
+        );
+        List<String> retrievedIds = extractRetrievedIds(result.state().get("retrieved"));
+        Double confidence = result.steps().stream()
+            .map(AgentStep::confidence)
+            .filter(java.util.Objects::nonNull)
+            .mapToDouble(Double::doubleValue)
+            .average()
+            .orElse(0.0);
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("real", llm.isReal());
+        meta.put("canonical_pipeline", true);
+        meta.put("retrieval", retrieval);
+        meta.put("pair", pair);
+        meta.put("status", result.status());
+        meta.put("trace_id", result.traceId() == null ? "" : result.traceId());
+        meta.put("stages", stages);
+        if (!llm.isReal()) {
+            meta.put("warning", "Mock LLM output is not trusted migration SQL.");
+        }
+        List<String> reportPoints = List.of("Six-agent pipeline status: " + result.status());
+        if (llm.isReal() && result.reportMd() != null && result.reportMd().trim().startsWith("{")) {
+            try {
+                List<String> parsed = stringList(parseJsonObject(result.reportMd()).get("report_points"));
+                if (!parsed.isEmpty()) reportPoints = parsed;
+            } catch (Exception ignored) {
+                // A Markdown report is the normal result; JSON is accepted for legacy test clients.
+            }
+        }
+        return ResponseEntity.ok(new MigrateResponse(
+            llm.isReal() ? result.resultSql() : "",
+            reportPoints,
+            result.reviewRequired() ? "high" : "low",
             confidence,
             retrievedIds,
             meta

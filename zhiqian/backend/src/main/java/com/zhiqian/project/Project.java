@@ -20,6 +20,8 @@ public class Project {
     private String framework;
     private String description;
     private String status;
+    @Column("owner_id")
+    private Long ownerId;
     @Column("created_at")
     private Instant createdAt;
 }

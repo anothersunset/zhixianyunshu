@@ -3,6 +3,7 @@ package com.zhiqian.agent.tools;
 import com.zhiqian.agent.AgentContext;
 import com.zhiqian.agent.AgentTool;
 import com.zhiqian.llm.LlmClient;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -12,6 +13,7 @@ import java.util.Map;
  * Stage 04 — 生成 SQL 补丁。v2-step-09 会接入 sqlglot AST 转译，本步仅 LLM 改写。
  */
 public class SqlPatcherAgent implements AgentTool {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
     private final LlmClient llm;
     public SqlPatcherAgent(LlmClient llm) { this.llm = llm; }
     @Override public String name() { return "SQL Patcher"; }
@@ -59,7 +61,7 @@ public class SqlPatcherAgent implements AgentTool {
         out.put("review_required", 2);
         if (llm.isReal()) {
             String reply = llm.chat(prompt);
-            out.put("patch_preview", reply);
+            out.put("patch_preview", extractTargetSql(reply));
             out.put("_confidence", 0.89);
             out.put("_real", true);
         } else {
@@ -69,5 +71,22 @@ public class SqlPatcherAgent implements AgentTool {
         }
         out.put("_model", llm.providerName());
         return out;
+    }
+
+    private static String extractTargetSql(String reply) {
+        if (reply == null) return "";
+        String trimmed = reply.trim();
+        if (trimmed.startsWith("```json")) {
+            trimmed = trimmed.replaceFirst("^```json\\s*", "").replaceFirst("\\s*```$", "");
+        }
+        if (trimmed.startsWith("{")) {
+            try {
+                var node = MAPPER.readTree(trimmed);
+                if (node.hasNonNull("target_sql")) return node.get("target_sql").asText();
+            } catch (Exception ignored) {
+                // The agent prompt normally asks for SQL, so non-JSON text is valid here.
+            }
+        }
+        return reply;
     }
 }
