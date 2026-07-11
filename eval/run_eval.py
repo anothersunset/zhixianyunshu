@@ -13,6 +13,8 @@ import json
 import re
 import math
 import os
+import random
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -21,6 +23,7 @@ import requests
 from eval.judge import LLMJudge
 from eval.metrics import recall_at_k, mrr_at_k, report_point_hit_rate, sql_equivalent, gold_quality_check
 from eval.migration_client import MigrationClient
+from eval.provenance import build_run_metadata
 
 RETRIEVAL_CHOICES = ["bm25", "vector", "vector_rerank", "crag", "full"]
 
@@ -60,6 +63,13 @@ def load_dataset(path: str, pair: str) -> list[dict]:
 
 def _eval_one(c, retrieval, client, judge, fast, skip_throttle=False, mode=None):
     """评估单个 case（供并行调用）。"""
+    started = time.perf_counter()
+    deterministic_ok = False
+    deterministic_report_acc = 0.0
+    models: list[str] = []
+    token_in = 0
+    token_out = 0
+    reported_cost_usd = None
     target = _target_db(c["pair"])
     try:
         res = client.run_migration(source_sql=c["source_sql"], pair=c["pair"], retrieval=retrieval, fast=fast, mode=mode, skip_throttle=skip_throttle)
@@ -67,8 +77,10 @@ def _eval_one(c, retrieval, client, judge, fast, skip_throttle=False, mode=None)
         parse_failed = not res.target_sql and res.risk_level == "high"
         if parse_failed:
             ok = False
+            deterministic_ok = False
             verdict_source = "parse_failed"
             report_acc = 0.0
+            deterministic_report_acc = 0.0
             recall = recall_at_k(res.retrieved_ids, c.get("gold_context_ids", []), k=5)
             if recall is not None and math.isnan(recall):
                 recall = None
@@ -80,13 +92,14 @@ def _eval_one(c, retrieval, client, judge, fast, skip_throttle=False, mode=None)
             pred_sql = ""
             error = "LLM returned non-JSON output"
         else:
-            ok = sql_equivalent(res.target_sql, c["gold_target_sql"], target)
+            deterministic_ok = sql_equivalent(res.target_sql, c["gold_target_sql"], target)
+            ok = deterministic_ok
             # verdict_source 标记这个 sql_ok 判定是靠什么定的：
             # "deterministic" = sqlglot AST 比对直接判定；"judge" = AST 判否但 LLM judge
             # 判定语义等价而翻转为 True（judge 意见真正改变结论的边界样本）；"fail" = 两者
             # 都判否（或没配 judge）。人工校准要优先抽 "judge" 样本，而不是均匀随机抽样——
             # 那样才是 judge 真正可能出错、值得花人工去验证的地方。
-            verdict_source = "deterministic" if ok else "fail"
+            verdict_source = "deterministic" if deterministic_ok else "fail"
             if not ok and judge is not None:
                 judge_ok = judge.sql_semantically_equal(res.target_sql, c["gold_target_sql"], target)
                 if judge_ok:
@@ -102,7 +115,11 @@ def _eval_one(c, retrieval, client, judge, fast, skip_throttle=False, mode=None)
             _pred_clean = re.sub(r'\s+', ' ', res.target_sql).strip().lower()
             if _pred_no_conv and ok and _source_clean == _pred_clean:
                 report_acc = 1.0
+                deterministic_report_acc = 1.0
             else:
+                deterministic_report_acc = report_point_hit_rate(
+                    res.report_points, c.get("gold_report_points", []), None
+                )
                 report_acc = report_point_hit_rate(res.report_points, c.get("gold_report_points", []), judge)
             recall = recall_at_k(res.retrieved_ids, c.get("gold_context_ids", []), k=5)
             if recall is not None and math.isnan(recall):
@@ -114,10 +131,22 @@ def _eval_one(c, retrieval, client, judge, fast, skip_throttle=False, mode=None)
             risk_level = res.risk_level
             pred_sql = res.target_sql
             error = None
+        raw_meta = (res.raw.get("raw") or {}) if isinstance(res.raw, dict) else {}
+        stages = raw_meta.get("stages") or []
+        models = sorted({
+            str(stage.get("model"))
+            for stage in stages
+            if isinstance(stage, dict) and stage.get("model")
+        })
+        token_in = sum(int(stage.get("tokenIn") or 0) for stage in stages if isinstance(stage, dict))
+        token_out = sum(int(stage.get("tokenOut") or 0) for stage in stages if isinstance(stage, dict))
+        reported_cost_usd = raw_meta.get("cost_usd")
     except Exception as exc:
         ok = False
+        deterministic_ok = False
         verdict_source = "error"
         report_acc = 0.0 if c.get("gold_report_points") else 1.0
+        deterministic_report_acc = report_acc
         recall = None
         mrr = None
         retrieval_real = None
@@ -130,8 +159,10 @@ def _eval_one(c, retrieval, client, judge, fast, skip_throttle=False, mode=None)
         "pair": c["pair"],
         "difficulty": c.get("difficulty"),
         "sql_ok": bool(ok),
+        "deterministic_sql_ok": bool(deterministic_ok),
         "verdict_source": verdict_source,
         "report_acc": report_acc,
+        "deterministic_report_acc": deterministic_report_acc,
         "recall@5": recall,
         "mrr@10": mrr,
         "retrieval_real": retrieval_real,
@@ -139,6 +170,12 @@ def _eval_one(c, retrieval, client, judge, fast, skip_throttle=False, mode=None)
         "pred_sql": pred_sql,
         "error": error,
         "gold_quality": gold_quality,
+        "latency_ms": round((time.perf_counter() - started) * 1000, 3),
+        "models": models,
+        "token_in": token_in,
+        "token_out": token_out,
+        "reported_cost_usd": reported_cost_usd,
+        "judge_enabled": judge is not None,
     }
 
 
@@ -201,7 +238,9 @@ def summarize(rows):
     if not n:
         return {"n": 0}
     sql_rate = sum(1 for r in rows if r["sql_ok"]) / n
+    deterministic_rate = sum(1 for r in rows if r.get("deterministic_sql_ok")) / n
     report_acc = sum(r["report_acc"] for r in rows) / n
+    deterministic_report_acc = sum(r.get("deterministic_report_acc", 0.0) for r in rows) / n
     recs = [r["recall@5"] for r in rows if r["recall@5"] is not None]
     recall = sum(recs) / len(recs) if recs else None
     mrrs = [r.get("mrr@10") for r in rows if r.get("mrr@10") is not None]
@@ -211,6 +250,10 @@ def summarize(rows):
     mock_retrieval = sum(1 for r in rows if r.get("retrieval_real") is False)
     # judge 真正翻转结论的样本数——这批是人工校准最该覆盖的边界样本（见 verdict_source）
     judge_decided = sum(1 for r in rows if r.get("verdict_source") == "judge")
+    latencies = sorted(float(r.get("latency_ms") or 0.0) for r in rows)
+    p95_index = max(0, math.ceil(len(latencies) * 0.95) - 1)
+    reported_costs = [float(r["reported_cost_usd"]) for r in rows if r.get("reported_cost_usd") is not None]
+    models = sorted({model for row in rows for model in row.get("models", [])})
     valid_rows = [r for r in rows if r.get("risk_level") != "error"]
     sql_rate_excl_errors = (
         sum(1 for r in valid_rows if r["sql_ok"]) / len(valid_rows) if valid_rows else None
@@ -236,6 +279,23 @@ def summarize(rows):
         "sql_repair_rate_excl_system_errors": round(sql_rate_excl_errors, 4) if sql_rate_excl_errors is not None else None,
         "mock_retrieval_cases": mock_retrieval,
         "judge_decided_cases": judge_decided,
+        "deterministic_metrics": {
+            "sql_repair_rate": round(deterministic_rate, 4),
+            "report_accuracy": round(deterministic_report_acc, 4),
+        },
+        "judge_metrics": {
+            "enabled": any(r.get("judge_enabled") for r in rows),
+            "judge_decided_cases": judge_decided,
+            "sql_repair_rate": round(sql_rate, 4),
+            "report_accuracy": round(report_acc, 4),
+        },
+        "runtime": {
+            "p95_latency_ms": round(latencies[p95_index], 3),
+            "token_in": sum(int(r.get("token_in") or 0) for r in rows),
+            "token_out": sum(int(r.get("token_out") or 0) for r in rows),
+            "models": models,
+            "reported_cost_usd": round(sum(reported_costs), 6) if reported_costs else None,
+        },
         "gold_quality": {
             "ok": gold_ok,
             "oracle_residue": gold_oracle,
@@ -263,8 +323,11 @@ def main():
                     help="Skip backend /actuator/health check before eval.")
     ap.add_argument("--preflight-timeout", type=float, default=5.0,
                     help="Seconds to wait for backend health before failing fast.")
+    ap.add_argument("--seed", type=int, default=42,
+                    help="Deterministic seed recorded with the run (default: 42).")
     args = ap.parse_args()
 
+    random.seed(args.seed)
     cases = load_dataset(args.dataset, args.pair)
     client = MigrationClient(cooldown=args.cooldown)
     if not args.skip_preflight:
@@ -279,12 +342,28 @@ def main():
         print(f"Fast mode: {len(cases)} cases, parallel={args.parallel}")
     rows = evaluate(cases, args.retrieval, client, judge, fast=args.fast, parallel=args.parallel, mode=mode)
     summary = summarize(rows)
+    metadata = build_run_metadata(
+        cases=cases,
+        config={
+            "retrieval": args.retrieval,
+            "pair": args.pair,
+            "dataset": args.dataset,
+            "fast": args.fast,
+            "mode": mode,
+            "parallel": args.parallel,
+            "cooldown": client.cooldown,
+            "seed": args.seed,
+            "migration_base_url": client.base_url,
+            "judge_enabled": judge is not None,
+            "judge_model": getattr(judge, "model", None),
+        },
+    )
 
     Path(args.out).mkdir(parents=True, exist_ok=True)
     suffix = "_fast" if args.fast else ("_agent" if mode == "agent" else "")
     out_file = os.path.join(args.out, "raw_" + args.retrieval + "_" + args.pair + suffix + ".json")
     with open(out_file, "w", encoding="utf-8") as fh:
-        json.dump({"summary": summary, "rows": rows}, fh, ensure_ascii=False, indent=2)
+        json.dump({"metadata": metadata, "summary": summary, "rows": rows}, fh, ensure_ascii=False, indent=2)
     print(json.dumps(summary, ensure_ascii=False), flush=True)
 
 
