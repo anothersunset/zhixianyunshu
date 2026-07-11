@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 import logging
 
@@ -16,7 +16,7 @@ router = APIRouter(prefix="/ingest", tags=["ingest"])
 
 
 class IngestReq(BaseModel):
-    collection: str = "zhiqian-default"
+    collection: str = Field(default="zhiqian-default", pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
     docs: List[Dict[str, Any]]
     strategy: Optional[str] = None  # semantic / late / none。None 时用 settings.chunk_strategy
 
@@ -79,7 +79,7 @@ async def ingest(req: IngestReq, r=Depends(_retriever)) -> IngestResp:
             sp.output({"chunks": len(all_chunks)})
 
         with tr.span("retriever.add", input={"chunks": len(all_chunks)}) as sp:
-            inserted = r.add(all_chunks)
+            inserted = r.add(all_chunks, collection=req.collection)
             sp.output({"inserted": inserted})
 
         tr.output({
@@ -92,5 +92,5 @@ async def ingest(req: IngestReq, r=Depends(_retriever)) -> IngestResp:
         docs_received=len(req.docs),
         chunks_inserted=inserted,
         strategy_used=strategy,
-        capabilities=r.capabilities(),
+        capabilities=r.capabilities(req.collection),
     )

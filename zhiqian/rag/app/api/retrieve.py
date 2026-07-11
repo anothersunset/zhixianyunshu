@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
+from pydantic import AliasChoices, BaseModel, Field
+from typing import List, Dict, Any, Literal, Optional
 import logging
 import traceback
 
@@ -14,11 +14,13 @@ router = APIRouter(prefix="/retrieve", tags=["retrieve"])
 
 
 class RetrieveReq(BaseModel):
-    collection: str = "zhiqian-default"
-    query: str
-    top_k: int = 5
+    collection: str = Field(default="zhiqian-default", pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    query: str = Field(min_length=1, validation_alias=AliasChoices("query", "question"))
+    top_k: int = Field(default=5, ge=1, le=50)
     filters: Optional[Dict[str, Any]] = None
-    mode: str = "full"  # bm25 / vector / vector_rerank / crag / full
+    mode: Literal[
+        "bm25", "hybrid", "rerank", "crag", "full", "vector", "vector_rerank"
+    ] = "full"
 
 
 class RetrieveItem(BaseModel):
@@ -34,7 +36,10 @@ class RetrieveItem(BaseModel):
 
 class RetrieveResp(BaseModel):
     items: List[RetrieveItem]
+    # One-release response alias for the historical offline regression suite.
+    results: List[RetrieveItem]
     capabilities: Dict[str, Any]
+    trace: Dict[str, Any]
 
 
 def _retriever():
@@ -50,16 +55,26 @@ async def retrieve(req: RetrieveReq, r=Depends(_retriever)) -> RetrieveResp:
             input={"query": req.query, "top_k": req.top_k, "collection": req.collection, "mode": req.mode},
             tags=["retrieve"],
         ) as tr:
+            retrieval_trace: Dict[str, Any] = {}
             chunks = r.search(
                 req.query,
                 top_k=req.top_k,
                 filters=req.filters,
                 mode=req.mode,
                 parent_trace=tr,
+                collection=req.collection,
+                trace_out=retrieval_trace,
             )
             tr.output({"items": len(chunks), "ids": [c.get("id") for c in chunks]})
         items = [RetrieveItem(**{k: v for k, v in c.items() if k in RetrieveItem.model_fields}) for c in chunks]
-        return RetrieveResp(items=items, capabilities=r.capabilities())
+        return RetrieveResp(
+            items=items,
+            results=items,
+            capabilities=r.capabilities(req.collection),
+            trace=retrieval_trace,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
     except Exception as e:
         log.error("[retrieve] 请求处理失败: %s\n%s", e, traceback.format_exc())
         # fail-loud: 返回 500 让调用方显式感知失败并自行降级（backend 侧会 fallback 到本地 mock）

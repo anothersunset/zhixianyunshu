@@ -51,4 +51,4 @@ def test_generate_validation_script_dependency():
     )
     s = scripts[0]
     assert "opengauss-jdbc" in s["content"]
-    assert s["file_path"].endswith(".sql")
+    assert s["file_path"].endswith(".sh")

@@ -229,7 +229,15 @@ class GraphRagIndex:
             return {"reports": [], "context": ""}
         scored: List[Tuple[float, str]] = []
         for cid, rpt in self.communities.items():
+            # The report keyword list is intentionally compact for display, so
+            # rare but decisive SQL features may be outside its top-N.  Global
+            # retrieval must score the complete community evidence instead of
+            # silently missing those features.
             r_tokens = set(rpt.keywords)
+            for node_id in rpt.node_ids:
+                node = self.nodes.get(node_id)
+                if node is not None:
+                    r_tokens.update(_tokenize(f"{node.label} {node.text}"))
             if not r_tokens:
                 continue
             overlap = len(q_tokens & r_tokens) / max(len(q_tokens), 1)

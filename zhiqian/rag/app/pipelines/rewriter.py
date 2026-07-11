@@ -1,3 +1,4 @@
+"""Deterministic corrective query rewriting for database-migration retrieval."""
 from __future__ import annotations
 
 import re
@@ -5,24 +6,56 @@ from typing import Optional
 
 
 class QueryRewriter:
-    """
-    查询重写器。默认实现仅做轻量规范化 + 所在领域名词补充，不依赖 LLM。
-    接入真实 LLM 后可替换为提示词驱动的重写。
+    """Normalize a query and add SQL migration terminology.
+
+    The deterministic implementation keeps CI offline and makes the CRAG
+    rewrite branch observable.  An optional LLM adapter may expose either a
+    ``rewrite`` method or an ``invoke`` method; failures fall back to the rules.
     """
 
-    _DOMAIN_HINTS = [
-        (re.compile(r"mysql", re.I), "MySQL"),
-        (re.compile(r"opengauss", re.I), "openGauss"),
-        (re.compile(r"(迁移|迁转|改造)"), "数据库迁移"),
-    ]
+    _EXPANSIONS = (
+        (re.compile(r"\b(ifnull|nvl|nvl2)\b", re.I), "COALESCE null handling function mapping"),
+        (re.compile(r"\b(limit|offset|rownum|fetch\s+first)\b", re.I), "pagination syntax rewrite"),
+        (re.compile(r"\b(auto_increment|identity|sequence)\b", re.I), "identity sequence type mapping"),
+        (re.compile(r"\b(group_concat|string_agg|listagg)\b", re.I), "string aggregation function mapping"),
+        (re.compile(r"\b(date_format|to_char|str_to_date)\b", re.I), "date time format function mapping"),
+        (re.compile(r"\b(on\s+duplicate\s+key|on\s+conflict|merge\s+into)\b", re.I), "upsert conflict syntax rewrite"),
+    )
+    _DIALECTS = ("mysql", "oracle", "postgresql", "postgres", "opengauss", "sqlserver", "db2")
 
     def rewrite(self, question: str, llm: Optional[object] = None) -> str:
-        q = (question or "").strip()
-        if not q:
-            return q
-        # 去除多余空白
-        q = re.sub(r"\s+", " ", q)
-        hints = [tag for pattern, tag in self._DOMAIN_HINTS if pattern.search(q) and tag not in q]
-        if hints:
-            q = q + " " + " ".join(hints)
-        return q
+        query = re.sub(r"\s+", " ", (question or "").strip())
+        if not query:
+            return query
+
+        llm_result = self._rewrite_with_llm(query, llm)
+        if llm_result:
+            return llm_result
+
+        additions = [hint for pattern, hint in self._EXPANSIONS if pattern.search(query)]
+        lowered = query.lower()
+        if any(dialect in lowered for dialect in self._DIALECTS):
+            additions.append("SQL dialect migration compatibility")
+        if not additions:
+            additions.append("database migration SQL dialect compatibility")
+        unique = []
+        for addition in additions:
+            if addition.lower() not in lowered and addition not in unique:
+                unique.append(addition)
+        return " ".join([query, *unique]).strip()
+
+    @staticmethod
+    def _rewrite_with_llm(query: str, llm: Optional[object]) -> str:
+        if llm is None:
+            return ""
+        try:
+            if hasattr(llm, "rewrite"):
+                value = llm.rewrite(query)
+            elif hasattr(llm, "invoke"):
+                value = llm.invoke(query)
+                value = getattr(value, "content", value)
+            else:
+                return ""
+            return re.sub(r"\s+", " ", str(value or "").strip())
+        except Exception:  # noqa: BLE001
+            return ""

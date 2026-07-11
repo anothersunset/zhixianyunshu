@@ -65,14 +65,9 @@ async def lifespan(app: FastAPI):
         log.error("[lifespan] HybridRetriever init failed: %s, starting with empty retriever\n%s",
                   e, traceback.format_exc())
         from app.pipelines.retriever import HybridRetriever as _HR
-        retriever = _HR.__new__(_HR)
-        retriever.docs = []
-        retriever._bm25 = None
-        retriever._by_id = {}
-        retriever._reranker = None
-        retriever._embedder = None
-        retriever._qdrant = None
-        retriever.collection = "zhiqian-default"
+        # Construct a valid empty retriever instead of bypassing __init__;
+        # /ingest can then recover the service after an initial KB failure.
+        retriever = _HR(docs=[])
     app.state.retriever = retriever
 
     # 初始化 SelfRAG critic

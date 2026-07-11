@@ -56,7 +56,12 @@ class CragRunner:
         t0 = time.time()
         q = state["question"]
         top_k = state.get("top_k", 5)
-        docs = self.retriever.search(q, top_k=top_k, parent_trace=parent_trace) or []
+        # CragRunner owns evaluate/refine/web/generate.  Use the canonical
+        # rerank stage here to avoid recursively running the corrective
+        # retrieval loop implemented by ``mode=crag``.
+        docs = self.retriever.search(
+            q, top_k=top_k, mode="rerank", parent_trace=parent_trace
+        ) or []
         state["docs"] = docs
         self._log_step(state, "retrieve", t0, {"top_k": top_k}, {"n_docs": len(docs)})
         return state

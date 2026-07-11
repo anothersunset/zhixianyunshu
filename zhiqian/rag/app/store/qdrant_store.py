@@ -102,7 +102,13 @@ class QdrantStore:
             log.warning("[Qdrant] upsert 失败 name=%s err=%s", name, e)
             return False
 
-    def search_dense(self, name: str, dense: List[float], k: int = 50) -> List[Tuple[str, float, Dict[str, Any]]]:
+    def search_dense(
+        self,
+        name: str,
+        dense: List[float],
+        k: int = 50,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> List[Tuple[str, float, Dict[str, Any]]]:
         if not self.available:
             return []
         try:
@@ -114,13 +120,20 @@ class QdrantStore:
                 using="dense",
                 limit=k,
                 with_payload=True,
+                query_filter=_build_filter(qm, filters),
             ).points
             return [(_extract_id(p), float(p.score), dict(p.payload or {})) for p in res]
         except Exception as e:
             log.warning("[Qdrant] search_dense 失败 name=%s err=%s", name, e)
             return []
 
-    def search_sparse(self, name: str, sparse: Dict[int, float], k: int = 50) -> List[Tuple[str, float, Dict[str, Any]]]:
+    def search_sparse(
+        self,
+        name: str,
+        sparse: Dict[int, float],
+        k: int = 50,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> List[Tuple[str, float, Dict[str, Any]]]:
         if not self.available or not sparse:
             return []
         try:
@@ -132,11 +145,36 @@ class QdrantStore:
                 using="sparse",
                 limit=k,
                 with_payload=True,
+                query_filter=_build_filter(qm, filters),
             ).points
             return [(_extract_id(p), float(p.score), dict(p.payload or {})) for p in res]
         except Exception as e:
             log.warning("[Qdrant] search_sparse 失败 name=%s err=%s", name, e)
             return []
+
+
+def _build_filter(qm: Any, filters: Optional[Dict[str, Any]]) -> Any:
+    """Translate flat metadata equality filters to a Qdrant payload filter.
+
+    Metadata is stored below the ``meta`` payload key.  Lists are treated as
+    an OR condition for a single field; different fields remain ANDed.
+    Unsupported empty values are left to the deterministic post-filter in the
+    retriever instead of producing an invalid Qdrant request.
+    """
+    if not filters:
+        return None
+    must = []
+    for key, value in filters.items():
+        payload_key = key if key.startswith("meta.") else f"meta.{key}"
+        if isinstance(value, (list, tuple, set)):
+            values = list(value)
+            if not values:
+                continue
+            match = qm.MatchAny(any=values)
+        else:
+            match = qm.MatchValue(value=value)
+        must.append(qm.FieldCondition(key=payload_key, match=match))
+    return qm.Filter(must=must) if must else None
 
 
 def _to_qdrant_id(s: str) -> str:

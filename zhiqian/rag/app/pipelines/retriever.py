@@ -251,7 +251,7 @@ def _tokenize(text: str) -> List[str]:
     ]
 
 
-class HybridRetriever:
+class _LegacyHybridRetriever:
     def __init__(
         self,
         docs: Optional[List[Dict[str, Any]]] = None,
@@ -576,3 +576,9 @@ class HybridRetriever:
                 sparse_dicts=sparse,
                 metas=[d.get("meta") for d in need_encode],
             )
+
+
+# Public implementation.  The legacy class remains above for one release so
+# old pickles/import diagnostics do not break, while all new imports receive
+# the collection-aware five-mode retriever.
+from app.pipelines.mode_retriever import HybridRetriever  # noqa: E402,F401
