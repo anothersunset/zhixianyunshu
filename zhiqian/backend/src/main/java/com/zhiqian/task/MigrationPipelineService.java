@@ -5,6 +5,7 @@ import com.zhiqian.agent.AgentGraph;
 import com.zhiqian.agent.AgentRunner;
 import com.zhiqian.agent.AgentStep;
 import com.zhiqian.agent.tools.ContextRetrieverAgent;
+import com.zhiqian.agent.tools.FeatureScannerAgent;
 import com.zhiqian.agent.tools.ReportSummarizerAgent;
 import com.zhiqian.agent.tools.SchemaAnalyzerAgent;
 import com.zhiqian.agent.tools.SqlCriticAgent;
@@ -41,6 +42,10 @@ public class MigrationPipelineService {
         context.state().put("sourceDialect", input.sourceDialect());
         context.state().put("targetDialect", input.targetDialect());
         context.state().put("retrieval", input.retrievalMode());
+        // Keep the visible pipeline at six business agents while running the
+        // deterministic dialect scan as zero-cost preprocessing.  UNKNOWN
+        // features then survive into the trace and terminal review status.
+        context.state().putAll(new FeatureScannerAgent().run(context, Map.of()));
 
         TraceHandle trace = langfuse.newTrace(
             "task.migration",
@@ -57,7 +62,9 @@ public class MigrationPipelineService {
 
         AgentStep failedStep = steps.stream().filter(step -> "FAIL".equals(step.status())).findFirst().orElse(null);
         boolean reviewRequired = Boolean.TRUE.equals(context.state().get("needs_correction"))
-            || "error".equals(context.state().get("critic_status"));
+            || "error".equals(context.state().get("critic_status"))
+            || (context.state().get("unknown_feature_count") instanceof Number count
+                && count.intValue() > 0);
         String resultSql = stripFence(String.valueOf(context.state().getOrDefault("patch_preview", "")));
         String reportMd = String.valueOf(context.state().getOrDefault("report_md", ""));
 

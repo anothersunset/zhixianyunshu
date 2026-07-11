@@ -118,6 +118,30 @@ class TaskWorkflowIntegrationTest {
             .andExpect(status().isForbidden());
     }
 
+    @Test
+    void unknownDialectFeatureRequiresHumanReview() throws Exception {
+        String createBody = mapper.writeValueAsString(new TaskController.CreateTaskRequest(
+            project.getId(),
+            "unknown-feature",
+            "SELECT MYSTERY_VENDOR_FN(id) FROM users"
+        ));
+        String createJson = mockMvc.perform(post("/api/tasks")
+                .header("Authorization", "Bearer " + adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createBody))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString();
+        long taskId = mapper.readTree(createJson).path("data").path("id").asLong();
+
+        mockMvc.perform(post("/api/tasks/{id}/execute", taskId)
+                .header("Authorization", "Bearer " + adminToken))
+            .andExpect(status().isAccepted());
+
+        Task finished = awaitTerminal(taskId);
+        assertThat(finished.getStatus()).isEqualTo("REVIEW_REQUIRED");
+        assertThat(finished.getReviewRequired()).isEqualTo(1);
+    }
+
     private Task awaitTerminal(long taskId) throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
         while (System.nanoTime() < deadline) {

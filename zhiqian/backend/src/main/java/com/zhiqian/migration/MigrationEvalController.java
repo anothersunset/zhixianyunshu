@@ -517,7 +517,7 @@ public class MigrationEvalController {
         log.info("[AdaptiveLLM] pair={}, sql={}", pair, sourceSql.length() > 80 ? sourceSql.substring(0, 80) + "..." : sourceSql);
         String reply;
         try {
-            reply = llm.chat(prompt); // 永远用 chat-model 生成，reasoner 留给 Critic 做跨模型评审
+            reply = complex ? llm.reason(prompt) : llm.chat(prompt);
         } catch (Exception e) {
             log.error("[generateMigrationJson] LLM 调用失败, 返回 parseFallback: {}", e.getMessage());
             return parseFallback("LLM 调用失败: " + e.getMessage(), "", e.getMessage());

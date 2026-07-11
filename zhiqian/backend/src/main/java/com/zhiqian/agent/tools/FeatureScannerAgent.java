@@ -8,6 +8,7 @@ import com.zhiqian.migration.TranslationRecipeRegistry.RegisteredFeature;
 
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -30,14 +31,23 @@ public class FeatureScannerAgent implements AgentTool {
         List<RegisteredFeature> recipes =
             DialectFeatureScanner.getRecipes(features, sourceDialect);
         String hints = DialectFeatureScanner.toPromptHints(features, recipes);
+        List<String> unknownFeatures = features.stream()
+            .filter(feature -> feature.targetMapping().toUpperCase(Locale.ROOT).contains("UNKNOWN"))
+            .map(DialectFeatureScanner.DetectedFeature::sourceFeature)
+            .toList();
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("features", features);
         out.put("feature_recipes", recipes);
         out.put("feature_hints", hints);
         out.put("feature_count", features.size());
+        out.put("unknown_features", unknownFeatures);
+        out.put("unknown_feature_count", unknownFeatures.size());
+        if (!unknownFeatures.isEmpty()) {
+            out.put("review_reason", "UNKNOWN_FEATURE");
+        }
         out.put("_model", "rule-based");
-        out.put("_confidence", 1.0);
+        out.put("_confidence", unknownFeatures.isEmpty() ? 1.0 : 0.0);
         out.put("_real", false);
         return out;
     }

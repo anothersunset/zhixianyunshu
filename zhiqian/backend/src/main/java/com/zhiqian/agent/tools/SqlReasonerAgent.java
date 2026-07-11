@@ -3,6 +3,7 @@ package com.zhiqian.agent.tools;
 import com.zhiqian.agent.AgentContext;
 import com.zhiqian.agent.AgentTool;
 import com.zhiqian.llm.LlmClient;
+import com.zhiqian.migration.MigrationEvalController;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -27,11 +28,14 @@ public class SqlReasonerAgent implements AgentTool {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("risk_units", 14);
         if (llm.isReal()) {
-            String reply = llm.chat(prompt);
+            boolean complex = MigrationEvalController.isComplexSql(sourceSql, pair);
+            String reply = complex ? llm.reason(prompt) : llm.chat(prompt);
             out.put("reasoning", reply);
+            out.put("complex_sql", complex);
+            out.put("routing_reason", complex ? "complexity_score>=6" : "complexity_score<6");
             out.put("_confidence", 0.84);
             out.put("_real", true);
-            out.put("_model", llm.providerName() + ":reasoner");
+            out.put("_model", llm.providerName() + (complex ? ":reasoner" : ":chat"));
         } else {
             out.put("reasoning", "1. AUTO_INCREMENT → CREATE SEQUENCE + DEFAULT nextval\n2. DATETIME DEFAULT CURRENT_TIMESTAMP → TIMESTAMP DEFAULT now()\n3. JSON → JSONB + GIN 索引");
             out.put("strategies", List.of("sequence-rewrite", "timestamp-default-fix", "jsonb-migration"));
