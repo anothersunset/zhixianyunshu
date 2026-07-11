@@ -9,6 +9,7 @@ target/
 __pycache__/
 *.pyc
 .venv/
+.uv-cache/
 *.egg-info/
 .pytest_cache/
 
@@ -45,6 +46,7 @@ zhiqian/backend/logs/
 
 # Lock files
 *.lock
+!zhiqian/rag/uv.lock
 !eval/results/.gitkeep
 
 # Qdrant init marker

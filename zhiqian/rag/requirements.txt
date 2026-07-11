@@ -11,13 +11,17 @@ scikit-learn==1.4.2
 rank-bm25==0.2.2
 jieba==0.42.1
 chromadb==0.5.4
+qdrant-client==1.11.3
 orjson==3.10.3
 python-multipart==0.0.9
 langfuse==2.50.0
 sqlglot==25.16.1
 duckduckgo-search==6.2.10
-psutil>=5.9.0
+psutil==6.0.0
 jsonschema==4.23.0
+networkx==3.3
+PyYAML==6.0.2
+typer==0.12.5
 
 # Optional heavy ML stack lives in requirements-ml.txt.
 # Optional structured-output local model stack is intentionally not installed by default.
