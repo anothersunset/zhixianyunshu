@@ -1,3 +1,33 @@
-html, body, #app { height: 100%; margin: 0; }
-body { font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; background: #f5f7fa; color: #303133; }
+html, body, #app { height: 100%; min-width: 0; margin: 0; }
+body { overflow: hidden; font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; background: #f5f7fa; color: #303133; }
 * { box-sizing: border-box; }
+
+.responsive-table {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.responsive-table > .el-table {
+  min-width: 720px;
+}
+
+.responsive-table.compact > .el-table {
+  min-width: 520px;
+}
+
+.mobile-nav-drawer .el-drawer__body {
+  padding: 0;
+  background: #0f172a;
+}
+
+@media (max-width: 600px) {
+  .el-card__header {
+    padding: 14px;
+  }
+
+  .el-card__body {
+    padding: 14px;
+  }
+}
