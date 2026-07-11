@@ -117,7 +117,7 @@ async def lifespan(app: FastAPI):
     log.info("[lifespan] RAG 服务关闭中...")
 
 
-app = FastAPI(title="ZhiQian RAG", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="ZhiQian RAG", version="2.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )
@@ -154,7 +154,7 @@ for r in (health, query_api, validation, rerank, ingest, retrieve,
 async def root():
     return {
         "name": "ZhiQian RAG",
-        "version": "1.0.0",
+        "version": "2.0.0",
         "capabilities": {
             "crag": True, "graphrag": True, "structured": True,
             "mcp": True, "tts": True, "reports": True

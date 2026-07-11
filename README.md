@@ -4,7 +4,7 @@
 >
 > MySQL/Oracle/SQLServer → openGauss/PostgreSQL, 一键智迁, AI 可解释, 生态互联。
 
-[![version](https://img.shields.io/badge/version-1.0.3-blue)]() [![ci](https://img.shields.io/badge/CI-passing-brightgreen)]() [![cov](https://img.shields.io/badge/coverage-%E2%89%A570%25-brightgreen)]() [![mcp](https://img.shields.io/badge/MCP-server-blue)]() [![a2a](https://img.shields.io/badge/A2A-peer-blue)]() [![license](https://img.shields.io/badge/license-Apache--2.0-blue)]()
+[![version](https://img.shields.io/badge/version-2.0.0-blue)]() [![ci](https://img.shields.io/badge/CI-verify-brightgreen)]() [![cov](https://img.shields.io/badge/core%20coverage-%E2%89%A570%25-brightgreen)]() [![mcp](https://img.shields.io/badge/MCP-server-blue)]() [![a2a](https://img.shields.io/badge/A2A-peer-blue)]() [![license](https://img.shields.io/badge/license-Apache--2.0-blue)]()
 
 ## 仓库定位
 
@@ -17,7 +17,7 @@ zhixianyunshu/
 ├── UPGRADE_PLAN.md            二期路线图 + 决策日志
 ├── sourcecode/                v1 存档, 不再变动
 └── zhiqian/                   v2 主工作区
-    ├── backend/               Spring Boot 3.3 主服务
+    ├── backend/               Spring Boot 3.2.5 主服务
     ├── rag/                   Python 3.11 FastAPI RAG
     ├── web/                   Vue 3.4 + Element Plus 控制台
     ├── deploy/                Kustomize / ArgoCD / KubeRay / CDC / 公开数据集
@@ -41,7 +41,7 @@ zhixianyunshu/
 
 | 层 | 选型 |
 | --- | --- |
-| 后端 | Spring Boot 3.3 · Spring Security · OpenAPI · Temporal Java SDK (opt) · JaCoCo 0.8.12 |
+| 后端 | Spring Boot 3.2.5 · Spring Security · OpenAPI · Temporal Java SDK (opt) · JaCoCo 0.8.12 |
 | RAG | Python 3.11 · FastAPI · BGE-M3 · Qdrant · sqlglot · Outlines · CRAG mini StateGraph |
 | 前端 | Vue 3.4 · Vite 5 · Element Plus 2.7 · Pinia · vue-i18n 9 · ECharts · transformers.js v3 |
 | 部署 | Kustomize · ArgoCD · KubeRay · Debezium 3.0 · Kafka Connect · Docker Compose |
@@ -70,7 +70,7 @@ cd zhiqian/backend && ./mvnw spring-boot:run
 # RAG
 cd zhiqian/rag && uvicorn app.main:app --port 8001
 # 前端
-cd zhiqian/web && pnpm i && pnpm dev
+cd zhiqian/web && npm ci && npm run dev
 ```
 
 ## 演示路径

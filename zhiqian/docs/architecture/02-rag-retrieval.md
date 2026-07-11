@@ -13,21 +13,20 @@ flowchart TB
   Q["查询问题"] --> EMB["BGE-M3 Encoder"]
   EMB --> D["Dense Vector\n(1024-d)"]
   EMB --> S["Sparse Lexical\n(token id→weight)"]
-  EMB --> CB["ColBERT Multi-vec\n(token-level)"]
+  Q --> BM25["BM25 lexical"]
 
   D --> QD[("Qdrant Dense")]
   S --> SB[("Qdrant Sparse")]
-  CB --> CBI[("ColBERT Index")]
 
   QD --> RRF["RRF 融合\nk=60"]
   SB --> RRF
-  CBI --> RRF
+  BM25 --> RRF
 
   RRF --> RR["bge-reranker-v2-m3"]
   RR --> TOP["Top-k=8 上下文"]
 
   classDef store fill:#22c55e,stroke:#15803d,color:#fff
-  class QD,SB,CBI store
+  class QD,SB store
 ```
 
 ## Late Chunking

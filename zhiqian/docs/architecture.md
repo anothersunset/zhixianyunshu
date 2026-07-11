@@ -49,7 +49,7 @@ flowchart LR
 ## 技术栈
 
 ### 后端
-- Spring Boot 3.3 · Spring Security · OpenAPI · Temporal Java SDK（可选）
+- Spring Boot 3.2.5 · Spring Security · OpenAPI · Temporal Java SDK（可选）
 - AgentGraph · DeepSeek RestClient · Langfuse SDK
 - MigrationToolFactory · pgloader / Ora2Pg / Debezium / ZhiQian Native 适配
 

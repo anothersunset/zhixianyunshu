@@ -31,7 +31,7 @@ const slides: Slide[] = [
   {
     title: '创新点 (1/2) — 检索与解码',
     bullets: [
-      'BGE-M3 三路 (Dense / Sparse / ColBERT) + RRF k=60',
+      'BM25 / Vector / Rerank / CRAG / GraphRAG 显式检索模式',
       'CRAG mini StateGraph: retrieve → evaluate → correct → generate',
       'GraphRAG 自实现 Louvain-Lite, 能回答跨表 PL/SQL 依赖',
       'Outlines 受约束解码 + pydantic 3 轮 retry',

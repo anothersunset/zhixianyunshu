@@ -18,7 +18,7 @@
 
 | 特性 | **智迁云枢** | LangChain Naive | LlamaIndex Default | RAGFlow | Verba |
 | --- | --- | --- | --- | --- | --- |
-| 检索路数 | 3（Dense+Sparse+ColBERT） | 1 | 2 | 2 | 1 |
+| 检索模式 | BM25 / Vector / Rerank / CRAG / GraphRAG | 1 | 2 | 2 | 1 |
 | 融合 | RRF k=60 | none | weighted | RRF | none |
 | Late Chunking | ✅ baseline | ❌ | 部分 | ❌ | ❌ |
 | CRAG | ✅ mini StateGraph | ❌ | ❌ | 部分 | ❌ |

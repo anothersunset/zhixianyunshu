@@ -6,7 +6,7 @@
 同类迁移产品通常不接这两个协议。智迁同时是 MCP server（被 Claude / Cursor 调）+ A2A peer（与其他 Agent 互联），更贴近 2026 LLM Agent 生态。
 
 ## 2. 三路检索 + RRF 低成本混合
-Dense + Sparse + ColBERT 三路并发，RRF k=60 融合。跨方言 SQL 检索场景中，sparse term 可补 Dense 容易忽略的术语变体；真实收益需在迁移样本集上补 Recall@5 / Top-5 precision 对照。
+BM25、向量、重排、CRAG 与 GraphRAG 是显式可选检索模式；线上收益必须由带数据集哈希和 Git SHA 的消融结果证明，不预设提升幅度。
 
 ## 3. CRAG mini StateGraph 自实现
 不引 langgraph 重依赖，自写轻量 StateGraph：retrieve → evaluate（LLM + heuristics 双轨）→ correct / fallback → generate。价值在于控制流清晰、可降级、可插 LLM judge；默认启发式结果不直接等同真实模型效果。
