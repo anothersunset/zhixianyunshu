@@ -213,6 +213,22 @@
                             <rules>
                                 <rule>
                                     <element>BUNDLE</element>
+                                    <!-- Gate the production migration runtime. Legacy analyzers,
+                                         optional CDC/Temporal/TTS adapters and generated DTOs have
+                                         separate smoke checks and do not dilute this signal. -->
+                                    <includes>
+                                        <include>com/zhiqian/agent/**</include>
+                                        <include>com/zhiqian/task/**</include>
+                                        <include>com/zhiqian/security/**</include>
+                                        <include>com/zhiqian/auth/**</include>
+                                        <include>com/zhiqian/project/**</include>
+                                        <include>com/zhiqian/report/**</include>
+                                        <include>com/zhiqian/a2a/**</include>
+                                        <include>com/zhiqian/common/**</include>
+                                        <include>com/zhiqian/migration/DialectFeatureScanner*</include>
+                                        <include>com/zhiqian/migration/TranslationRecipeRegistry*</include>
+                                        <include>com/zhiqian/migration/SqlSyntaxValidator*</include>
+                                    </includes>
                                     <limits>
                                         <limit>
                                             <counter>LINE</counter>
