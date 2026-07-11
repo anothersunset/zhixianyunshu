@@ -13,6 +13,10 @@ spring:
       schema-locations: classpath:schema-h2.sql
 
 app:
+  task-execution:
+    core-threads: 1
+    max-threads: 1
+    queue-capacity: 1
   security:
     eval-endpoints-open: true
     integration-endpoints-open: true

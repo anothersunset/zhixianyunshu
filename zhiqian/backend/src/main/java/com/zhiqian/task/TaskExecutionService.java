@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -47,7 +48,10 @@ public class TaskExecutionService {
         TaskRepository taskRepository,
         TaskAgentStepRepository stepRepository,
         MigrationReportRepository reportRepository,
-        ObjectMapper mapper
+        ObjectMapper mapper,
+        @Value("${app.task-execution.core-threads:4}") int coreThreads,
+        @Value("${app.task-execution.max-threads:8}") int maxThreads,
+        @Value("${app.task-execution.queue-capacity:100}") int queueCapacity
     ) {
         this.pipeline = pipeline;
         this.taskRepository = taskRepository;
@@ -55,11 +59,11 @@ public class TaskExecutionService {
         this.reportRepository = reportRepository;
         this.mapper = mapper;
         this.executor = new ThreadPoolExecutor(
-            4,
-            8,
+            coreThreads,
+            maxThreads,
             60,
             TimeUnit.SECONDS,
-            new ArrayBlockingQueue<>(100),
+            new ArrayBlockingQueue<>(queueCapacity),
             new ThreadPoolExecutor.AbortPolicy()
         );
         scheduler.scheduleAtFixedRate(this::heartbeat, 15, 15, TimeUnit.SECONDS);

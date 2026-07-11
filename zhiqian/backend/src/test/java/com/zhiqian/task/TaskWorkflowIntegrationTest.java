@@ -158,6 +158,35 @@ class TaskWorkflowIntegrationTest {
         assertThat(finished.getReviewRequired()).isEqualTo(1);
     }
 
+    @Test
+    void returnsTooManyRequestsWhenMigrationQueueIsFull() throws Exception {
+        long first = createTask("queue-first", "SELECT IFNULL(name, 'a') FROM users");
+        long second = createTask("queue-second", "SELECT IFNULL(name, 'b') FROM users");
+        long third = createTask("queue-third", "SELECT IFNULL(name, 'c') FROM users");
+
+        mockMvc.perform(post("/api/tasks/{id}/execute", first).header("Authorization", "Bearer " + adminToken))
+            .andExpect(status().isAccepted());
+        mockMvc.perform(post("/api/tasks/{id}/execute", second).header("Authorization", "Bearer " + adminToken))
+            .andExpect(status().isAccepted());
+        mockMvc.perform(post("/api/tasks/{id}/execute", third).header("Authorization", "Bearer " + adminToken))
+            .andExpect(status().isTooManyRequests());
+        assertThat(taskRepository.findById(third).orElseThrow().getStatus()).isEqualTo("PENDING");
+        assertThat(taskRepository.findById(third).orElseThrow().getRunId()).isNull();
+
+        awaitTerminal(first);
+        awaitTerminal(second);
+    }
+
+    private long createTask(String name, String sql) throws Exception {
+        String body = mapper.writeValueAsString(new TaskController.CreateTaskRequest(project.getId(), name, sql));
+        String json = mockMvc.perform(post("/api/tasks")
+                .header("Authorization", "Bearer " + adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+            .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        return mapper.readTree(json).path("data").path("id").asLong();
+    }
+
     private Task awaitTerminal(long taskId) throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
         while (System.nanoTime() < deadline) {
