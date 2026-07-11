@@ -24,6 +24,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -89,6 +91,20 @@ class TaskWorkflowIntegrationTest {
         assertThat(finished.getResultSql()).isNotBlank();
         assertThat(stepRepository.findByTaskIdOrderByIdAsc(taskId)).hasSizeGreaterThanOrEqualTo(6);
         assertThat(reportRepository.findFirstByTaskIdOrderByIdDesc(taskId)).isPresent();
+
+        mockMvc.perform(get("/api/tasks/{id}/stream", taskId)
+                .param("runId", start.path("runId").asText()))
+            .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/tasks/{id}/stream", taskId)
+                .param("runId", start.path("runId").asText())
+                .header("Authorization", "Bearer " + adminToken))
+            .andExpect(status().isOk())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM));
+        mockMvc.perform(get("/api/tasks/{id}/report/download", taskId)
+                .header("Authorization", "Bearer " + adminToken))
+            .andExpect(status().isOk())
+            .andExpect(header().string("Content-Disposition", "attachment; filename=task-" + taskId + "-migration-report.md"))
+            .andExpect(content().contentTypeCompatibleWith("text/markdown"));
     }
 
     @Test

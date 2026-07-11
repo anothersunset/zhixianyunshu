@@ -3,6 +3,12 @@ package com.zhiqian.project;
 import com.zhiqian.common.Result;
 import com.zhiqian.task.TaskAccessService;
 import lombok.RequiredArgsConstructor;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -28,6 +34,24 @@ public class ProjectController {
         return Result.ok(items);
     }
 
+    @PostMapping
+    public ResponseEntity<Result<Project>> create(
+        @Valid @RequestBody CreateProjectRequest request,
+        Authentication authentication
+    ) {
+        var user = accessService.currentUser(authentication);
+        Project project = new Project();
+        project.setName(request.name().trim());
+        project.setSourceDb(request.sourceDb().trim());
+        project.setTargetDb(request.targetDb().trim());
+        project.setFramework(request.framework());
+        project.setDescription(request.description());
+        project.setStatus("NEW");
+        project.setOwnerId(user.getId());
+        project.setCreatedAt(java.time.Instant.now());
+        return ResponseEntity.status(HttpStatus.CREATED).body(Result.ok(projectRepository.save(project)));
+    }
+
     @GetMapping("/{id}")
     public Result<Project> detail(@PathVariable Long id, Authentication authentication) {
         return Result.ok(accessService.requireProject(id, authentication));
@@ -37,4 +61,12 @@ public class ProjectController {
     public Result<String> ping() {
         return Result.ok("pong");
     }
+
+    public record CreateProjectRequest(
+        @NotBlank String name,
+        @NotBlank String sourceDb,
+        @NotBlank String targetDb,
+        String framework,
+        String description
+    ) {}
 }
