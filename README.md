@@ -116,6 +116,8 @@ flowchart LR
 
 当前 CRAG / GraphRAG 已实现工程控制流：retrieve → evaluate → correct / fallback → generate，以及 local / global 图检索思路。但默认语义判断仍包含启发式成分，真实语义增益需要通过真实迁移样本和对照实验验证。后续评测将优先补充 BM25 only、Vector only、Vector + Rerank、CRAG、GraphRAG / CKG 五组对照。
 
+CI 的默认验收完全离线：Java 使用 `mvn clean verify`（含核心代码 70% JaCoCo 门禁），RAG 与 eval 使用确定性 pytest，前端执行类型检查和生产构建。真实 Qdrant、外部 LLM 与 Langfuse 属于凭据齐备后的可选 smoke；未配置时只验证显式降级、过滤器构造和追溯契约，不把 mock 或启发式结果报告为在线质量成绩。
+
 ## 同类产品对比
 
 详 [zhiqian/docs/comparison.md](./zhiqian/docs/comparison.md), 与 AWS DMS / Alibaba DTS / Ora2Pg / pgloader / DataX / RAGFlow / Verba 对比 6 维度。
