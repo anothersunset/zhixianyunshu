@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Optional
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # prefix="/crag"：此前无 prefix 导致 crag 也注册 POST /query，与 query.py 冲突并被其屏蔽。
 # 加 prefix 后端点为 /crag/query，与模块文档一致。
@@ -15,8 +15,8 @@ router = APIRouter(prefix="/crag", tags=["crag"])
 
 
 class CragReq(BaseModel):
-    question: str
-    top_k: int = 5
+    question: str = Field(min_length=1)
+    top_k: int = Field(default=5, ge=1, le=50)
     use_web: bool = True
 
 

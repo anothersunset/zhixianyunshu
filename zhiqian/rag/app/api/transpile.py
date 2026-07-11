@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 import logging
 
 from fastapi import APIRouter
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.core.observability import get_langfuse
 from app.core.sql_transpiler import (
@@ -25,7 +25,7 @@ router = APIRouter(prefix="/transpile", tags=["transpile"])
 
 
 class TranspileReq(BaseModel):
-    sql: str
+    sql: str = Field(min_length=1)
     source: str = "mysql"
     target: str = "postgres"  # opengauss/gauss/pg/postgresql 都会 alias 到 postgres
     explain: bool = True

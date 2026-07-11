@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from app.core.structured_output import StructuredOutputClient, outlines_available
 from app.core.schemas import TranspileExplanation, SchemaAnalysisResult, MigrationRiskReport
 
-router = APIRouter(tags=["structured"])
+router = APIRouter(prefix="/structured", tags=["structured"])
 
 # 依赖注入点: main.py override
 def _client_dep() -> StructuredOutputClient:
@@ -15,20 +15,24 @@ def _client_dep() -> StructuredOutputClient:
 
 
 class TranspileExplainReq(BaseModel):
-    source_sql: str
-    target_sql: str
+    source_sql: str = Field(min_length=1)
+    target_sql: str = Field(min_length=1)
     source_dialect: str = "mysql"
     target_dialect: str = "opengauss"
 
 
 class SchemaAnalysisReq(BaseModel):
-    schema_summary: str = Field(..., description="DDL / 信息表提取出的文本描述")
-    tables_total: Optional[int] = None
+    schema_summary: str = Field(
+        ..., min_length=1, description="DDL / 信息表提取出的文本描述"
+    )
+    tables_total: Optional[int] = Field(default=None, ge=0)
 
 
 class RiskReportReq(BaseModel):
     task_id: int
-    context: str = Field(..., description="上下文: 包含表名/SQL/改动点 的多行文本")
+    context: str = Field(
+        ..., min_length=1, description="上下文: 包含表名/SQL/改动点 的多行文本"
+    )
 
 
 class StructuredResp(BaseModel):

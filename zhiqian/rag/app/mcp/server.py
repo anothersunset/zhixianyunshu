@@ -8,8 +8,12 @@ JSON-RPC 2.0 over HTTP。实现依 MCP spec 0.4 最小集: tools/list + tools/ca
 from __future__ import annotations
 import json
 import logging
+import os
 import time
 from typing import Any, Dict, List
+
+import httpx
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +29,7 @@ TOOLS: List[Dict[str, Any]] = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "source_sql": {"type": "string", "description": "原始 SQL"},
+                "source_sql": {"type": "string", "minLength": 1, "description": "原始 SQL"},
                 "source_dialect": {"type": "string", "enum": ["mysql","oracle","postgres","sqlserver","db2"], "default": "mysql"},
                 "target_dialect": {"type": "string", "enum": ["opengauss","postgres","mysql"], "default": "opengauss"}
             },
@@ -38,9 +42,10 @@ TOOLS: List[Dict[str, Any]] = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "source_sql": {"type": "string"},
+                "source_sql": {"type": "string", "minLength": 1},
                 "source_dialect": {"type": "string", "default": "mysql"},
-                "target_dialect": {"type": "string", "default": "opengauss"}
+                "target_dialect": {"type": "string", "default": "opengauss"},
+                "target_sql": {"type": "string", "minLength": 1}
             },
             "required": ["source_sql"]
         }
@@ -51,10 +56,10 @@ TOOLS: List[Dict[str, Any]] = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "ddl": {"type": "string"},
-                "dialect": {"type": "string", "default": "mysql"}
+                "schema_summary": {"type": "string", "minLength": 1},
+                "tables_total": {"type": "integer", "minimum": 0}
             },
-            "required": ["ddl"]
+            "required": ["schema_summary"]
         }
     },
     {
@@ -63,11 +68,10 @@ TOOLS: List[Dict[str, Any]] = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "sql_list": {"type": "array", "items": {"type": "string"}},
-                "source_dialect": {"type": "string", "default": "mysql"},
-                "target_dialect": {"type": "string", "default": "opengauss"}
+                "task_id": {"type": "integer"},
+                "context": {"type": "string", "minLength": 1}
             },
-            "required": ["sql_list"]
+            "required": ["task_id", "context"]
         }
     },
     {
@@ -76,8 +80,8 @@ TOOLS: List[Dict[str, Any]] = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "query": {"type": "string"},
-                "k": {"type": "integer", "default": 8, "minimum": 1, "maximum": 50}
+                "query": {"type": "string", "minLength": 1},
+                "top_k": {"type": "integer", "default": 8, "minimum": 1, "maximum": 50}
             },
             "required": ["query"]
         }
@@ -88,8 +92,9 @@ TOOLS: List[Dict[str, Any]] = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "question": {"type": "string"},
-                "context": {"type": "string", "description": "可选上下文"}
+                "question": {"type": "string", "minLength": 1},
+                "top_k": {"type": "integer", "default": 5, "minimum": 1, "maximum": 50},
+                "use_web": {"type": "boolean", "default": True}
             },
             "required": ["question"]
         }
@@ -122,43 +127,83 @@ async def dispatch(method: str, params: Dict[str, Any], deps) -> Any:
     raise ValueError(f"unknown method: {method}")
 
 
+def _validated_request(
+    model_cls: type[BaseModel], payload: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Validate internal HTTP payloads against the endpoint's real schema."""
+    return model_cls.model_validate(payload).model_dump(
+        exclude_none=True,
+        exclude_unset=True,
+    )
+
+
 async def _call_tool(name: str, args: Dict[str, Any], deps) -> Dict[str, Any]:
     """调现有服务。远端调用 (各 endpoint 独立 httpx) 是为了避免循环 import。"""
-    import httpx
-    base = "http://localhost:8001"
+    base = os.getenv("MCP_INTERNAL_BASE_URL", "http://localhost:8001")
     started = time.time()
     try:
+        # Local imports avoid an import cycle while keeping MCP-to-HTTP
+        # contracts tied to the exact FastAPI Pydantic request models.
+        from app.api.crag import CragReq
+        from app.api.retrieve import RetrieveReq
+        from app.api.structured import (
+            RiskReportReq,
+            SchemaAnalysisReq,
+            TranspileExplainReq,
+        )
+        from app.api.transpile import TranspileReq
+
         async with httpx.AsyncClient(base_url=base, timeout=120) as client:
             if name == "sql_transpile":
-                r = await client.post("/transpile", json={
-                    "source_sql": args.get("source_sql"),
-                    "source_dialect": args.get("source_dialect", "mysql"),
-                    "target_dialect": args.get("target_dialect", "opengauss")
+                body = _validated_request(TranspileReq, {
+                    "sql": args.get("source_sql"),
+                    "source": args.get("source_dialect", "mysql"),
+                    "target": args.get("target_dialect", "opengauss")
                 })
+                r = await client.post("/transpile", json=body)
             elif name == "sql_explain":
-                r = await client.post("/structured/transpile-explain", json={
+                target_sql = args.get("target_sql")
+                if not target_sql:
+                    transpile_body = _validated_request(TranspileReq, {
+                        "sql": args.get("source_sql"),
+                        "source": args.get("source_dialect", "mysql"),
+                        "target": args.get("target_dialect", "opengauss")
+                    })
+                    transpiled = await client.post("/transpile", json=transpile_body)
+                    transpiled.raise_for_status()
+                    target_sql = transpiled.json().get("target")
+                body = _validated_request(TranspileExplainReq, {
                     "source_sql": args.get("source_sql"),
+                    "target_sql": target_sql,
                     "source_dialect": args.get("source_dialect", "mysql"),
                     "target_dialect": args.get("target_dialect", "opengauss")
                 })
+                r = await client.post("/structured/transpile-explain", json=body)
             elif name == "schema_analysis":
-                r = await client.post("/structured/schema-analysis", json={
-                    "ddl": args.get("ddl"),
-                    "dialect": args.get("dialect", "mysql")
+                body = _validated_request(SchemaAnalysisReq, {
+                    "schema_summary": args.get("schema_summary", args.get("ddl")),
+                    "tables_total": args.get("tables_total")
                 })
+                r = await client.post("/structured/schema-analysis", json=body)
             elif name == "risk_report":
-                r = await client.post("/structured/risk-report", json={
-                    "sql_list": args.get("sql_list", []),
-                    "source_dialect": args.get("source_dialect", "mysql"),
-                    "target_dialect": args.get("target_dialect", "opengauss")
-                })
-            elif name == "retrieve":
-                r = await client.post("/retrieve", json={"query": args.get("query"), "k": args.get("k", 8)})
-            elif name == "migrate_query":
-                r = await client.post("/crag/query", json={
-                    "query": args.get("question"),
+                body = _validated_request(RiskReportReq, {
+                    "task_id": args.get("task_id"),
                     "context": args.get("context")
                 })
+                r = await client.post("/structured/risk-report", json=body)
+            elif name == "retrieve":
+                body = _validated_request(RetrieveReq, {
+                    "query": args.get("query"),
+                    "top_k": args.get("top_k", args.get("k", 8))
+                })
+                r = await client.post("/retrieve", json=body)
+            elif name == "migrate_query":
+                body = _validated_request(CragReq, {
+                    "question": args.get("question"),
+                    "top_k": args.get("top_k", 5),
+                    "use_web": args.get("use_web", True)
+                })
+                r = await client.post("/crag/query", json=body)
             else:
                 return _error_content(f"unknown tool: {name}")
             r.raise_for_status()
