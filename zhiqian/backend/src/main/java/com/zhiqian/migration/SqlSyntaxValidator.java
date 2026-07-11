@@ -32,33 +32,51 @@ public class SqlSyntaxValidator {
         try {
             ProcessBuilder pb = new ProcessBuilder(
                 findPython(), SCRIPT_PATH, sql, dialect);
-            pb.redirectErrorStream(true);
+            // sqlglot may write parser diagnostics to stderr even though the
+            // validator itself emits a valid JSON result on stdout.  Merging
+            // the two streams made the JSON parser reject the real result.
+            pb.redirectErrorStream(false);
             Process proc = pb.start();
-
-            StringBuilder output = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(proc.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line);
-                }
-            }
             boolean finished = proc.waitFor(5, TimeUnit.SECONDS);
             if (!finished) {
                 proc.destroyForcibly();
                 return new ValidationResult(false, "Validation timed out (5s)");
             }
 
-            @SuppressWarnings("unchecked")
-            Map<String, Object> result = MAPPER.readValue(output.toString(), Map.class);
-            boolean valid = Boolean.TRUE.equals(result.get("valid"));
-            String error = result.get("error") != null ? String.valueOf(result.get("error")) : null;
-            return new ValidationResult(valid, error);
+            String stdout = new String(proc.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            String stderr = new String(proc.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
+            return parseResult(stdout, stderr, proc.exitValue());
 
         } catch (Exception e) {
             log.warn("[SqlSyntaxValidator] validation failed: {}", e.getMessage());
             return new ValidationResult(false, "Validator error: " + e.getMessage());
         }
+    }
+
+    static ValidationResult parseResult(String stdout, String stderr, int exitCode) {
+        String json = stdout == null ? "" : stdout.lines()
+            .filter(line -> !line.isBlank())
+            .reduce((first, second) -> second)
+            .orElse("")
+            .trim();
+        if (exitCode != 0 || json.isBlank()) {
+            String detail = stderr == null || stderr.isBlank() ? "no JSON output" : stderr.trim();
+            return new ValidationResult(false,
+                "Validator exited with code " + exitCode + ": " + abbreviate(detail));
+        }
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> result = MAPPER.readValue(json, Map.class);
+            boolean valid = Boolean.TRUE.equals(result.get("valid"));
+            String error = result.get("error") != null ? String.valueOf(result.get("error")) : null;
+            return new ValidationResult(valid, error);
+        } catch (Exception exception) {
+            return new ValidationResult(false, "Validator returned invalid JSON: " + exception.getMessage());
+        }
+    }
+
+    private static String abbreviate(String value) {
+        return value.length() <= 300 ? value : value.substring(0, 300);
     }
 
     private static String findPython() {

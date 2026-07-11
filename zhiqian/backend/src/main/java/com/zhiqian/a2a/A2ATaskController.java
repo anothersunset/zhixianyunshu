@@ -42,7 +42,11 @@ public class A2ATaskController {
     public ResponseEntity<Map<String, Object>> send(@RequestBody Map<String, Object> body) {
         A2ATask task = buildTask(body);
         store.save(task);
-        executor.execute(task);
+        try {
+            executor.run(task);
+        } catch (RuntimeException ignored) {
+            // A2A transports execution failures in the task status payload.
+        }
         return ResponseEntity.ok(task.toJson());
     }
 
@@ -55,26 +59,17 @@ public class A2ATaskController {
         // 1) 马上推 submitted
         emit(emitter, "task", task.toJson());
 
-        CompletableFuture.runAsync(() -> {
-            try {
-                task.state = "working";
-                task.updatedAt = Instant.now();
-                emit(emitter, "status", task.toJson());
-
-                executor.run(task);
-
+        task.state = "working";
+        task.updatedAt = Instant.now();
+        emit(emitter, "status", task.toJson());
+        executor.execute(task).whenComplete((ignored, error) -> {
+            if ("completed".equals(task.state)) {
                 emit(emitter, "artifact", Map.of(
                     "taskId", task.id, "artifacts", task.artifacts
                 ));
-                emit(emitter, "status", task.toJson());
-                emitter.complete();
-            } catch (Exception e) {
-                task.state = "failed";
-                task.errorMessage = e.getMessage();
-                task.updatedAt = Instant.now();
-                emit(emitter, "status", task.toJson());
-                emitter.completeWithError(e);
             }
+            emit(emitter, "status", task.toJson());
+            emitter.complete();
         });
         return emitter;
     }
