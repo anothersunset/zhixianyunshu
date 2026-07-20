@@ -28,7 +28,7 @@
         <temporal.version>1.27.0</temporal.version>
         <!-- v2-step-17: Testcontainers + JaCoCo -->
         <testcontainers.version>1.20.1</testcontainers.version>
-        <jacoco.version>0.8.12</jacoco.version>
+        <jacoco.version>0.8.15</jacoco.version>
         <springdoc.version>2.5.0</springdoc.version>
     </properties>
 
