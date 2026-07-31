@@ -11,7 +11,7 @@ torch==2.4.0+cpu ; platform_system != "Darwin"
 torch==2.4.0 ; platform_system == "Darwin"
 
 transformers==4.44.2
-sentencepiece==0.2.0
+sentencepiece==0.2.1
 FlagEmbedding==1.2.11
 accelerate==0.34.2
 peft>=0.7.0
