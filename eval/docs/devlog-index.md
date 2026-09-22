@@ -17,6 +17,17 @@
 | [Reranker OOM + RAG 稳定性](devlog-2026-06-13-reranker-rag-stability.md) | 06-13 | Reranker 内存超限 + 看门狗 | Recall@5: 0.30→0.73 (+143%) |
 | [规则扫描器 P0/P1/P2](devlog-2026-06-24-rule-scanner-architecture.md) | 06-22~24 | 统一注册表 + 两阶段 + 注释剥离 | v12: 30/30 oracle-pg |
 | [三层复审体系](devlog-2026-06-24-review-system.md) | 06-24 | FETCH FIRST 归一化 + Judge + 金标检测 | PARROT: 35%→80% (adjusted 90%) |
+| [KB 统一管理](devlog-2026-06-24-kb-unification.md) | 06-24 | **Phase 1** · 3 处硬编码 → 单一 YAML 真源 | 61 docs / 6 categories 统一；RAG 重启丢数据修复 |
+| [多方言扩展框架](devlog-2026-06-24-multi-dialect-framework.md) | 06-24 | **Phase 2** · 新方言零代码接入 | oracle 30 / mysql 16 / sqlserver 12 features |
+| [失败模式自动学习](devlog-2026-06-24-failure-auto-learning.md) | 06-24 | **Phase 3** · 评测失败 → KB 补充闭环 | 19 clusters，3 critical（MONTHS_BETWEEN / CONNECT BY 各 100% 失败） |
+
+### 架构与审计（`docs/`）
+
+| 文件 | 日期 | 主题 | 关键结果 |
+|------|------|------|----------|
+| [失败学习闭环 — 通用框架](../../docs/devlog-2026-06-24-failure-learning-loop.md) | 06-24 | 5 阶段管道：失败 → LLM 生成知识 → 人工门禁 → 回注验证 | 38/38 失败 case 修复，100% 改善率 |
+| [SQL Server 方言支持](../../docs/devlog-2026-06-30-sqlserver-support.md) | 06-30 | 补齐 recipes + 修 `\b` 正则陷阱 + 源方言映射 | SQL Server fast mode **32/32 (100.0%)** |
+| [P0/P1 遗留问题核实与修复](../../docs/devlog-2026-07-09-p0-p1-audit.md) | 07-09 | 10 项外部审查逐条对照真实代码核实 | 3 处描述有出入；critic 失败谎报已修 |
 
 ### 关键里程碑
 
@@ -35,6 +46,10 @@ v12:   P0+P1+P2 架构重构                 → 30/30 (零回归)
 3. **金标质量决定评测上限**（PARROT 50% case 金标含 Oracle 残留）
 4. **单一根因 > 多因修补**（漏浮力一项解释全部 4 个偏差）
 5. **评测数字需要拆分解读**（原始率 / 调整率 / 金标质量分布）
+6. **`\b` 正则陷阱**（`\b` 只匹配 `[a-zA-Z0-9_]` 边界，与 `(`、`[` 混用永不匹配）
+7. **安全闸门是反馈回路的核心**（不设人工门禁的自动学习 = 自我退化）
+8. **核实优先于修复**（10 项外部审查中 3 项描述与真实代码不符，不轻信描述）
+9. **多处同步是熵增源**（同一条 KB 维护 3 份必然脱节 → 收敛为单一真源）
 
 ---
 
@@ -44,6 +59,8 @@ v12:   P0+P1+P2 架构重构                 → 30/30 (零回归)
 |------|------|------|----------|
 | [v3.2 本地验证](../../../Graphrag-copilot/docs/devlog-2026-05-22-v3.2-validation.md) | 05-22 | 5 修复 + 哨兵测试 | 20/20 PASS |
 | [50 题 Benchmark 评测](../../../Graphrag-copilot/docs/devlog-2026-06-11-benchmark-evaluation.md) | 06-10~11 | Faithfulness/CRAG/跨文档/GraphRAG 边 | faithfulness 0.18→0.83 (+65pp) |
+| [GraphRAG 索引层深度重构](../../../Graphrag-copilot/docs/devlog-2026-07-08-graphrag-index-layer.md) | 07-08 | `packages/kg` 实装 + PPR 检索 + Louvain 社区检测 + local/global 路由 | v3.2 → v3.3；测试 125 → 191 通过 |
+| [索引层 × 评测调优分支合并](../../../Graphrag-copilot/docs/devlog-2026-07-09-merge-reconciliation.md) | 07-08~09 | 逐文件核实 14 个冲突提交后合并（非简单二选一） | 提交 `023695e`；191 测试全过 |
 | `memory/graphrag-copilot-v3.2-validation.md` | 05-22 | v3.2 本地验证（原始记录） | - |
 
 ### 关键修复
