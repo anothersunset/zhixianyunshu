@@ -156,7 +156,7 @@ public class TaskExecutionService {
             task = taskRepository.findById(taskId).orElseThrow();
             task.setStatus(result.status());
             task.setResultSql(result.resultSql());
-            task.setErrorMessage(result.failedStage());
+            task.setErrorMessage(failureMessage(result.failedStage()));
             task.setReviewRequired(result.reviewRequired() ? 1 : 0);
             task.setTotalUnits(result.steps().size());
             task.setAvgConfidence(confidences.stream().mapToDouble(Double::doubleValue).average().orElse(0.0));
@@ -280,6 +280,11 @@ public class TaskExecutionService {
         if (normalized.contains("opengauss")) return "opengauss";
         if (normalized.contains("postgres")) return "postgresql";
         return normalized.replaceAll("\\s+.*$", "");
+    }
+
+    /** 失败阶段名转为可读错误信息（保留阶段名便于排查）。 */
+    static String failureMessage(String failedStage) {
+        return failedStage == null ? null : "pipeline failed at stage: " + failedStage;
     }
 
     private String terminalName(String status) {

@@ -11,6 +11,7 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -28,7 +29,12 @@ public class A2ATaskExecutor {
         RestTemplateBuilder restTemplateBuilder,
         @Value("${app.rag.base-url:http://localhost:8001}") String ragUrl
     ) {
-        this(taskExecutor, restTemplateBuilder.build(), ragUrl);
+        this(taskExecutor, restTemplateBuilder
+                // RAG 服务无响应时不能无限占用执行线程
+                .setConnectTimeout(Duration.ofSeconds(5))
+                .setReadTimeout(Duration.ofSeconds(60))
+                .build(),
+            ragUrl);
     }
 
     A2ATaskExecutor(TaskExecutor taskExecutor, RestTemplate rest, String ragUrl) {
