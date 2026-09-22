@@ -8,14 +8,13 @@
 
 ## 仓库定位
 
-本仓库是 **智迁云枢 v2.0** 完整可运行版,在原 `sourcecode/` (v1 存档) 基础上, 在新目录 `zhiqian/` 重写 backend / rag / web / deploy / docs。
+本仓库是 **智迁云枢 v2.0** 完整可运行版。v1 代码已归档移出仓库，当前由 `zhiqian/` 目录承载 backend / rag / web / deploy / docs。
 
 ```
 zhixianyunshu/
 ├── README.md                  本文档
 ├── CHANGELOG.md               v2 全部 32 个 milestone + 7 加分 commit 详情
 ├── UPGRADE_PLAN.md            二期路线图 + 决策日志
-├── sourcecode/                v1 存档, 不再变动
 └── zhiqian/                   v2 主工作区
     ├── backend/               Spring Boot 3.2.5 主服务
     ├── rag/                   Python 3.11 FastAPI RAG
