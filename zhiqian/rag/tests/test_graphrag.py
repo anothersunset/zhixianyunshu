@@ -121,3 +121,28 @@ def test_stats_method(ckg_fixture):
     s = idx.stats()
     assert s["n_nodes"] == 15
     assert s["largest_community"] >= 3
+
+
+def test_http_index_returns_503_when_index_not_initialized(client):
+    """_index_dep 为 None 时 /index (GraphRAG) 必须返 503, 不能 AttributeError→500。"""
+    from app.api import graphrag as graphrag_api
+
+    original = client.app.dependency_overrides.get(graphrag_api._index_dep)
+    client.app.dependency_overrides[graphrag_api._index_dep] = lambda: None
+    try:
+        resp = client.post(
+            "/index",
+            json={
+                "nodes": [{"id": "a", "type": "Class", "label": "A", "text": "a"}],
+                "edges": [],
+            },
+        )
+    finally:
+        if original is None:
+            client.app.dependency_overrides.pop(graphrag_api._index_dep, None)
+        else:
+            client.app.dependency_overrides[graphrag_api._index_dep] = original
+
+    assert resp.status_code == 503
+    body = resp.json()
+    assert body.get("detail"), "错误响应应带 detail 说明 (与其他端点 HTTPException 风格一致)"

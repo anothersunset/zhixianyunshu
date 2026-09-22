@@ -48,6 +48,9 @@ def _index_dep():
 
 @router.post("/index")
 def index(req: IndexReq, index = Depends(_index_dep)):
+    if index is None:
+        # 未注入索引 (lifespan 建图失败/服务启动中): 显式 503, 不让 AttributeError 变 500。
+        raise HTTPException(503, "GraphRAG index not initialized; 请先等 KB 建图完成或检查启动日志")
     stats = index.build(
         [n.dict() for n in req.nodes],
         [e.dict() for e in req.edges],

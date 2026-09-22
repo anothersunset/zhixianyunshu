@@ -29,7 +29,9 @@ from datetime import datetime
 from pathlib import Path
 
 # ─── 配置 ───
-RAG_PORT = 8004
+# 端口与 eval/rag_watchdog.py、eval/preflight.py、Dockerfile 保持一致 (8001)。
+# 可用 RAG_WATCHDOG_PORT 环境变量覆盖 (例如本地把服务跑在其他端口时)。
+RAG_PORT = int(os.environ.get("RAG_WATCHDOG_PORT", "8001"))
 RAG_HOST = "127.0.0.1"
 HEALTH_URL = f"http://{RAG_HOST}:{RAG_PORT}/health"
 HEALTH_TIMEOUT = 10  # 秒

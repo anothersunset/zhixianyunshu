@@ -19,6 +19,7 @@ from app.pipelines.critic import SelfRagCritic
 from app.graphs.graphrag import GraphRagIndex
 from app.graphs.crag import CragRunner
 from app.graphs.kb_graph_builder import build_graph_from_docs
+from app.config import settings
 from app.core.structured_output import StructuredOutputClient
 
 # ─── 日志持久化 ───
@@ -117,9 +118,19 @@ async def lifespan(app: FastAPI):
     log.info("[lifespan] RAG 服务关闭中...")
 
 
+def _cors_origins(raw: str) -> list:
+    """解析 RAG_CORS_ORIGINS: 逗号分隔; 空或 "*" 保持全放开 (默认不破坏本地搭配)。"""
+    value = (raw or "").strip()
+    if not value or value == "*":
+        return ["*"]
+    origins = [origin.strip() for origin in value.split(",") if origin.strip()]
+    return origins or ["*"]
+
+
 app = FastAPI(title="ZhiQian RAG", version="2.0.0", lifespan=lifespan)
 app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
+    CORSMiddleware, allow_origins=_cors_origins(settings.cors_origins),
+    allow_methods=["*"], allow_headers=["*"]
 )
 
 

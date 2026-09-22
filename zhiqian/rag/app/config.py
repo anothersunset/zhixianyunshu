@@ -8,6 +8,10 @@ class Settings(BaseSettings):
     port: int = 8001
     data_dir: str = "/data"
 
+    # CORS 允许来源。默认 "*" 保持本地搭配全放开; 生产可用 RAG_CORS_ORIGINS 收紧,
+    # 逗号分隔, 例: "http://localhost:5173,https://zhiqian.example.com"
+    cors_origins: str = "*"
+
     embedding_dim: int = 1024
     bm25_top_k: int = 50
     rerank_top_n: int = 5
