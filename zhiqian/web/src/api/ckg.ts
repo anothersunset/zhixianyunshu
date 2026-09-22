@@ -1,5 +1,5 @@
 // v2-step-16: CKG graph backend client
-import axios from 'axios'
+import http from './http'
 
 export interface CkgNode {
   id: string
@@ -24,14 +24,8 @@ export interface CkgGraphResp {
   stats?: Record<string, number>
 }
 
-const api = axios.create({ baseURL: import.meta.env.VITE_API_BASE || '/api' })
-api.interceptors.request.use((cfg) => {
-  const t = localStorage.getItem('zq_token')
-  if (t) cfg.headers.Authorization = 'Bearer ' + t
-  return cfg
-})
-
+// 复用共享 http 实例: 统一注入 Bearer token, 且 401/403 时清 token 跳登录。
+// 响应拦截器已解包 {code,message,data} 信封, 直接返回 CkgGraphResp。
 export async function fetchCkgGraph(projectId: number): Promise<CkgGraphResp> {
-  const { data } = await api.get('/ckg/graph', { params: { projectId } })
-  return (data && data.data) ? data.data : data
+  return http.get('/ckg/graph', { params: { projectId } })
 }

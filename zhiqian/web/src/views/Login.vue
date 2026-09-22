@@ -15,13 +15,23 @@
 
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { login } from '@/api/auth'
 
 const form = reactive({ username: 'admin', password: 'admin123' })
 const loading = ref(false)
+const route = useRoute()
 const router = useRouter()
+
+// 登录后优先回到守卫记录的深链; 仅接受以单个 '/' 开头的站内路径 (排除 '//' 防 open redirect)
+function safeRedirectTarget(): string {
+  const target = route.query.redirect
+  if (typeof target === 'string' && target.startsWith('/') && !target.startsWith('//')) {
+    return target
+  }
+  return '/'
+}
 
 async function submit() {
   loading.value = true
@@ -30,7 +40,7 @@ async function submit() {
     localStorage.setItem('zq_token', r.token)
     localStorage.setItem('zq_role', r.role)
     ElMessage.success(`欢迎回来，${r.displayName || r.username}`)
-    router.push('/')
+    router.push(safeRedirectTarget())
   } catch (e: any) {
     ElMessage.error(e?.message || '登录失败')
   } finally { loading.value = false }

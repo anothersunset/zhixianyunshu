@@ -35,6 +35,8 @@ export const useTaskStore = defineStore('task', () => {
   const streamStoppedByUser = ref(false)
   const activeRunId = ref<string | null>(null)
   let abortController: AbortController | null = null
+  // 当前视图是否已收到过 SSE progress 事件 (纯逻辑标记, 不参与渲染)
+  let sseProgressSeen = false
 
   async function refreshAll() {
     tasks.value = await listTasks()
@@ -42,6 +44,8 @@ export const useTaskStore = defineStore('task', () => {
 
   async function loadOne(id: number) {
     const snapshot = await fetchSnapshot(id)
+    // 切换任务视图时重置 SSE 进度标记: 此视图尚未收到任何 SSE progress
+    sseProgressSeen = false
     applySnapshot(snapshot)
   }
 
@@ -72,9 +76,14 @@ export const useTaskStore = defineStore('task', () => {
       payload: parsePayload(step.payload),
     }))
     activeRunId.value = task.runId
-    progress.value = isTerminal(task.status)
-      ? 100
-      : Math.min(95, Math.round((steps.value.length / 6) * 100))
+    if (isTerminal(task.status)) {
+      // 终态快照是权威进度 (100 为上限, 天然只前进)
+      progress.value = 100
+    } else if (!sseProgressSeen) {
+      // 仅在从未收到 SSE progress 时, 才允许用快照步数估算进度
+      progress.value = Math.min(95, Math.round((steps.value.length / 6) * 100))
+    }
+    // 已收到 SSE progress 时不套用估算值, 防止快照回捞/重连把进度"倒退"覆盖
     terminalStatus.value = ['DONE', 'FAILED', 'REVIEW_REQUIRED'].includes(current.value.status)
       ? current.value.status
       : null
@@ -85,6 +94,7 @@ export const useTaskStore = defineStore('task', () => {
     stopStream(false)
     steps.value = []
     progress.value = 0
+    sseProgressSeen = false // 新一轮运行: 重置 SSE 进度标记, 快照估算恢复生效资格
     terminalStatus.value = null
     streamError.value = null
     streamStoppedByUser.value = false
@@ -150,7 +160,9 @@ export const useTaskStore = defineStore('task', () => {
       if (event.name === 'step') {
         steps.value.push(JSON.parse(event.data) as AgentStep)
       } else if (event.name === 'progress') {
-        progress.value = Math.max(0, Math.min(100, Number(event.data) || 0))
+        sseProgressSeen = true
+        // 进度只前进不倒退 (重连重放旧事件时取 max 防回退)
+        progress.value = Math.max(progress.value, Math.max(0, Math.min(100, Number(event.data) || 0)))
       } else if (event.name === 'completed' || event.name === 'failed') {
         const terminal = JSON.parse(event.data) as { status?: string; error?: string }
         terminalStatus.value = terminal.status ?? (event.name === 'failed' ? 'FAILED' : 'DONE')
