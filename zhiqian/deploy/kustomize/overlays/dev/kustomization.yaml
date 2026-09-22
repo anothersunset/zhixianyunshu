@@ -15,6 +15,18 @@ replicas:
   - name: zhiqian-web
     count: 1
 patches:
+  # base 的 namespace.yaml 定义的是名为 zhiqian 的 Namespace 对象，而本 overlay
+  # 的 namespace 字段是 zhiqian-dev。新版 kustomize（>= v4.1）会自动把 Namespace
+  # 对象改名到目标 namespace；旧版（及部分 ArgoCD 内置的旧 kustomize）不会，导致
+  # 纯 kubectl 路径额外创建一个空的 zhiqian 命名空间而资源落在 zhiqian-dev。
+  # 显式改名，保证不同工具链版本下行为一致。
+  - target:
+      kind: Namespace
+      name: zhiqian
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: zhiqian-dev
   - target:
       kind: Service
       name: zhiqian-web
