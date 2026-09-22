@@ -28,6 +28,7 @@
 | [失败学习闭环 — 通用框架](../../docs/devlog-2026-06-24-failure-learning-loop.md) | 06-24 | 5 阶段管道：失败 → LLM 生成知识 → 人工门禁 → 回注验证 | 38/38 失败 case 修复，100% 改善率 |
 | [SQL Server 方言支持](../../docs/devlog-2026-06-30-sqlserver-support.md) | 06-30 | 补齐 recipes + 修 `\b` 正则陷阱 + 源方言映射 | SQL Server fast mode **32/32 (100.0%)** |
 | [P0/P1 遗留问题核实与修复](../../docs/devlog-2026-07-09-p0-p1-audit.md) | 07-09 | 10 项外部审查逐条对照真实代码核实 | 3 处描述有出入；critic 失败谎报已修 |
+| [第二轮 P0/P1 加固](../../docs/devlog-2026-07-12-second-hardening-round.md) | 07-10~12 | 15 个无记录提交的 diff 复盘：六 Agent 链路统一、Bearer Header + owner 鉴权、MCP/A2A 契约、显式 retrieval mode | 三态终态含 `REVIEW_REQUIRED`；70% 覆盖率门禁；TaskDetail 截图 QA 未做 |
 
 ### 关键里程碑
 
