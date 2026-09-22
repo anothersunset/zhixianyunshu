@@ -375,7 +375,13 @@ def to_markdown(table) -> str:
     sep = "|---|---|---|---|---|"
     lines = [head, sep]
     for r in RETRIEVAL_CHOICES:
-        s = table[r]["summary"]
+        # 守卫: 某组失败/被跳过时 run_all 不会写 table[r]。缺组输出占位行,
+        # 不能让整轮汇总崩溃、把已完成各组的结果也一起丢掉。
+        entry = table.get(r) if isinstance(table, dict) else None
+        s = entry.get("summary") if isinstance(entry, dict) else None
+        if not isinstance(s, dict):
+            lines.append("| {0} | skipped | skipped | skipped | 0 |".format(GROUP_LABEL[r]))
+            continue
         rec = s.get("recall@5")
         rec_str = f"{rec:.4f}" if rec is not None else "N/A"
         lines.append("| {0} | {1} | {2} | {3} | {4} |".format(
