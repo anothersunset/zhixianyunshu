@@ -94,13 +94,16 @@ public class SqlSyntaxValidator {
     }
 
     /** 将后端方言名映射为 sqlglot 方言名 */
-    private static String normalizeDialect(String dialect) {
+    static String normalizeDialect(String dialect) {
         if (dialect == null) return "postgres";
-        return switch (dialect.toLowerCase()) {
+        String lower = dialect.toLowerCase();
+        return switch (lower) {
             case "opengauss" -> "postgres";
             case "mysql" -> "mysql";
             case "oracle" -> "oracle";
-            default -> dialect.contains("postgres") ? "postgres" : dialect.toLowerCase();
+            // TaskController 允许 sqlserver 作为源/目标方言，但 sqlglot 中 T-SQL 的方言名是 tsql
+            case "sqlserver", "sql server", "mssql" -> "tsql";
+            default -> lower.contains("postgres") ? "postgres" : lower;
         };
     }
 

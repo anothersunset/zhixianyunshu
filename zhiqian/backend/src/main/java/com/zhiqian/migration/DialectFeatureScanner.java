@@ -143,8 +143,9 @@ public class DialectFeatureScanner {
             Set<String> dialectAdditions = DIALECT_WHITELIST_ADDITIONS.get(dial);
             if (dialectAdditions != null && dialectAdditions.contains(func)) continue;
             if (phase1Keywords.contains(func)) continue;
-            // 同义词去重（INSTR 和 INSTR( 可能分别注册）
+            // 同义词去重（INSTR 和 INSTR(、GETDATE 和 GETDATE() 可能分别注册）
             if (phase1Keywords.contains(func + "(")) continue;
+            if (phase1Keywords.contains(func + "()")) continue;
             if (!seen.add(func)) continue;
 
             found.add(new DetectedFeature(
@@ -292,7 +293,9 @@ public class DialectFeatureScanner {
             case "merge into" ->
                 lowerSql.replaceAll("\\s+", " ").contains("merge into");
             default -> {
-                if (keyword.endsWith("(")) {
+                // "X(" 与 "X()"（零参函数，如 GETDATE()）都用子串匹配；
+                // 正则的 \b 在 ')' 之后永远不成立，会导致这类关键词永远匹配失败
+                if (keyword.endsWith("(") || keyword.endsWith(")")) {
                     yield lowerSql.contains(keyword);
                 }
                 yield lowerSql.matches("(?s).*\\b" + java.util.regex.Pattern.quote(keyword) + "\\b.*");

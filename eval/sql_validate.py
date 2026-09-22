@@ -5,9 +5,17 @@ import sys
 import json
 import sqlglot
 
+# 调用方常用别名 → sqlglot 方言名（sqlglot 中 T-SQL 的方言名是 tsql）
+DIALECT_ALIASES = {
+    "sqlserver": "tsql",
+    "sql server": "tsql",
+    "mssql": "tsql",
+}
+
 def validate(sql: str, dialect: str = "postgres") -> dict:
     if not sql.strip():
         return {"valid": False, "error": "Empty SQL"}
+    dialect = DIALECT_ALIASES.get(dialect.strip().lower(), dialect)
     try:
         # RAISE 模式：遇到语法错误直接抛异常
         parsed = sqlglot.parse(sql, read=dialect, error_level=sqlglot.ErrorLevel.RAISE)
