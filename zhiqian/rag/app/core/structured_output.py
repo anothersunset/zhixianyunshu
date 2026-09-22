@@ -5,7 +5,9 @@
      LogitsProcessor 在采样时就强制输出合 schema, 零重试。需 transformers 重依赖。
   2. **deepseek_json_mode** (默认): OpenAI-compatible response_format={'type':'json_object'} +
      system prompt 加 JSON Schema 描述 + pydantic 验证 + 失败重试 报错文本注入下一轮。
-  3. **pydantic_only** (降级): 无 LLM key 时, 走 template 生成合理默认值, pydantic 验证后返。
+  3. **pydantic_only** (降级): 无 LLM key 时, 走 template 生成保守默认值, pydantic 验证后返。
+     降级产物是显式的: ok=False + risk 字段恒为 "unknown" + confidence=0.0 + errors 说明,
+     绝不谎报 "低风险" 之类的质量判断 (静默降级比崩溃更危险)。
 
 设计原则:
 - 对外统一 .generate_json(prompt, schema_cls, max_retries=3) -> StructuredResult
@@ -193,29 +195,44 @@ class StructuredOutputClient:
         return data["choices"][0]["message"]["content"]
 
     # -------- pydantic_only 降级后端 --------
+    _TEMPLATE_DEGRADED_MSG = (
+        "degraded: LLM 后端不可用 (backend=pydantic_only), 以下数据由模板生成, "
+        "未经模型评估; risk 字段为 unknown, confidence 恒为 0。请配置 DEEPSEEK_API_KEY。"
+    )
+
     def _gen_template(self, schema_cls, template_fallback, tr) -> StructuredResult:
-        """无 LLM 时: template_fallback 提供默认值 → pydantic 验证 → 返。避免 500。"""
+        """无 LLM 时: template_fallback 提供默认值 → pydantic 验证 → 返。
+
+        降级产物不得声称质量判断: 即便验证通过也 ok=False, risk 字段由
+        _default_fallback / 端点模板置为 "unknown", 并在 errors 里显式标注降级。
+        """
         base = template_fallback or self._default_fallback(schema_cls)
         try:
             obj = schema_cls.model_validate(base)
             with tr.span("template.validate") as sp:
-                sp.output({"ok": True})
-            return StructuredResult(ok=True, backend="pydantic_only", attempts=1, data=obj.model_dump())
+                sp.output({"ok": True, "degraded": True})
+            return StructuredResult(ok=False, backend="pydantic_only", attempts=1,
+                                    data=obj.model_dump(),
+                                    errors=[self._TEMPLATE_DEGRADED_MSG])
         except ValidationError as e:
             return StructuredResult(ok=False, backend="pydantic_only", attempts=1, data=None,
                                     errors=[f"template_validate: {e}"])
 
     @staticmethod
     def _default_fallback(schema_cls) -> Dict[str, Any]:
-        """为三个业务 schema 提供保守默认值。其他 schema 走空 dict (pydantic 会报缺字段)。"""
+        """为三个业务 schema 提供保守默认值。其他 schema 走空 dict (pydantic 会报缺字段)。
+
+        质量判断类字段 (risk_level/overall_risk/confidence) 一律给 "unknown"/0.0,
+        不给看似真实的 "low"/0.5。
+        """
         name = schema_cls.__name__
         if name == "TranspileExplanation":
             return {"function_mappings": [], "pagination_change": None, "type_change": None,
-                    "risk_level": "low", "confidence": 0.5, "notes": ["LLM 未配置, 由模板生成"]}
+                    "risk_level": "unknown", "confidence": 0.0, "notes": ["LLM 未配置, 由模板生成, 未经模型评估"]}
         if name == "SchemaAnalysisResult":
             return {"tables_total": 0, "tables_top": [], "relations_total": 0,
                     "suggested_migration_order": [], "notes": ["LLM 未配置"]}
         if name == "MigrationRiskReport":
-            return {"task_id": 0, "overall_risk": "low", "confidence": 0.5,
-                    "risks": [], "recommendations": [], "summary": "LLM 未配置, 仅默认报告"}
+            return {"task_id": 0, "overall_risk": "unknown", "confidence": 0.0,
+                    "risks": [], "recommendations": [], "summary": "LLM 未配置, 仅模板降级报告, 未做风险评估"}
         return {}

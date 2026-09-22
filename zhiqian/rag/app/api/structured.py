@@ -88,8 +88,9 @@ def risk_report(req: RiskReportReq, client: StructuredOutputClient = Depends(_cl
         "各项风险 (分 sql_syntax/data_type/index/performance/security/business 6 类) / "
         "缓解措施 / 总结。"
     )
-    fallback = {"task_id": req.task_id, "overall_risk": "low", "confidence": 0.5,
-                "risks": [], "recommendations": [], "summary": "默认报告, 请配置 DEEPSEEK_API_KEY 以启用 LLM"}
+    # 模板降级产物: risk 恒为 "unknown" / confidence 0, 不谎报低风险。
+    fallback = {"task_id": req.task_id, "overall_risk": "unknown", "confidence": 0.0,
+                "risks": [], "recommendations": [], "summary": "模板降级报告 (未调 LLM), 请配置 DEEPSEEK_API_KEY 以启用真实评估"}
     result = client.generate_json(prompt, MigrationRiskReport, max_retries=3, template_fallback=fallback)
     return StructuredResp(
         ok=result.ok, backend=result.backend, attempts=result.attempts,

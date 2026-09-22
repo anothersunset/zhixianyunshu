@@ -23,7 +23,10 @@ class TranspileExplanation(BaseModel):
     function_mappings: List[FunctionMapping] = Field(default_factory=list)
     pagination_change: Optional[str] = Field(None, description="如有 LIMIT/OFFSET 调整, 描述。无则 null")
     type_change: Optional[str] = Field(None, description="如有类型变动描述。无则 null")
-    risk_level: Literal["low", "medium", "high"] = Field("low", description="转译质量风险等级")
+    risk_level: Literal["low", "medium", "high", "unknown"] = Field(
+        "unknown",
+        description="转译质量风险等级; unknown 表示未做真实评估 (如 LLM 未配置的模板降级)",
+    )
     confidence: float = Field(..., ge=0.0, le=1.0, description="转译信心度 0-1")
     notes: List[str] = Field(default_factory=list, description="追加备注 (例: 虚拟不同, 需人工复检)")
 
@@ -55,7 +58,7 @@ class RiskItem(BaseModel):
 class MigrationRiskReport(BaseModel):
     """#3 SqlCritic + ReportSummarizer 联合输出。"""
     task_id: int
-    overall_risk: Literal["low", "medium", "high", "critical"]
+    overall_risk: Literal["low", "medium", "high", "critical", "unknown"]
     confidence: float = Field(..., ge=0.0, le=1.0)
     risks: List[RiskItem] = Field(default_factory=list)
     recommendations: List[str] = Field(default_factory=list)
