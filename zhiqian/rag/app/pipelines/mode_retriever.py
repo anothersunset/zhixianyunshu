@@ -346,27 +346,41 @@ class HybridRetriever:
                     sparse_raw = vectors["lexical_weights"][0] or {}
                     sparse = {int(k): float(v) for k, v in sparse_raw.items()}
                     sp.output({"dense_dim": len(dense), "sparse_terms": len(sparse)})
-                dense_rows = self._qdrant.search_dense(
-                    collection, dense, k=top_n, filters=filters
-                )
-                dense_hits = self._known_filtered_hits(dense_rows, state, filters, top_n)
-                ranked.append(("dense", dense_hits))
-                if use_sparse:
-                    if sparse:
-                        sparse_rows = self._qdrant.search_sparse(
-                            collection, sparse, k=top_n, filters=filters
-                        )
-                        sparse_hits = self._known_filtered_hits(
-                            sparse_rows, state, filters, top_n
-                        )
-                        ranked.append(("sparse", sparse_hits))
-                    else:
-                        self._degrade(trace, "sparse:no_lexical_weights")
             except Exception as exc:  # noqa: BLE001
-                log.warning("[HybridRetriever] vector channels failed: %s", exc)
+                log.warning("[HybridRetriever] query encoding failed: %s", exc)
                 self._degrade(trace, "dense:runtime_error")
                 if use_sparse:
                     self._degrade(trace, "sparse:runtime_error")
+            else:
+                # Qdrant 运行时失败 (服务半路挂掉等) 会从 store 抛 QdrantSearchError;
+                # 必须记入 degraded_channels, 让 vector 组退化在 trace 里显式可见,
+                # 同时不拖垮其余通道 (bm25/sparse 照常)。
+                try:
+                    dense_rows = self._qdrant.search_dense(
+                        collection, dense, k=top_n, filters=filters
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("[HybridRetriever] dense channel failed: %s", exc)
+                    self._degrade(trace, "dense:runtime_error")
+                else:
+                    dense_hits = self._known_filtered_hits(dense_rows, state, filters, top_n)
+                    ranked.append(("dense", dense_hits))
+                if use_sparse:
+                    if sparse:
+                        try:
+                            sparse_rows = self._qdrant.search_sparse(
+                                collection, sparse, k=top_n, filters=filters
+                            )
+                        except Exception as exc:  # noqa: BLE001
+                            log.warning("[HybridRetriever] sparse channel failed: %s", exc)
+                            self._degrade(trace, "sparse:runtime_error")
+                        else:
+                            sparse_hits = self._known_filtered_hits(
+                                sparse_rows, state, filters, top_n
+                            )
+                            ranked.append(("sparse", sparse_hits))
+                    else:
+                        self._degrade(trace, "sparse:no_lexical_weights")
         elif use_dense:
             self._degrade(trace, "dense:unavailable")
             if use_sparse:

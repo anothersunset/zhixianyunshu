@@ -70,6 +70,26 @@ class FakeQdrant:
         ][:k]
 
 
+class BrokenDenseQdrant(FakeQdrant):
+    """dense 查询运行时抛异常, sparse 正常 — 模拟 Qdrant 半路挂掉。"""
+
+    def search_dense(self, collection, _dense, k=50, filters=None):
+        self.calls.append(("dense", collection, filters))
+        raise RuntimeError("qdrant connection refused")
+
+
+class BrokenVectorQdrant(FakeQdrant):
+    """dense + sparse 全部运行时抛异常。"""
+
+    def search_dense(self, collection, _dense, k=50, filters=None):
+        self.calls.append(("dense", collection, filters))
+        raise RuntimeError("qdrant connection refused")
+
+    def search_sparse(self, collection, _sparse, k=50, filters=None):
+        self.calls.append(("sparse", collection, filters))
+        raise RuntimeError("qdrant connection refused")
+
+
 class FakeReranker:
     available = True
 
@@ -186,3 +206,40 @@ def test_legacy_mode_names_remain_available_for_one_release(retriever):
     assert rerank_trace["effective_mode"] == "dense_rerank"
     assert vector_trace["channels"] == ["dense"]
     assert rerank_trace["reranked"] is True
+
+
+def test_dense_runtime_error_visible_in_trace_and_bm25_survives():
+    """Qdrant dense 半路挂掉: trace 必须记录 dense:runtime_error, bm25/sparse 照常出结果。"""
+    retriever = HybridRetriever(
+        docs=DOCS,
+        embedder=FakeEmbedder(),
+        qdrant=BrokenDenseQdrant(),
+        reranker=FakeReranker(),
+        evaluator=AmbiguousEvaluator(),
+    )
+    trace = {}
+    results = retriever.search("IFNULL migration", mode="hybrid", top_k=3, trace_out=trace)
+
+    assert results, "bm25 通道必须继续返回结果"
+    assert "bm25" in trace["channels"]
+    assert "sparse" in trace["channels"], "sparse 通道不受 dense 故障拖累"
+    assert "dense:runtime_error" in trace["degraded_channels"]
+    assert "sparse:runtime_error" not in trace["degraded_channels"]
+
+
+def test_all_vector_channels_runtime_error_visible_in_trace():
+    """dense+sparse 同时挂: 两条 runtime_error 都进 trace, bm25 兜底仍返回。"""
+    retriever = HybridRetriever(
+        docs=DOCS,
+        embedder=FakeEmbedder(),
+        qdrant=BrokenVectorQdrant(),
+        reranker=FakeReranker(),
+        evaluator=AmbiguousEvaluator(),
+    )
+    trace = {}
+    results = retriever.search("IFNULL migration", mode="hybrid", top_k=3, trace_out=trace)
+
+    assert results, "bm25 兜底必须返回结果"
+    assert "bm25" in trace["channels"]
+    assert "dense:runtime_error" in trace["degraded_channels"]
+    assert "sparse:runtime_error" in trace["degraded_channels"]

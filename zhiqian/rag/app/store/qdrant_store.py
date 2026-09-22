@@ -13,6 +13,15 @@ from typing import Any, Dict, List, Optional, Tuple
 log = logging.getLogger(__name__)
 
 
+class QdrantSearchError(RuntimeError):
+    """Qdrant 运行时检索失败 (服务不可达/collection 异常等)。
+
+    与 import-probe 的 available=False 不同: available 表示"依赖没装/未启用",
+    本异常表示"启用了但查询时失败"。运行时失败必须显式抛出, 由上层
+    (mode_retriever) 记入 trace.degraded_channels, 绝不吞成空列表静默降级。
+    """
+
+
 class QdrantStore:
     def __init__(self, url: str = "http://qdrant:6333", api_key: Optional[str] = None, dim: int = 1024, local_path: Optional[str] = None):
         self.url = url
@@ -124,8 +133,8 @@ class QdrantStore:
             ).points
             return [(_extract_id(p), float(p.score), dict(p.payload or {})) for p in res]
         except Exception as e:
-            log.warning("[Qdrant] search_dense 失败 name=%s err=%s", name, e)
-            return []
+            log.warning("[Qdrant] search_dense 运行时失败 name=%s err=%s", name, e)
+            raise QdrantSearchError(f"search_dense failed for collection={name}: {e}") from e
 
     def search_sparse(
         self,
@@ -149,8 +158,8 @@ class QdrantStore:
             ).points
             return [(_extract_id(p), float(p.score), dict(p.payload or {})) for p in res]
         except Exception as e:
-            log.warning("[Qdrant] search_sparse 失败 name=%s err=%s", name, e)
-            return []
+            log.warning("[Qdrant] search_sparse 运行时失败 name=%s err=%s", name, e)
+            raise QdrantSearchError(f"search_sparse failed for collection={name}: {e}") from e
 
 
 def _build_filter(qm: Any, filters: Optional[Dict[str, Any]]) -> Any:
