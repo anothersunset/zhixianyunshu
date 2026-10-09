@@ -85,6 +85,16 @@ def check_single_case(client, pair: str, fast: bool) -> bool:
         return False
 
 
+def _checkpoint_test_path() -> str:
+    """checkpoint 写入自检用的临时文件路径。
+
+    旧实现硬编码 "/tmp/preflight_checkpoint_test.json"：POSIX 上没问题，但 Windows
+    会把它解析为当前盘符根下的 \\tmp（通常是 C:\\tmp）——该目录多半不存在，
+    check_checkpoint 会直接 FAIL。改用 tempfile.gettempdir() 做平台感知。
+    """
+    return str(Path(tempfile.gettempdir()) / "preflight_checkpoint_test.json")
+
+
 def check_checkpoint() -> bool:
     """验证 checkpoint 写入机制。"""
     print("[4/7] Checkpoint 写入测试...", end=" ", flush=True)
@@ -95,7 +105,7 @@ def check_checkpoint() -> bool:
         client = MigrationClient(cooldown=0)
         cases = load_dataset("eval/datasets", "mysql_opengauss")[:5]  # 取 5 个 case 触发 checkpoint
 
-        ckpt_path = "/tmp/preflight_checkpoint_test.json"
+        ckpt_path = _checkpoint_test_path()
         if os.path.exists(ckpt_path):
             os.unlink(ckpt_path)
 

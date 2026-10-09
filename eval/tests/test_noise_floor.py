@@ -5,7 +5,7 @@
 """
 from __future__ import annotations
 
-from eval.noise_floor import compare_runs
+from eval.noise_floor import compare_runs, format_report
 
 
 def _row(cid: str, sql_ok: bool, recall: float, mrr: float) -> dict:
@@ -48,3 +48,21 @@ class TestCompareRuns:
         rows_b = [{"id": "c1", "sql_ok": True, "recall@5": 0.9}]
         stats = compare_runs(rows_a, rows_b)
         assert stats["recall@5"]["n"] == 0  # 一边为 None，不该被当成 0 参与计算
+
+
+class TestFormatReport:
+    def test_empty_stats_report_reason_not_crash(self):
+        text = format_report({"n": 0, "error": "no common case ids between the two runs"})
+        assert "无法比较" in text
+        assert "no common case ids" in text
+
+    def test_report_renders_sql_ok_and_continuous_metrics(self):
+        stats = compare_runs(
+            [_row("c1", True, 0.8, 0.5), _row("c2", False, 0.4, 0.2)],
+            [_row("c1", True, 0.8, 0.5), _row("c2", True, 0.5, 0.3)],
+        )
+        text = format_report(stats)
+        assert "n=2" in text
+        assert "flip_rate=50.00%" in text
+        assert "recall@5" in text and "mean_abs_diff" in text
+        assert "mrr@10" in text and "mean_delta" in text
