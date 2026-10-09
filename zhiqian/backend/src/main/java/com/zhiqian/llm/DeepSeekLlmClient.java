@@ -41,13 +41,28 @@ public class DeepSeekLlmClient implements LlmClient {
     private final RestClient client;
     private final LangfuseClient langfuse;
 
+    /**
+     * 重试退避基数（指数退避：base * 2^attempt）。默认 2s；包私有可写仅为测试加速，
+     * 生产路径不修改。
+     */
+    long retryBackoffBaseMs = 2000;
+
     public DeepSeekLlmClient(LlmProperties props, LangfuseClient langfuse) {
+        this(props, langfuse, buildDefaultClient(props));
+    }
+
+    /** 测试注入 RestClient（如指向本地 HttpServer），生产行为与原构造器一致。 */
+    DeepSeekLlmClient(LlmProperties props, LangfuseClient langfuse, RestClient client) {
         this.props = props;
         this.langfuse = langfuse;
+        this.client = client;
+    }
+
+    private static RestClient buildDefaultClient(LlmProperties props) {
         SimpleClientHttpRequestFactory rf = new SimpleClientHttpRequestFactory();
         rf.setConnectTimeout((int) Duration.ofSeconds(10).toMillis());
         rf.setReadTimeout((int) Duration.ofSeconds(props.getTimeoutSeconds()).toMillis());
-        this.client = RestClient.builder()
+        return RestClient.builder()
                 .baseUrl(props.getBaseUrl())
                 .requestFactory(rf)
                 .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + props.getApiKey())
@@ -84,22 +99,30 @@ public class DeepSeekLlmClient implements LlmClient {
                 enableThinking ? blankToNull(props.getReasoningEffort()) : null);
 
         int maxRetries = 2;
-        long baseBackoffMs = 2000;
         RestClientException lastException = null;
         for (int attempt = 0; attempt <= maxRetries; attempt++) {
             Instant start = Instant.now();
             try {
                 // 用 exchange() 手动读取原始响应体，彻底绕过 content-type 匹配
                 // （mimo API 间歇返回 application/octet-stream，导致所有 MessageConverter 都失败）
-                String raw = client.post()
+                RawResp raw = client.post()
                         .uri("/chat/completions")
                         .body(payload)
                         .exchange((req, resp) -> {
                             try (var is = resp.getBody()) {
-                                return new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                                return new RawResp(resp.getStatusCode().value(),
+                                        new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
                             }
                         });
-                ChatCompletionResponse resp = OM.readValue(raw, ChatCompletionResponse.class);
+                String rawBody = raw.body();
+                if (raw.status() >= 400) {
+                    // exchange() 不做默认状态码错误处理：非 2xx 若不在这里显式转成
+                    // RestClientException，OpenAI 风格的 JSON 错误体会被当正常响应解析，
+                    // 以 IllegalStateException("LLM 返回为空") 绕过下面的 429/重试分支。
+                    String snippet = rawBody.length() > 300 ? rawBody.substring(0, 300) : rawBody;
+                    throw new RestClientException("LLM HTTP " + raw.status() + ": " + snippet);
+                }
+                ChatCompletionResponse resp = OM.readValue(rawBody, ChatCompletionResponse.class);
                 Instant end = Instant.now();
                 if (resp == null || resp.choices() == null || resp.choices().isEmpty()) {
                     throw new IllegalStateException("LLM 返回为空");
@@ -118,7 +141,7 @@ public class DeepSeekLlmClient implements LlmClient {
                     break;
                 }
                 if (attempt < maxRetries) {
-                    long waitMs = baseBackoffMs * (1L << attempt);
+                    long waitMs = retryBackoffBaseMs * (1L << attempt);
                     log.warn("[LLM] 调用失败 (attempt={}/{}), {}ms 后重试: {}", attempt + 1, maxRetries + 1, waitMs, e.getMessage());
                     try { Thread.sleep(waitMs); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
                 }
@@ -154,4 +177,7 @@ public class DeepSeekLlmClient implements LlmClient {
 
     @Override
     public String providerName() { return props.getProvider(); }
+
+    /** exchange() 的原始响应（状态码 + 原文），绕过 MessageConverter 的 content-type 匹配。 */
+    private record RawResp(int status, String body) {}
 }
