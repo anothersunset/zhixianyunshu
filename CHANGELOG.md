@@ -4,6 +4,59 @@
 
 ---
 
+## 🔵 [Unreleased] — P0/P1 审计修复三轮 — 2026-07 ~ 2026-10（分支 `codex/p0-p1-repair`，未发布）
+
+> 前置：第一轮（2026-07-09）对外部审查的 10 项遗留问题逐条对照真实代码核实（3 处描述与实际不符）后修复，详见 [docs/devlog-2026-07-09-p0-p1-audit.md](docs/devlog-2026-07-09-p0-p1-audit.md)。以下收录其后的两轮。
+
+### 第二轮加固 — 15 个提交（`01ad87d` → `bacb026`，2026-07-10 ~ 07-12）
+
+完整逐主题复盘（问题 → 修复 → 验证状态，含 diff 证实/推断/待核实标注）见 [docs/devlog-2026-07-12-second-hardening-round.md](docs/devlog-2026-07-12-second-hardening-round.md)。概述：
+
+1. **六 Agent 主链路统一 + 任务真实加载**（`01ad87d`，+1112/-270）：新增 `MigrationPipelineService` 唯一执行图，任务执行与 `/migrate` 共用；按 taskId 加载真实任务 SQL，删除硬编码项目与演示用 emitter；`TaskAgentStep` 持久化（Flyway V3）支持 SSE 断线回放。
+2. **认证与资源边界**（`01ad87d` + `647c515`）：JWT 只认 `Authorization: Bearer` Header（移除 query token）；任务/项目按 owner 鉴权；有界线程池（core 4 / max 8 / queue 100）；重复执行 409、队列饱和 429、SSE 有限超时，并有契约测试压住。
+3. **终态诚实化**（`01ad87d`）：critic 修正 SQL 经 `SqlSyntaxValidator` 复验；终态三分为 `DONE / FAILED / REVIEW_REQUIRED`，复验不过不谎报 DONE。
+4. **A2A / MCP 契约加固**（`ea1b423` / `e550d3c`）：sqlglot `redirectErrorStream` 修正（stderr 不再污染 JSON 解析，合法 SQL 不再被误报）；MCP 工具入参 schema 与 FastAPI 模型对齐（`source_sql→sql`、`k→top_k`），`structured` 路由补 prefix。
+5. **显式 retrieval mode**（`6af7e70`）：`bm25 / dense / dense_rerank / hybrid / rerank / crag / full` 七档按模式门控检索通道，只有 `full` 启用 graph——**旧口径 CRAG/Full 消融数字（82.14%）自此作废**，语义增益待真实样本对照重跑。
+6. **复杂/未知 SQL 安全路由**（`6f6b478`）：`unknown_features` 置信度归零；复杂度评分 ≥6 走 reasoner 模型，路由原因写入状态。
+7. **评测溯源**（`12eae1c`）：`eval/provenance.py` 记录数据集 SHA256 / git / 环境指纹，结果可复现。
+8. **工程门禁**（`77e7741` / `63940f1` / `f55f472`）：`uv.lock` 冻结 RAG 运行时依赖；JaCoCo 核心迁移运行时包 70% 行覆盖门禁进 `mvn verify` 与 CI；版本与宣称口径统一 2.0.0。
+9. **前端**（`ca47bb5` / `97709af`）：SSE 改 `fetch` + Bearer Header 消费（配套后端收紧）；任务详情步骤回放重写；布局响应式打磨。
+10. **离线降级诚实化**（`dda4a3d`）：LLM 不可用时 `SqlPatcherAgent` 从写死示例 SQL 改为对真实输入做确定性规则转换，输出标记 `_real: false`。
+11. **边界文档**（`bacb026`）：README 声明 CI 默认验收完全离线，不把 mock/启发式结果报告为在线质量成绩。
+
+（另有 `7307b76` 补 `POST /api/projects` 支撑认证链路集成测试。）
+
+### 第三轮 — 10 个提交（`ede9850` → `a1d6f35`，2026-09 ~ 10，按主题归并）
+
+1. **方言契约**：`ede9850` — sqlserver 方言正确映射到 tsql，零参特性匹配修复。
+2. **任务对账**：`b8addad` — 启动时回收陈旧 RUNNING 任务（进程重启后的孤儿状态），修复种子任务。
+3. **降级诚实化**：`96322ff` — structured 模板 fallback 不再谎称低风险；`3388713` — 流水线失败信息可读化，A2A/report HTTP 调用加超时上界，删除死代码 `TaskSseRegistry`。
+4. **Qdrant 可见性**：`bc9a2ac` — Qdrant 运行时失败透出到检索降级轨迹，不再静默。
+5. **RAG/评测健壮性**：`9c0ea35` — graphrag 索引端点守卫、watchdog 端口对齐、CORS 可配置；`8892420` — 消融汇总在某组被跳过时仍可渲染。
+6. **前端体验**：`55b9307` — 登录深链回跳生效、ckg 复用共享 http client、进度条回归守卫。
+7. **文档与部署**：`7c0b625` — 二轮加固 devlog 从 commit diff 复原成文；`a1d6f35` — SSE 鉴权文档修正、`.env.example` 重写、kustomize dev namespace 锁定。
+
+### 验收
+
+**2026-10-09 本地复跑**（分支 `codex/p0-p1-repair` 当前工作树，四套件全绿）：
+
+```text
+backend  mvn clean test             136 tests, 0 failures, 1 skipped（较二轮 +45）
+                                      mvn verify JaCoCo 门禁通过，核心包行覆盖 ~82%
+rag      pytest                      64 passed, 3 skipped
+eval     pytest eval/tests           55 passed（较二轮 +24）
+web      npm run build               vue-tsc 类型检查 + vite 生产构建通过（本轮 web 无改动，
+                                      因本机 npm 源故障未复跑，上次成功构建产物用于 QA）
+```
+
+2026-07-12 时点的记录（转述自 devlog，当时未重跑）：Maven 91 tests 0 failures（1 skipped）、核心类行覆盖 76.08%、RAG 50 passed / 3 skipped、eval 28 passed。
+
+**TaskDetail 三档截图 QA 已完成**（2026-10-09，真实浏览器实页验收）：1440/900/390 三档无阻塞缺陷，SSE 实时流真跑验证通过（连流→实时步骤→进度 0→100%→终态徽章），报告与截图见 [docs/qa/taskdetail-responsive-qa-2026-10-09.md](docs/qa/taskdetail-responsive-qa-2026-10-09.md)。
+
+**遗留**：消融实验未用新 retrieval mode 重跑；在线 smoke（真实 Qdrant / 外部 LLM / Langfuse）未跑。
+
+---
+
 ## 🟡 v1.0.4 hotfix — Backend 与 RAG 编译/运行问题修复 — 2026-06-01
 
 **SHA**: `(本提交)`
