@@ -24,9 +24,9 @@ fi
 echo "Java: $(java -version 2>&1 | head -1)"
 
 # 检查 Maven（使用 Maven Wrapper）
-if [ ! -f "$PROJECT_ROOT/backend/mvnw" ]; then
+if [ ! -f "$PROJECT_ROOT/zhiqian/backend/mvnw" ]; then
     echo "生成 Maven Wrapper..."
-    cd "$PROJECT_ROOT/backend"
+    cd "$PROJECT_ROOT/zhiqian/backend"
     mvn wrapper:wrapper -Dmaven=3.9.6 2>/dev/null || {
         echo "请手动安装 Maven: https://maven.apache.org/install.html"
         exit 1
@@ -37,7 +37,7 @@ echo "Maven Wrapper: OK"
 
 echo ""
 echo "===== 安装 Python 依赖 ====="
-cd "$PROJECT_ROOT/rag"
+cd "$PROJECT_ROOT/zhiqian/rag"
 pip install -r requirements.txt 2>/dev/null || pip install -e . 2>/dev/null || {
     echo "警告: Python 依赖安装失败，尝试继续..."
 }
@@ -48,7 +48,7 @@ echo "===== 启动服务 ====="
 
 # 1. 启动 RAG 服务（后台）
 echo "启动 RAG 服务 (端口 8001)..."
-cd "$PROJECT_ROOT/rag"
+cd "$PROJECT_ROOT/zhiqian/rag"
 python -m app.main > /tmp/rag.log 2>&1 &
 RAG_PID=$!
 echo "RAG PID: $RAG_PID"
@@ -63,7 +63,7 @@ fi
 
 # 2. 启动后端（使用 local profile，H2 内存数据库）
 echo "启动后端 (端口 8080, profile=local)..."
-cd "$PROJECT_ROOT/backend"
+cd "$PROJECT_ROOT/zhiqian/backend"
 export SPRING_PROFILES_ACTIVE=local
 ./mvnw spring-boot:run > /tmp/backend.log 2>&1 &
 BACKEND_PID=$!

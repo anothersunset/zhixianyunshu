@@ -1,8 +1,3 @@
-# v1.0.2 hotfix: CI workflow 模板。原 .github/workflows/ci.yml 中
-# GitHub Actions 二重括号表达式被上游 URL 压缩吃成数字占位符, 4 处全坏。
-# 本模板用 "${{ name }}" (单 $ + 上下空格) 作占位, 由 scripts/install-supply-chain-workflow.sh
-# 一键 sed 还原回真表达式后写入 .github/workflows/ci.yml。
-# hashFiles 含特殊字符, 用 sentinel ${{ hashFiles('**/pom.xml') }} 单独替换。
 name: CI
 
 on:

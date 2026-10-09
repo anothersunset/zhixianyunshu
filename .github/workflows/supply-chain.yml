@@ -1,5 +1,4 @@
 # v2-step-31: 供应链安全 — Syft SBOM + Cosign keyless + Trivy fs/image
-# 手动拷到仓库根 .github/workflows/supply-chain.yml 后即生效。
 name: supply-chain
 
 on:

@@ -156,9 +156,11 @@ services:
       TRANSFORMERS_OFFLINE: 1
     volumes:
       - ragdata:/data
-      # Bind mount: 直接挂载宿主机模型目录，零拷贝
-      - ${HF_CACHE_DIR:-C:/Users/anoth/.hf_cache}/modelscope/BAAI/bge-m3:/models/bge-m3:ro
-      - ${HF_CACHE_DIR:-C:/Users/anoth/.hf_cache}/modelscope/BAAI/bge-reranker-v2-m3:/models/bge-reranker-v2-m3:ro
+      # Bind mount: 直接挂载宿主机模型目录，零拷贝。
+      # HF_CACHE_DIR 无默认值：必须在 .env 中显式设置（见 .env.example），
+      # 避免默认路径指向不存在的目录导致模型挂载为空。
+      - ${HF_CACHE_DIR:?请在 .env 中设置 HF_CACHE_DIR（宿主机模型缓存根目录，如 modelscope 下载根目录）}/modelscope/BAAI/bge-m3:/models/bge-m3:ro
+      - ${HF_CACHE_DIR:?请在 .env 中设置 HF_CACHE_DIR（宿主机模型缓存根目录，如 modelscope 下载根目录）}/modelscope/BAAI/bge-reranker-v2-m3:/models/bge-reranker-v2-m3:ro
     ports:
       - "8001:8001"
     healthcheck:
