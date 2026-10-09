@@ -606,7 +606,8 @@ public class MigrationEvalController {
      * @param sql 生成的 SQL
      * @param sourceSql 原始源 SQL（用于上下文感知修正）
      */
-    private static String fixupStubbornPatterns(String sql, String sourceSql) {
+    // 包私有可见性仅为了直接单测（先例：DialectFeatureScanner.normalizeDialect）
+    static String fixupStubbornPatterns(String sql, String sourceSql) {
         if (sql == null || sql.isBlank()) return sql;
         String fixed = sql;
 
