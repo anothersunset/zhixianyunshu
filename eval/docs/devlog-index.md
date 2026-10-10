@@ -20,6 +20,7 @@
 | [KB 统一管理](devlog-2026-06-24-kb-unification.md) | 06-24 | **Phase 1** · 3 处硬编码 → 单一 YAML 真源 | 61 docs / 6 categories 统一；RAG 重启丢数据修复 |
 | [多方言扩展框架](devlog-2026-06-24-multi-dialect-framework.md) | 06-24 | **Phase 2** · 新方言零代码接入 | oracle 30 / mysql 16 / sqlserver 12 features |
 | [失败模式自动学习](devlog-2026-06-24-failure-auto-learning.md) | 06-24 | **Phase 3** · 评测失败 → KB 补充闭环 | 19 clusters，3 critical（MONTHS_BETWEEN / CONNECT BY 各 100% 失败） |
+| [真实全栈评测 + 五组消融](devlog-2026-10-10-real-stack-eval.md) | 10-10 | glm-4-flash + 真 BGE-M3 五数据集 & 显式模式五组对照 | 五数据集 **96.6%**（112/116，oracle 30/30）；消融：**CRAG/GraphRAG 不提升修复率**（C 90% → D 76.7% → E 66.7%），Vector+Rerank 最优 |
 
 ### 架构与审计（`docs/`）
 

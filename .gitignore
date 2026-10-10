@@ -49,8 +49,9 @@ zhiqian/backend/logs/
 !zhiqian/rag/uv.lock
 !eval/results/.gitkeep
 
-# Qdrant init marker
+# Qdrant init marker and local vector stores
 zhiqian/rag/.qdrant-initialized
+zhiqian/rag/qdrant_local*/
 
 # Runtime artifacts
 *.pid

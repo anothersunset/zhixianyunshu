@@ -89,12 +89,15 @@ make web             # cd zhiqian/web && pnpm dev                      (5173)
 | PARROT 子集 **35% → 80%**（调整口径 90%） | 84 个含真实 Oracle 特征 case 中取 20 测试；80% 为三层复审后原始率，90% 为排除 10 个含 Oracle 残留可疑金标后的调整率 | [三层复审体系 devlog](eval/docs/devlog-2026-06-24-review-system.md) |
 | 消融最优 **Vector+Rerank**：SQL 修复率 98.8% | 旧口径五档消融（同数据集）；注意 A→E 不单调——Full 引入图噪声低于 Vector+Rerank | [消融实验 devlog](eval/docs/devlog-2026-06-10-ablation-experiments.md) |
 | CRAG/Full Recall@5 **0.30 → 0.73** | reranker OOM 修复前后（+143%） | [RAG 稳定性 devlog](eval/docs/devlog-2026-06-13-reranker-rag-stability.md) |
+| 真实全栈五数据集 **96.6%**（112/116） | glm-4-flash（免费档）+ 真 BGE-M3 + 真 reranker 全链路无 mock：oracle 30/30、mysql 60/60（og+pg）、sqlserver 29/32；零系统错误零 mock，provenance 全记录 | [真实全栈评测 devlog](eval/docs/devlog-2026-10-10-real-stack-eval.md) |
+| 真实五组消融：**Vector+Rerank 最优 90.0%**；CRAG 76.7%、GraphRAG 66.7% | 显式 retrieval mode 门控下的 oracle→pg × 30 per-case 对照（150 次真实调用）；CRAG/GraphRAG 提升召回（E 组 Recall@5 0.9375 最高）但降低转译修复率——适用于解释/问答场景而非转译 | [真实全栈评测 devlog](eval/docs/devlog-2026-10-10-real-stack-eval.md) §3 |
 
 > **边界声明（先于一切数字）**
 >
-> 1. **CRAG / GraphRAG 的真实语义增益待对照实验**：当前实现的是工程控制流（retrieve → evaluate → correct/fallback → generate，local/global 图检索），语义判断仍含启发式成分。07-10 显式 retrieval mode 落地后，旧口径的 CRAG/Full 消融数字（如 82.14%）已作废不再引用；后续将补 BM25 only / Vector / Vector+Rerank / CRAG / GraphRAG 五组真实样本对照（[二轮加固 devlog](docs/devlog-2026-07-12-second-hardening-round.md) §6）。
+> 1. **CRAG / GraphRAG 的语义增益已由真实对照收口（2026-10-10）**：显式模式门控 + trace 验证下的五组对照显示，二者提升检索召回但**不提升 SQL 转译修复率**（C 90.0% → D 76.7% → E 66.7%）；转译最优配置为 Vector+Rerank，CRAG/GraphRAG 的价值定位在开放域问答与解释场景（/crag/query、/graphrag/* 端点）。旧口径的 CRAG/Full 消融数字（如 82.14%）已作废不再引用；E 组下降的根因归因（图权重/prompt 预算）见 devlog §5 遗留。
 > 2. **CI 默认验收完全离线**：Java 走 `mvn clean verify`（含核心包 70% JaCoCo 行覆盖门禁），RAG 与 eval 走确定性 pytest，前端走类型检查 + 生产构建。真实 Qdrant、外部 LLM 与 Langfuse 属于凭据齐备后的可选 smoke；未配置时只验证显式降级、过滤器构造和追溯契约，**不把 mock 或启发式结果报告为在线质量成绩**。
 > 3. Demo seed 中的 confidence / 综合分仅用于 UI 与报告流程演示，真实效果以独立评测集与人工复核为准。
+> 4. 2026-10-10 真实评测的口径边界：LLM 与 judge 均为 glm-4-flash 免费档（judge 未做人工 κ 校准，每数据集仅裁决 1-3 例）、BGE-M3 为本机 CPU fp32——与 6 月 deepseek-chat 口径的数字不可直接混比，结果文件带完整 provenance。
 
 ## 工程质量
 

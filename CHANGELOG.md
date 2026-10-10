@@ -53,7 +53,15 @@ web      npm run build               vue-tsc 类型检查 + vite 生产构建通
 
 **TaskDetail 三档截图 QA 已完成**（2026-10-09，真实浏览器实页验收）：1440/900/390 三档无阻塞缺陷，SSE 实时流真跑验证通过（连流→实时步骤→进度 0→100%→终态徽章），报告与截图见 [docs/qa/taskdetail-responsive-qa-2026-10-09.md](docs/qa/taskdetail-responsive-qa-2026-10-09.md)。
 
-**遗留**：消融实验未用新 retrieval mode 重跑；在线 smoke（真实 Qdrant / 外部 LLM / Langfuse）未跑。
+### 第四轮 — 真实全栈评测（2026-10-10）
+
+真实 LLM（glm-4-flash 免费额度）+ 真 BGE-M3（fp32 CPU 本地权重）+ 真 reranker 的全链路评测，无任何 mock（详见 [eval/docs/devlog-2026-10-10-real-stack-eval.md](eval/docs/devlog-2026-10-10-real-stack-eval.md)）：
+
+- **五数据集 fast/bm25：总修复率 112/116 = 96.6%**（oracle→pg 30/30、mysql→og 30/30、mysql→pg 24/24、sqlserver→og 15/16、sqlserver→pg 14/16）；零系统错误、零 mock 检索，provenance 全记录。
+- **五组消融（oracle→pg × 30，150 次真实调用）**：修复率 C(90.0%) > A=B(86.7%) > D(76.7%) > E(66.7%)——**CRAG/GraphRAG 提升召回（E 组 Recall@5 0.9375 最高）但不提升、反而降低转译修复率**；Vector+Rerank 仍为转译最优配置。07-12 悬置的「显式模式语义增益对照」就此收口。
+- 附带工程修复：`.gitignore` 补 qdrant 本地库目录。
+
+**遗留**：在线 smoke（真实 Qdrant server / Langfuse）未跑；E 组（GraphRAG）修复率下降根因待归因；付费旗舰模型复跑与 judge κ 校准待做。
 
 ---
 
