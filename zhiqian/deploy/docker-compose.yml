@@ -81,6 +81,9 @@ services:
     build:
       context: ../backend
       dockerfile: Dockerfile
+      # SqlSyntaxValidator 的 sqlglot 校验脚本真源（COPY --from=eval_src 进镜像 /eval/）
+      additional_contexts:
+        eval_src: ../../eval
     container_name: zhiqian-backend
     restart: unless-stopped
     environment:
@@ -156,6 +159,9 @@ services:
       TRANSFORMERS_OFFLINE: 1
     volumes:
       - ragdata:/data
+      # KB 真源直挂（只读）：kb_loader 以 `from kb.kb_loader import ...` 导入，
+      # WORKDIR=/app 时 /app/kb 落在 sys.path，无需副本
+      - ../../kb:/app/kb:ro
       # Bind mount: 直接挂载宿主机模型目录，零拷贝。
       # HF_CACHE_DIR 无默认值：必须在 .env 中显式设置（见 .env.example），
       # 避免默认路径指向不存在的目录导致模型挂载为空。

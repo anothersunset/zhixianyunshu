@@ -13,4 +13,4 @@ EXPOSE 80
 # 不加 USER：官方 nginx 镜像 master 需 root 绑 80 端口，worker 已自动降权到 nginx 用户；
 # 盲目 USER nginx 会导致无法绑定 80。健康检查用 busybox wget（alpine 自带）。
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget -q --spider http://localhost:80/ || exit 1
+    CMD wget -q --spider http://127.0.0.1/ || exit 1

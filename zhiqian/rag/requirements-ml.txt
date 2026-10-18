@@ -15,5 +15,9 @@ sentencepiece==0.2.0
 FlagEmbedding==1.2.11
 accelerate==0.34.2
 peft>=0.7.0
+# datasets/pyarrow 必须钉住：新版 pyarrow(>=16) 要求 numpy>=2，与 torch 2.4 (numpy 1.x) 冲突，
+# 会让 FlagEmbedding 的导入链（datasets→pyarrow）在 import 时即失败
+datasets<3
+pyarrow<17
 # 可选：Qdrant 客户端（step 5 会用到）
 qdrant-client==1.11.3
